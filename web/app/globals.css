@@ -1,0 +1,66 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Base */
+:root {
+    color-scheme: light;
+}
+
+/* what: tell UA to render light controls; why: stop forced dark look */
+
+html,
+body {
+    height: 100%;
+}
+
+body {
+    @apply bg-bg text-text antialiased;
+}
+
+/* Elements */
+a {
+    @apply underline-offset-4 hover:underline text-accent;
+}
+
+/* Cards & surfaces */
+.card {
+    @apply bg-card border border-line rounded-2xl shadow-soft;
+}
+
+/* Inputs */
+.input {
+    /* why: neutral light fields with a visible focus affordance */
+    @apply bg-white border border-gray-300 rounded-xl px-3 py-2 outline-none focus:border-accent focus:ring-2 focus:ring-accent/30 transition;
+}
+
+/* Buttons */
+.btn {
+    @apply inline-flex items-center justify-center rounded-xl px-3 py-2 font-medium transition;
+}
+
+.btn-primary {
+    @apply bg-accent text-white hover:shadow-ring;
+}
+
+.btn-ghost {
+    @apply bg-white border border-gray-300 hover:bg-gray-50;
+}
+
+/* Badges */
+.badge {
+    @apply inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-100 px-2 py-0.5 text-xs text-gray-700;
+}
+
+/* Tables */
+.table {
+    @apply w-full border-separate border-spacing-0;
+}
+
+.table thead th {
+    @apply text-left text-gray-600 font-medium border-b border-gray-200 pb-2;
+}
+
+.table tbody td {
+    @apply border-b border-gray-200 py-3 align-middle;
+}
