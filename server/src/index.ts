@@ -1,11 +1,30 @@
+process.on('uncaughtException', (err) => {
+    console.error('Uncaught Exception:', err);
+    process.exit(1);
+});
+process.on('unhandledRejection', (reason) => {
+    console.error('Unhandled Rejection:', reason);
+    process.exit(1);
+});
+
+console.log('Starting server...');
+
 import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 import morgan from 'morgan';
 import path from 'path';
+
+console.log('Core modules loaded');
+
 import { config } from './config.js';
+
+console.log('Config loaded, port:', config.port);
+
 import { router as api } from './routes/index';
 import { stripeWebhookHandler } from './routes/payments.js';
+
+console.log('Routes loaded');
 
 const app = express();
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
