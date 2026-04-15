@@ -174,8 +174,19 @@ function Sidebar() {
 /* ─── Shell ───────────────────────────────────────────────────────────────── */
 export default function AdminShell({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
+    const router = useRouter();
 
-    if (pathname?.startsWith("/shop/") || pathname === "/login") {
+    const isPublic = pathname?.startsWith("/shop/") || pathname === "/login";
+
+    useEffect(() => {
+        if (isPublic) return;
+        const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
+        if (!token) {
+            router.replace(`/login?from=${encodeURIComponent(pathname ?? "/")}`);
+        }
+    }, [pathname, isPublic, router]);
+
+    if (isPublic) {
         return <ToastProvider><main>{children}</main></ToastProvider>;
     }
 
