@@ -1,8 +1,5 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-    reactStrictMode: true,
-    experimental: {
-        serverComponentsExternalPackages: []
-    }
+    reactStrictMode: true
 };
 module.exports = nextConfig;
