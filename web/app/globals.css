@@ -36,10 +36,6 @@
 
 /* ─── Components ────────────────────────────────────────────────────────────── */
 @layer components {
-  .page-title {
-    @apply text-2xl font-bold text-slate-900 tracking-tight leading-tight;
-  }
-
   .page-subtitle {
     @apply text-sm text-slate-500 mt-0.5 leading-relaxed;
   }
@@ -60,8 +56,13 @@
            transition-all duration-300 hover:shadow-card-hover hover:-translate-y-0.5 cursor-default;
   }
 
+  .table-wrap {
+    @apply w-full overflow-x-auto -mx-0;
+  }
+
   .data-table {
     @apply w-full text-sm;
+    min-width: 540px;
   }
   .data-table thead tr {
     @apply border-b border-slate-100;
@@ -77,6 +78,10 @@
   }
   .data-table tbody td {
     @apply px-4 py-3.5 text-slate-700;
+  }
+
+  .page-title {
+    @apply text-xl sm:text-2xl font-bold text-slate-900 tracking-tight leading-tight;
   }
 
   .field-label {

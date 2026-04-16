@@ -274,7 +274,7 @@ export default function ProductsPage() {
                             </div>
                         ) : (
                             <div className="overflow-x-auto">
-                                <table className="data-table">
+                                <div className="table-wrap"><table className="data-table">
                                     <thead><tr><th>Product</th><th>SKU</th><th>Collection</th><th>Vendor</th><th>Variants</th><th>Price</th><th className="text-right pr-5">Actions</th></tr></thead>
                                     <tbody>
                                         {filtered.map((p, idx) => (
@@ -321,7 +321,7 @@ export default function ProductsPage() {
                                             </motion.tr>
                                         ))}
                                     </tbody>
-                                </table>
+                                </table></div>
                             </div>
                         )}
                     </div>

@@ -55,8 +55,8 @@ const NAV: NavItem[] = [
     },
 ];
 
-/* ─── Sidebar ─────────────────────────────────────────────────────────────── */
-function Sidebar() {
+/* ─── Sidebar content ─────────────────────────────────────────────────────── */
+function SidebarContent({ onNav }: { onNav?: () => void }) {
     const pathname = usePathname();
     const router = useRouter();
     const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -77,7 +77,7 @@ function Sidebar() {
     }
 
     return (
-        <aside className="sidebar-root w-[220px] shrink-0 flex flex-col sticky top-0 h-screen overflow-y-auto scrollbar-none">
+        <div className="flex flex-col h-full">
             {/* Brand */}
             <div className="px-4 py-4 flex flex-col items-center gap-1">
                 <Image
@@ -94,7 +94,7 @@ function Sidebar() {
             <div className="sidebar-divider" />
 
             {/* Navigation */}
-            <nav className="flex-1 px-3 py-1 space-y-0.5">
+            <nav className="flex-1 px-3 py-1 space-y-0.5 overflow-y-auto">
                 {NAV.map(item => {
                     const isActive = pathname === item.href ||
                         (item.href !== "/" && pathname?.startsWith(item.href));
@@ -102,7 +102,7 @@ function Sidebar() {
 
                     return (
                         <div key={item.href}>
-                            <Link href={item.href} className={cn("nav-item", isActive && "active")}>
+                            <Link href={item.href} onClick={onNav} className={cn("nav-item", isActive && "active")}>
                                 <span className={cn(
                                     "shrink-0 transition-colors duration-200",
                                     isActive ? "text-brand-400" : "text-ink-400"
@@ -128,6 +128,7 @@ function Sidebar() {
                                                     <Link
                                                         key={sub.href}
                                                         href={sub.href}
+                                                        onClick={onNav}
                                                         className={cn(
                                                             "flex items-center px-3 py-2 rounded-lg text-xs font-medium",
                                                             "transition-colors duration-150",
@@ -167,7 +168,7 @@ function Sidebar() {
                     Sign out
                 </button>
             </div>
-        </aside>
+        </div>
     );
 }
 
@@ -175,9 +176,11 @@ function Sidebar() {
 export default function AdminShell({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
     const router = useRouter();
+    const [mobileOpen, setMobileOpen] = useState(false);
 
     const isPublic = pathname?.startsWith("/shop/") || pathname === "/login";
 
+    // Auth guard
     useEffect(() => {
         if (isPublic) return;
         const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
@@ -186,6 +189,9 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
         }
     }, [pathname, isPublic, router]);
 
+    // Close mobile menu on route change
+    useEffect(() => { setMobileOpen(false); }, [pathname]);
+
     if (isPublic) {
         return <ToastProvider><main>{children}</main></ToastProvider>;
     }
@@ -193,18 +199,71 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
     return (
         <ToastProvider>
             <div className="app-bg min-h-screen flex">
-                <Sidebar />
-                <main className="flex-1 min-w-0 overflow-y-auto">
-                    <motion.div
-                        key={pathname}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.25, ease: [0.32, 0.72, 0, 1] }}
-                        className="p-7 max-w-[1200px]"
-                    >
-                        {children}
-                    </motion.div>
-                </main>
+
+                {/* ── Desktop sidebar (always visible ≥ lg) ── */}
+                <aside className="sidebar-root hidden lg:flex w-[220px] shrink-0 flex-col sticky top-0 h-screen overflow-y-auto scrollbar-none">
+                    <SidebarContent />
+                </aside>
+
+                {/* ── Mobile drawer overlay ── */}
+                <AnimatePresence>
+                    {mobileOpen && (
+                        <>
+                            {/* Backdrop */}
+                            <motion.div
+                                key="backdrop"
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                transition={{ duration: 0.2 }}
+                                className="fixed inset-0 z-40 bg-black/60 lg:hidden"
+                                onClick={() => setMobileOpen(false)}
+                            />
+                            {/* Drawer */}
+                            <motion.aside
+                                key="drawer"
+                                initial={{ x: -240 }}
+                                animate={{ x: 0 }}
+                                exit={{ x: -240 }}
+                                transition={{ duration: 0.25, ease: [0.32, 0.72, 0, 1] }}
+                                className="sidebar-root fixed top-0 left-0 z-50 w-[240px] h-full flex flex-col lg:hidden shadow-2xl"
+                            >
+                                <SidebarContent onNav={() => setMobileOpen(false)} />
+                            </motion.aside>
+                        </>
+                    )}
+                </AnimatePresence>
+
+                {/* ── Main content ── */}
+                <div className="flex-1 min-w-0 flex flex-col">
+
+                    {/* Mobile top bar */}
+                    <div className="lg:hidden sticky top-0 z-30 flex items-center gap-3 px-4 py-3 border-b border-slate-200 bg-white/80 backdrop-blur-sm">
+                        <button
+                            type="button"
+                            onClick={() => setMobileOpen(true)}
+                            className="p-2 rounded-lg text-slate-600 hover:bg-slate-100 transition-colors"
+                            aria-label="Open menu"
+                        >
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+                            </svg>
+                        </button>
+                        <Image src="/logo.png" alt="Crossroads Custom Apparel" width={100} height={40} className="object-contain" />
+                    </div>
+
+                    <main className="flex-1 overflow-x-hidden">
+                        <motion.div
+                            key={pathname}
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.25, ease: [0.32, 0.72, 0, 1] }}
+                            className="p-4 sm:p-6 lg:p-7 max-w-[1200px]"
+                        >
+                            {children}
+                        </motion.div>
+                    </main>
+                </div>
             </div>
         </ToastProvider>
     );

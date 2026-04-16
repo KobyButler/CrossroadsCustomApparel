@@ -105,7 +105,7 @@ export default function ShippingLabelsPage() {
                     </div>
                 ) : (
                     <div className="overflow-x-auto">
-                        <table className="data-table">
+                        <div className="table-wrap"><table className="data-table">
                             <thead>
                                 <tr>
                                     <th className="pl-5 w-10">
@@ -153,7 +153,7 @@ export default function ShippingLabelsPage() {
                                     </motion.tr>
                                 ))}
                             </tbody>
-                        </table>
+                        </table></div>
                     </div>
                 )}
             </div>

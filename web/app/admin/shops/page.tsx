@@ -148,7 +148,7 @@ export default function ShopsPage() {
                     </div>
                 ) : (
                     <div className="overflow-x-auto">
-                        <table className="data-table">
+                        <div className="table-wrap"><table className="data-table">
                             <thead><tr><th>Shop Name</th><th>Collection</th><th>Link</th><th>Status</th><th>Expires</th><th className="text-right pr-5">Actions</th></tr></thead>
                             <tbody>
                                 {filtered.map((shop, idx) => {
@@ -207,7 +207,7 @@ export default function ShopsPage() {
                                     );
                                 })}
                             </tbody>
-                        </table>
+                        </table></div>
                     </div>
                 )}
             </div>

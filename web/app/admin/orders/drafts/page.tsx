@@ -87,7 +87,7 @@ export default function DraftsPage() {
                         <p className="text-sm text-slate-400 font-medium">No draft orders</p>
                     </div>
                 ) : (
-                    <table className="data-table">
+                    <div className="table-wrap"><table className="data-table">
                         <thead><tr><th>Order ID</th><th>Customer</th><th>Items</th><th>Total</th><th>Created</th></tr></thead>
                         <tbody>
                             {drafts.map((o, idx) => (
@@ -100,7 +100,7 @@ export default function DraftsPage() {
                                 </motion.tr>
                             ))}
                         </tbody>
-                    </table>
+                    </table></div>
                 )}
             </div>
 
