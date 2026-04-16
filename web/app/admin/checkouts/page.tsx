@@ -38,7 +38,7 @@ export default function AbandonedCheckoutsPage() {
                     </div>
                 ) : (
                     <div className="overflow-x-auto">
-                        <table className="data-table">
+                        <div className="table-wrap"><table className="data-table">
                             <thead><tr><th>Date</th><th>Email</th><th>Shop</th><th>Items</th><th>Status</th></tr></thead>
                             <tbody>
                                 {rows.map((r, idx) => {
@@ -54,7 +54,7 @@ export default function AbandonedCheckoutsPage() {
                                     );
                                 })}
                             </tbody>
-                        </table>
+                        </table></div>
                     </div>
                 )}
             </div>

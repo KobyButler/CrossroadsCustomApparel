@@ -93,7 +93,7 @@ export default function DiscountsPage() {
                     </div>
                 ) : (
                     <div className="overflow-x-auto">
-                        <table className="data-table">
+                        <div className="table-wrap"><table className="data-table">
                             <thead><tr><th>Code</th><th>Discount</th><th>Used</th><th>Status</th><th>Expires</th><th className="text-right pr-5">Actions</th></tr></thead>
                             <tbody>
                                 {codes.map((c, idx) => {
@@ -144,7 +144,7 @@ export default function DiscountsPage() {
                                     );
                                 })}
                             </tbody>
-                        </table>
+                        </table></div>
                     </div>
                 )}
             </div>

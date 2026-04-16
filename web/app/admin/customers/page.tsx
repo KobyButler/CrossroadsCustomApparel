@@ -74,7 +74,7 @@ export default function CustomersPage() {
                     </div>
                 ) : (
                     <div className="overflow-x-auto">
-                        <table className="data-table">
+                        <div className="table-wrap"><table className="data-table">
                             <thead><tr><th>Customer</th><th>Orders</th><th>Total Spent</th><th>Top Customer?</th><th>Since</th></tr></thead>
                             <tbody>
                                 {filtered.sort((a,b) => b.totalCents - a.totalCents).map((c, idx) => (
@@ -111,7 +111,7 @@ export default function CustomersPage() {
                                     </motion.tr>
                                 ))}
                             </tbody>
-                        </table>
+                        </table></div>
                     </div>
                 )}
             </div>

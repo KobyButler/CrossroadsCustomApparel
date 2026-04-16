@@ -223,7 +223,7 @@ export default function OrdersPage() {
                     </div>
                 ) : (
                     <div className="overflow-x-auto">
-                        <table className="data-table">
+                        <div className="table-wrap"><table className="data-table">
                             <thead>
                                 <tr>
                                     <th className="w-10 pl-5">
@@ -322,7 +322,7 @@ export default function OrdersPage() {
                                     </motion.tr>
                                 ))}
                             </tbody>
-                        </table>
+                        </table></div>
                     </div>
                 )}
             </div>
