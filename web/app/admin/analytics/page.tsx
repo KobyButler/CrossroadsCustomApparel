@@ -124,7 +124,7 @@ export default function AnalyticsPage() {
                 {data.top.length === 0 ? (
                     <div className="py-12 text-center text-sm text-slate-400">No product sales yet</div>
                 ) : (
-                    <table className="data-table">
+                    <div className="table-wrap"><table className="data-table">
                         <thead><tr><th>#</th><th>Product</th><th>SKU</th><th>Units Sold</th><th>Sales</th></tr></thead>
                         <tbody>
                             {data.top.map((p, i) => (
@@ -143,7 +143,7 @@ export default function AnalyticsPage() {
                                 </tr>
                             ))}
                         </tbody>
-                    </table>
+                    </table></div>
                 )}
             </motion.div>
         </div>

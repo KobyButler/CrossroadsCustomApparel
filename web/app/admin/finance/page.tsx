@@ -145,7 +145,7 @@ export default function FinancePage() {
                     </div>
                 ) : (
                     <div className="overflow-x-auto">
-                        <table className="data-table">
+                        <div className="table-wrap"><table className="data-table">
                             <thead><tr><th>Type</th><th>Amount</th><th>Note</th><th>Order</th><th>Date</th></tr></thead>
                             <tbody>
                                 {filtered.map((tx, idx) => (
@@ -169,7 +169,7 @@ export default function FinancePage() {
                                     </motion.tr>
                                 ))}
                             </tbody>
-                        </table>
+                        </table></div>
                     </div>
                 )}
             </div>
