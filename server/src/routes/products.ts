@@ -43,18 +43,25 @@ router.get('/', async (req, res) => {
 
 router.post('/', async (req, res) => {
     const { name, sku, vendor, vendorIdentifier, brand, description, priceCents, images, sizes, colors, collectionId } = req.body;
-    const p = await prisma.product.create({
-        data: {
-            name, sku, vendor, vendorIdentifier, brand, description,
-            priceCents,
-            imagesJson: JSON.stringify(images ?? []),
-            sizesJson: sizes?.length ? JSON.stringify(sizes) : null,
-            colorsJson: colors?.length ? JSON.stringify(colors) : null,
-            collectionId
-        },
-        include: { collection: true }
-    });
-    res.json(p);
+    try {
+        const p = await prisma.product.create({
+            data: {
+                name, sku, vendor, vendorIdentifier, brand, description,
+                priceCents,
+                imagesJson: JSON.stringify(images ?? []),
+                sizesJson: sizes?.length ? JSON.stringify(sizes) : null,
+                colorsJson: colors?.length ? JSON.stringify(colors) : null,
+                collectionId
+            },
+            include: { collection: true }
+        });
+        res.json(p);
+    } catch (err: any) {
+        if (err?.code === 'P2002') {
+            return res.status(409).json({ error: `A product with SKU "${sku}" already exists.` });
+        }
+        throw err;
+    }
 });
 
 router.get('/:id', async (req, res) => {
@@ -84,7 +91,10 @@ router.put('/:id', async (req, res) => {
             include: { collection: true }
         });
         res.json(p);
-    } catch {
+    } catch (err: any) {
+        if (err?.code === 'P2002') {
+            return res.status(409).json({ error: `A product with that SKU already exists.` });
+        }
         res.status(404).json({ error: 'not found' });
     }
 });

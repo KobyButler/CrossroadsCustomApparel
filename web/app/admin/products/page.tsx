@@ -120,6 +120,8 @@ export default function ProductsPage() {
     const [form, setForm]             = useState({ ...EMPTY });
     const [collForm, setCollForm]     = useState({ name:"", description:"" });
     const [saving, setSaving]         = useState(false);
+    const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
+    const [deleting, setDeleting]     = useState(false);
 
     useEffect(() => {
         Promise.all([api("/products"), api("/collections")])
@@ -162,6 +164,18 @@ export default function ProductsPage() {
             setForm({ ...EMPTY });
         } catch (err: any) { toast(err.message || "Failed to save product", "error"); }
         finally { setSaving(false); }
+    }
+
+    async function deleteProduct() {
+        if (!deleteTarget) return;
+        setDeleting(true);
+        try {
+            await api(`/products/${deleteTarget.id}`, { method: "DELETE" });
+            setProducts(p => p.filter(x => x.id !== deleteTarget.id));
+            toast("Product deleted");
+            setDeleteTarget(null);
+        } catch (err: any) { toast(err.message || "Failed to delete product", "error"); }
+        finally { setDeleting(false); }
     }
 
     async function saveCollection(e: React.FormEvent) {
@@ -313,10 +327,16 @@ export default function ProductsPage() {
                                                 </td>
                                                 <td><span className="text-sm font-bold text-slate-900 tabular-nums">${(p.priceCents/100).toFixed(2)}</span></td>
                                                 <td className="text-right pr-5">
-                                                    <button type="button" onClick={() => openEdit(p)}
-                                                        className="px-2.5 py-1 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors">
-                                                        Edit
-                                                    </button>
+                                                    <div className="flex items-center justify-end gap-1">
+                                                        <button type="button" onClick={() => openEdit(p)}
+                                                            className="px-2.5 py-1 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors">
+                                                            Edit
+                                                        </button>
+                                                        <button type="button" onClick={() => setDeleteTarget(p)}
+                                                            className="px-2.5 py-1 rounded-lg text-xs font-medium text-red-500 hover:bg-red-50 hover:text-red-700 transition-colors">
+                                                            Delete
+                                                        </button>
+                                                    </div>
                                                 </td>
                                             </motion.tr>
                                         ))}
@@ -429,6 +449,18 @@ export default function ProductsPage() {
                         <Button type="submit" loading={saving}>{editProduct ? "Save Changes" : "Create Product"}</Button>
                     </ModalFooter>
                 </form>
+            </Modal>
+
+            {/* Delete Confirmation Modal */}
+            <Modal open={!!deleteTarget} onClose={() => setDeleteTarget(null)} title="Delete Product" size="sm">
+                <p className="text-sm text-slate-600 mb-1">
+                    Are you sure you want to delete <span className="font-semibold text-slate-900">{deleteTarget?.name}</span>?
+                </p>
+                <p className="text-xs text-slate-400 mb-4">This cannot be undone.</p>
+                <ModalFooter>
+                    <Button type="button" variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+                    <Button type="button" variant="danger" loading={deleting} onClick={deleteProduct}>Delete</Button>
+                </ModalFooter>
             </Modal>
 
             {/* Add Collection Modal */}
