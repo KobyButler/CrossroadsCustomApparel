@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, imgUrl } from "@/app/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Modal, ModalFooter } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 
 type Product = {
     id: string; name: string; sku: string; vendor: string;
@@ -21,6 +21,35 @@ const VENDOR_LABELS: Record<string, string> = { SANMAR:"SanMar", SSACTIVEWEAR:"S
 const VENDOR_COLORS: Record<string, string> = { SANMAR:"info", SSACTIVEWEAR:"success", OTHER:"default" };
 const EMPTY = { name:"", sku:"", vendor:"OTHER", vendorIdentifier:"", brand:"", description:"", priceDollars:"", collectionId:"", sizes:[] as string[], colors:[] as string[] };
 
+// ── Color mapping ──────────────────────────────────────────────────────────────
+export const COLOR_MAP: Record<string, string> = {
+    "black":"#111827","white":"#ffffff","red":"#dc2626","navy":"#1e3a5f",
+    "navy blue":"#1e3a5f","royal blue":"#2563eb","royal":"#2563eb",
+    "light blue":"#93c5fd","sky blue":"#7dd3fc","blue":"#3b82f6",
+    "maroon":"#7f1d1d","charcoal":"#374151","dark charcoal":"#1f2937",
+    "gray":"#9ca3af","grey":"#9ca3af","dark gray":"#4b5563","dark grey":"#4b5563",
+    "heather gray":"#d1d5db","heather grey":"#d1d5db","sport grey":"#d1d5db",
+    "ash":"#d1d5db","green":"#16a34a","dark green":"#15803d",
+    "forest green":"#166534","kelly green":"#22c55e","lime":"#a3e635",
+    "yellow":"#facc15","gold":"#d97706","athletic gold":"#d97706",
+    "dark gold":"#b45309","orange":"#f97316","pink":"#ec4899",
+    "hot pink":"#db2777","light pink":"#fbcfe8","purple":"#7c3aed",
+    "lavender":"#a78bfa","brown":"#92400e","tan":"#d4a96a","khaki":"#c4a96a",
+    "olive":"#84795a","cardinal":"#9b1c1c","crimson":"#dc2626",
+    "vegas gold":"#c5a028","columbia blue":"#b0c4de","carolina blue":"#56a0d3",
+    "copper":"#b45309","silver":"#c0c0c0","cream":"#fef9c3","natural":"#fef3c7",
+    "safety green":"#a3e635","safety orange":"#f97316","deep navy":"#1e2a4a",
+    "midnight navy":"#0f172a","heather navy":"#3b4f6e","heather red":"#ef4444",
+    "heather royal":"#4b7fd4","true royal":"#2563eb","burgundy":"#7f1d1d",
+    "wine":"#881337","teal":"#0d9488","cyan":"#06b6d4","coral":"#fb7185",
+    "sand":"#fde68a","cobalt":"#1d4ed8","violet":"#7c3aed","indigo":"#4338ca",
+};
+
+export function getColorCss(name: string): string {
+    return COLOR_MAP[name.toLowerCase().trim()] ?? "#94a3b8";
+}
+
+// ── TagInput ──────────────────────────────────────────────────────────────────
 function TagInput({ label, tags, onChange, placeholder }: { label:string; tags:string[]; onChange:(t:string[])=>void; placeholder?:string }) {
     const [input, setInput] = useState("");
     function add() {
@@ -57,6 +86,52 @@ function TagInput({ label, tags, onChange, placeholder }: { label:string; tags:s
     );
 }
 
+// ── ColorTagInput ─────────────────────────────────────────────────────────────
+function ColorTagInput({ label, tags, onChange, placeholder }: { label:string; tags:string[]; onChange:(t:string[])=>void; placeholder?:string }) {
+    const [input, setInput] = useState("");
+    function add() {
+        const v = input.trim();
+        if (v && !tags.includes(v)) onChange([...tags, v]);
+        setInput("");
+    }
+    return (
+        <div>
+            <label className="field-label">{label}</label>
+            <div className="flex flex-wrap gap-1.5 mb-2 min-h-[28px]">
+                {tags.map(t => (
+                    <span key={t} className="inline-flex items-center gap-1.5 text-xs bg-brand-50 text-brand-700 border border-brand-200 px-2 py-0.5 rounded-full">
+                        <span className="w-3 h-3 rounded-full border border-black/15 shrink-0"
+                            style={{ backgroundColor: getColorCss(t) }} />
+                        {t}
+                        <button type="button" title={`Remove ${t}`} aria-label={`Remove ${t}`}
+                            onClick={() => onChange(tags.filter(x => x !== t))} className="hover:text-red-500 transition-colors">
+                            <svg viewBox="0 0 12 12" fill="currentColor" className="w-3 h-3"><path d="M4.586 6L1.293 2.707 2.707 1.293 6 4.586l3.293-3.293 1.414 1.414L7.414 6l3.293 3.293-1.414 1.414L6 7.414l-3.293 3.293-1.414-1.414L4.586 6z"/></svg>
+                        </button>
+                    </span>
+                ))}
+                {tags.length === 0 && <span className="text-xs text-slate-300 italic">None added yet</span>}
+            </div>
+            <div className="flex gap-2">
+                <div className="relative flex-1">
+                    {input && (
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border border-black/15 pointer-events-none"
+                            style={{ backgroundColor: getColorCss(input) }} />
+                    )}
+                    <input type="text" value={input} onChange={e => setInput(e.target.value)}
+                        onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); add(); } }}
+                        placeholder={placeholder ?? "Black, White, Navy…"}
+                        className={`w-full ${input ? "pl-8" : "pl-3"} pr-3 py-1.5 text-sm border border-slate-200 rounded-xl outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all`} />
+                </div>
+                <button type="button" onClick={add}
+                    className="px-3 py-1.5 text-sm border border-slate-200 rounded-xl text-slate-600 hover:bg-brand-50 hover:border-brand-300 hover:text-brand-700 transition-all">
+                    Add
+                </button>
+            </div>
+        </div>
+    );
+}
+
+// ── ImageUploader ─────────────────────────────────────────────────────────────
 function ImageUploader({ productId, existingImages, onUploaded }: { productId:string; existingImages:string[]; onUploaded:(url:string)=>void }) {
     const { toast } = useToast();
     const [uploading, setUploading] = useState(false);
@@ -105,23 +180,142 @@ function ImageUploader({ productId, existingImages, onUploaded }: { productId:st
     );
 }
 
+// ── Vendor Search Panel ───────────────────────────────────────────────────────
+type VendorItem = {
+    style: string; title: string; brand?: string;
+    colors: string[]; sizes: string[]; priceCents: number; description?: string;
+};
+
+function VendorSearchPanel({ source, onSelect }: { source: "SANMAR"|"SS"; onSelect:(item:VendorItem)=>void }) {
+    const [query, setQuery] = useState("");
+    const [results, setResults] = useState<any[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [selecting, setSelecting] = useState(false);
+    const [error, setError] = useState("");
+    const timerRef = useRef<ReturnType<typeof setTimeout>>();
+
+    async function doSearch(q: string) {
+        if (!q.trim()) { setResults([]); return; }
+        setLoading(true); setError("");
+        try {
+            if (source === "SANMAR") {
+                const data = await api(`/sanmar/catalog?q=${encodeURIComponent(q)}&limit=40`);
+                const seen = new Set<string>();
+                const unique: any[] = [];
+                for (const row of data.data ?? []) {
+                    if (!seen.has(row.style)) { seen.add(row.style); unique.push(row); }
+                }
+                setResults(unique.slice(0, 15));
+            } else {
+                const data = await api(`/ss/search?q=${encodeURIComponent(q)}`);
+                setResults((data.products ?? data ?? []).slice(0, 15));
+            }
+        } catch (e: any) { setError(e.message || "Search failed"); }
+        finally { setLoading(false); }
+    }
+
+    function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+        const q = e.target.value;
+        setQuery(q);
+        clearTimeout(timerRef.current);
+        timerRef.current = setTimeout(() => doSearch(q), 400);
+    }
+
+    async function handleSelect(result: any) {
+        setSelecting(true); setError("");
+        try {
+            if (source === "SANMAR") {
+                const detail = await api(`/sanmar/catalog/${result.style}`);
+                onSelect({
+                    style: detail.style,
+                    title: detail.title ?? result.style,
+                    brand: detail.brand ?? undefined,
+                    colors: detail.colors ?? [],
+                    sizes: detail.sizes ?? [],
+                    priceCents: detail.priceCents ?? 0,
+                    description: detail.description ?? undefined,
+                });
+            } else {
+                onSelect({
+                    style: result.sku ?? result.style ?? result.partNumber ?? "",
+                    title: result.title ?? result.name ?? result.sku ?? "",
+                    brand: result.brandName ?? result.brand ?? undefined,
+                    colors: result.colors ?? [],
+                    sizes: result.sizes ?? [],
+                    priceCents: result.priceCents ?? Math.round((result.price ?? 0) * 100),
+                    description: result.description ?? undefined,
+                });
+            }
+        } catch (e: any) { setError(e.message || "Failed to load details"); }
+        finally { setSelecting(false); }
+    }
+
+    const label = source === "SANMAR" ? "SanMar" : "S&S Activewear";
+
+    return (
+        <div className="space-y-2">
+            <div className="relative">
+                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                <input value={query} onChange={handleChange}
+                    placeholder={`Search ${label} by style # or name…`}
+                    className="w-full pl-9 pr-8 py-2.5 text-sm border border-slate-200 rounded-xl outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 bg-white transition-all" />
+                {(loading || selecting) && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+                )}
+            </div>
+            {error && <p className="text-xs text-red-500 px-1">{error}</p>}
+            {results.length > 0 && (
+                <div className="border border-slate-200 rounded-xl overflow-hidden max-h-52 overflow-y-auto divide-y divide-slate-100 bg-white shadow-sm">
+                    {results.map((r, i) => (
+                        <button key={i} type="button" onClick={() => handleSelect(r)}
+                            className="w-full text-left px-4 py-2.5 hover:bg-brand-50 transition-colors flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                                <p className="text-sm font-semibold text-slate-800 truncate">{r.title ?? r.name ?? r.sku}</p>
+                                <p className="text-xs text-slate-400 truncate">{r.brand ?? ""} {r.brand ? "·" : ""} Style {r.style ?? r.sku}</p>
+                            </div>
+                            <span className="text-xs text-brand-600 font-semibold shrink-0">Select →</span>
+                        </button>
+                    ))}
+                </div>
+            )}
+            {query && !loading && !selecting && results.length === 0 && !error && (
+                <p className="text-xs text-slate-400 text-center py-2">No results for &ldquo;{query}&rdquo;</p>
+            )}
+            {source === "SANMAR" && !query && (
+                <p className="text-xs text-slate-400 px-1">Searches your synced SanMar catalog. Run a catalog sync in the SanMar tab if results are missing.</p>
+            )}
+        </div>
+    );
+}
+
+// ── Main Page ─────────────────────────────────────────────────────────────────
 export default function ProductsPage() {
     const { toast } = useToast();
-    const [products, setProducts]     = useState<Product[]>([]);
-    const [collections, setCollections] = useState<Collection[]>([]);
-    const [loading, setLoading]       = useState(true);
-    const [tab, setTab]               = useState<"products"|"collections">("products");
-    const [search, setSearch]         = useState("");
+    const [products, setProducts]         = useState<Product[]>([]);
+    const [collections, setCollections]   = useState<Collection[]>([]);
+    const [loading, setLoading]           = useState(true);
+    const [tab, setTab]                   = useState<"products"|"collections">("products");
+    const [search, setSearch]             = useState("");
     const [filterCollection, setFilterCollection] = useState("");
-    const [filterVendor, setFilterVendor]         = useState("");
-    const [showAdd, setShowAdd]       = useState(false);
-    const [showAddColl, setShowAddColl] = useState(false);
-    const [editProduct, setEditProduct] = useState<Product | null>(null);
-    const [form, setForm]             = useState({ ...EMPTY });
-    const [collForm, setCollForm]     = useState({ name:"", description:"" });
-    const [saving, setSaving]         = useState(false);
+    const [filterVendor, setFilterVendor] = useState("");
+    const [showAdd, setShowAdd]           = useState(false);
+    const [showAddColl, setShowAddColl]   = useState(false);
+    const [editProduct, setEditProduct]   = useState<Product | null>(null);
+    const [form, setForm]                 = useState({ ...EMPTY });
+    const [collForm, setCollForm]         = useState({ name:"", description:"" });
+    const [saving, setSaving]             = useState(false);
     const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
-    const [deleting, setDeleting]     = useState(false);
+    const [deleting, setDeleting]         = useState(false);
+
+    // Vendor import state
+    const [importSource, setImportSource] = useState<"MANUAL"|"SANMAR"|"SS">("MANUAL");
+    const [importedFrom, setImportedFrom] = useState<string>("");
+
+    // Collection management state
+    const [managingCollection, setManagingCollection] = useState<Collection | null>(null);
+    const [addToCollSearch, setAddToCollSearch]       = useState("");
+    const [addToCollSelected, setAddToCollSelected]   = useState<Set<string>>(new Set());
+    const [addToCollSaving, setAddToCollSaving]       = useState(false);
 
     useEffect(() => {
         Promise.all([api("/products"), api("/collections")])
@@ -142,9 +336,36 @@ export default function ProductsPage() {
 
     function openEdit(p: Product) {
         setEditProduct(p);
+        setImportSource("MANUAL");
+        setImportedFrom("");
         setForm({ name:p.name, sku:p.sku, vendor:p.vendor, vendorIdentifier:p.vendorIdentifier??"", brand:p.brand??"", description:p.description??"",
             priceDollars:(p.priceCents/100).toFixed(2), collectionId:p.collectionId,
             sizes:p.sizesJson?JSON.parse(p.sizesJson):[], colors:p.colorsJson?JSON.parse(p.colorsJson):[] });
+    }
+
+    function openAdd() {
+        setForm({ ...EMPTY });
+        setEditProduct(null);
+        setImportSource("MANUAL");
+        setImportedFrom("");
+        setShowAdd(true);
+    }
+
+    function handleVendorSelect(item: VendorItem) {
+        const vendor = importSource === "SANMAR" ? "SANMAR" : "SSACTIVEWEAR";
+        setForm(p => ({
+            ...p,
+            name:             item.title,
+            sku:              item.style,
+            vendor,
+            vendorIdentifier: item.style,
+            brand:            item.brand ?? p.brand,
+            description:      item.description ?? p.description,
+            priceDollars:     item.priceCents > 0 ? (item.priceCents / 100).toFixed(2) : p.priceDollars,
+            sizes:            item.sizes.length > 0 ? item.sizes : p.sizes,
+            colors:           item.colors.length > 0 ? item.colors : p.colors,
+        }));
+        setImportedFrom(item.title);
     }
 
     async function saveProduct(e: React.FormEvent) {
@@ -188,10 +409,36 @@ export default function ProductsPage() {
         finally { setSaving(false); }
     }
 
+    async function addProductsToCollection() {
+        if (!managingCollection || addToCollSelected.size === 0) return;
+        setAddToCollSaving(true);
+        try {
+            await Promise.all([...addToCollSelected].map(id =>
+                api(`/products/${id}`, { method:"PUT", body:JSON.stringify({ collectionId: managingCollection.id }) })
+            ));
+            setProducts(prev => prev.map(p =>
+                addToCollSelected.has(p.id) ? { ...p, collectionId: managingCollection.id, collection: { name: managingCollection.name } } : p
+            ));
+            toast(`Added ${addToCollSelected.size} product${addToCollSelected.size !== 1 ? "s" : ""} to ${managingCollection.name}`);
+            setManagingCollection(null);
+            setAddToCollSelected(new Set());
+        } catch (err: any) { toast(err.message || "Failed to update products", "error"); }
+        finally { setAddToCollSaving(false); }
+    }
+
     const TABS = [
         { key:"products", label:"Products", count:products.length },
         { key:"collections", label:"Collections", count:collections.length }
     ] as const;
+
+    // Products not in the managing collection (for "add to collection" modal)
+    const otherProducts = managingCollection
+        ? products.filter(p => p.collectionId !== managingCollection.id)
+            .filter(p => {
+                const q = addToCollSearch.toLowerCase();
+                return !q || p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q);
+            })
+        : [];
 
     return (
         <div className="space-y-6">
@@ -204,7 +451,7 @@ export default function ProductsPage() {
                 <div className="flex gap-2.5 flex-wrap">
                     {tab === "products" && (
                         <motion.button whileHover={{ y:-1 }} whileTap={{ scale:0.97 }}
-                            onClick={() => { setForm({ ...EMPTY }); setEditProduct(null); setShowAdd(true); }}
+                            onClick={openAdd}
                             className="btn-shine flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white transition-all duration-200"
                             style={{ background:"linear-gradient(135deg,#8b5cf6 0%,#7c3aed 100%)", boxShadow:"0 4px 16px rgba(124,58,237,0.35)" }}
                         >
@@ -313,12 +560,20 @@ export default function ProductsPage() {
                                                 <td><span className="text-sm text-slate-500">{p.collection?.name ?? "—"}</span></td>
                                                 <td><Badge variant={VENDOR_COLORS[p.vendor] as any} size="sm">{VENDOR_LABELS[p.vendor] ?? p.vendor}</Badge></td>
                                                 <td>
-                                                    <div className="flex gap-1 flex-wrap">
+                                                    <div className="flex gap-1 flex-wrap items-center">
                                                         {p.sizesJson && JSON.parse(p.sizesJson).length > 0 && (
                                                             <span className="text-xs bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">{JSON.parse(p.sizesJson).length} sizes</span>
                                                         )}
                                                         {p.colorsJson && JSON.parse(p.colorsJson).length > 0 && (
-                                                            <span className="text-xs bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">{JSON.parse(p.colorsJson).length} colors</span>
+                                                            <span className="flex items-center gap-0.5">
+                                                                {JSON.parse(p.colorsJson).slice(0,4).map((c: string) => (
+                                                                    <span key={c} title={c} className="w-3 h-3 rounded-full border border-black/10 inline-block"
+                                                                        style={{ backgroundColor: getColorCss(c) }} />
+                                                                ))}
+                                                                {JSON.parse(p.colorsJson).length > 4 && (
+                                                                    <span className="text-xs text-slate-400 ml-0.5">+{JSON.parse(p.colorsJson).length - 4}</span>
+                                                                )}
+                                                            </span>
                                                         )}
                                                         {(!p.sizesJson || JSON.parse(p.sizesJson).length === 0) && (!p.colorsJson || JSON.parse(p.colorsJson).length === 0) && (
                                                             <span className="text-xs text-slate-300">—</span>
@@ -367,6 +622,7 @@ export default function ProductsPage() {
                     ) : (
                         collections.map((c, idx) => {
                             const count = products.filter(p => p.collectionId === c.id).length;
+                            const collProducts = products.filter(p => p.collectionId === c.id);
                             return (
                                 <motion.div key={c.id} initial={{ opacity:0, y:8 }} animate={{ opacity:1, y:0 }}
                                     transition={{ delay:idx*0.05, duration:0.3 }}
@@ -383,6 +639,36 @@ export default function ProductsPage() {
                                     <h3 className="text-sm font-bold text-slate-900 mt-3">{c.name}</h3>
                                     {c.description && <p className="text-xs text-slate-500 mt-0.5 mb-2">{c.description}</p>}
                                     <code className="text-xs font-mono text-slate-400">/collections/{c.slug}</code>
+
+                                    {/* Mini product thumbnails */}
+                                    {collProducts.length > 0 && (
+                                        <div className="flex gap-1 mt-3 flex-wrap">
+                                            {collProducts.slice(0,5).map(p => {
+                                                const imgs = p.imagesJson ? JSON.parse(p.imagesJson) : [];
+                                                return imgs[0] ? (
+                                                    <img key={p.id} src={imgUrl(imgs[0])} alt={p.name}
+                                                        title={p.name}
+                                                        className="w-8 h-8 rounded-lg object-cover border border-slate-200 ring-1 ring-black/5" />
+                                                ) : (
+                                                    <div key={p.id} title={p.name}
+                                                        className="w-8 h-8 rounded-lg bg-brand-50 border border-slate-200 flex items-center justify-center">
+                                                        <svg className="w-4 h-4 text-brand-200" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/></svg>
+                                                    </div>
+                                                );
+                                            })}
+                                            {collProducts.length > 5 && (
+                                                <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-xs text-slate-500 font-semibold border border-slate-200">
+                                                    +{collProducts.length - 5}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    <button type="button"
+                                        onClick={() => { setManagingCollection(c); setAddToCollSelected(new Set()); setAddToCollSearch(""); }}
+                                        className="mt-3 w-full text-xs font-semibold text-brand-600 hover:text-brand-700 border border-brand-200 hover:border-brand-400 hover:bg-brand-50 rounded-xl py-2 transition-all">
+                                        + Add Products to Collection
+                                    </button>
                                 </motion.div>
                             );
                         })
@@ -390,11 +676,54 @@ export default function ProductsPage() {
                 </div>
             )}
 
-            {/* Add/Edit Product Modal */}
+            {/* ── Add/Edit Product Modal ── */}
             <Modal open={showAdd || !!editProduct}
                 onClose={() => { setShowAdd(false); setEditProduct(null); setForm({ ...EMPTY }); }}
-                title={editProduct ? "Edit Product" : "Add Product"} size="lg">
-                <form onSubmit={saveProduct} className="space-y-4">
+                title={editProduct ? "Edit Product" : "Add Product"} size="xl">
+                <form onSubmit={saveProduct} className="space-y-5">
+
+                    {/* Source selector (only on create) */}
+                    {!editProduct && (
+                        <div>
+                            <label className="field-label mb-2 block">Product Source</label>
+                            <div className="flex rounded-xl border border-slate-200 overflow-hidden">
+                                {(["MANUAL","SANMAR","SS"] as const).map(src => {
+                                    const labels = { MANUAL:"Manual Entry", SANMAR:"SanMar", SS:"S&S Activewear" };
+                                    return (
+                                        <button key={src} type="button"
+                                            onClick={() => { setImportSource(src); setImportedFrom(""); }}
+                                            className={`flex-1 py-2 text-sm font-medium transition-all ${importSource===src ? "bg-brand-600 text-white" : "text-slate-600 hover:bg-slate-50"}`}>
+                                            {labels[src]}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Vendor search panel */}
+                    {!editProduct && importSource !== "MANUAL" && (
+                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2">
+                            {importedFrom ? (
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
+                                            <svg className="w-3 h-3 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>
+                                        </div>
+                                        <span className="text-sm font-semibold text-slate-800">Imported: {importedFrom}</span>
+                                    </div>
+                                    <button type="button" onClick={() => setImportedFrom("")}
+                                        className="text-xs text-slate-500 hover:text-slate-700 underline">
+                                        Search again
+                                    </button>
+                                </div>
+                            ) : (
+                                <VendorSearchPanel source={importSource} onSelect={handleVendorSelect} />
+                            )}
+                        </div>
+                    )}
+
+                    {/* Fields */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <Input label="Product Name" required value={form.name} onChange={e => setForm(p => ({ ...p, name:e.target.value }))} />
                         <Input label="SKU" required value={form.sku} onChange={e => setForm(p => ({ ...p, sku:e.target.value }))} />
@@ -415,9 +744,15 @@ export default function ProductsPage() {
                         <Input label="Brand" placeholder="e.g. Port & Company" value={form.brand} onChange={e => setForm(p => ({ ...p, brand:e.target.value }))} />
                         <Input label="Price ($)" type="number" step="0.01" min="0" required value={form.priceDollars} onChange={e => setForm(p => ({ ...p, priceDollars:e.target.value }))} />
                     </div>
+                    <div>
+                        <label className="field-label">Description</label>
+                        <textarea value={form.description} onChange={e => setForm(p => ({ ...p, description:e.target.value }))}
+                            placeholder="Product description…" rows={3}
+                            className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all resize-none" />
+                    </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <TagInput label="Available Sizes" tags={form.sizes} onChange={sizes => setForm(p => ({ ...p, sizes }))} placeholder="S, M, L, XL…" />
-                        <TagInput label="Available Colors" tags={form.colors} onChange={colors => setForm(p => ({ ...p, colors }))} placeholder="Black, White…" />
+                        <ColorTagInput label="Available Colors" tags={form.colors} onChange={colors => setForm(p => ({ ...p, colors }))} />
                     </div>
                     <div>
                         <label className="field-label">Collection</label>
@@ -451,7 +786,7 @@ export default function ProductsPage() {
                 </form>
             </Modal>
 
-            {/* Delete Confirmation Modal */}
+            {/* ── Delete Confirmation Modal ── */}
             <Modal open={!!deleteTarget} onClose={() => setDeleteTarget(null)} title="Delete Product" size="sm">
                 <p className="text-sm text-slate-600 mb-1">
                     Are you sure you want to delete <span className="font-semibold text-slate-900">{deleteTarget?.name}</span>?
@@ -463,7 +798,7 @@ export default function ProductsPage() {
                 </ModalFooter>
             </Modal>
 
-            {/* Add Collection Modal */}
+            {/* ── Add Collection Modal ── */}
             <Modal open={showAddColl} onClose={() => setShowAddColl(false)} title="New Collection" size="sm">
                 <form onSubmit={saveCollection} className="space-y-4">
                     <Input label="Collection Name" required value={collForm.name} onChange={e => setCollForm(p => ({ ...p, name:e.target.value }))} />
@@ -473,6 +808,67 @@ export default function ProductsPage() {
                         <Button type="submit" loading={saving}>Create Collection</Button>
                     </ModalFooter>
                 </form>
+            </Modal>
+
+            {/* ── Manage Collection Products Modal ── */}
+            <Modal open={!!managingCollection}
+                onClose={() => { setManagingCollection(null); setAddToCollSelected(new Set()); }}
+                title={`Add Products to "${managingCollection?.name}"`} size="lg">
+                <div className="space-y-4">
+                    <div className="relative">
+                        <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                        <input className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-xl outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all"
+                            placeholder="Search products…" value={addToCollSearch} onChange={e => setAddToCollSearch(e.target.value)} />
+                    </div>
+                    {otherProducts.length === 0 ? (
+                        <p className="text-sm text-slate-400 text-center py-4">
+                            {addToCollSearch ? "No matching products found." : "All products are already in this collection."}
+                        </p>
+                    ) : (
+                        <div className="border border-slate-200 rounded-xl overflow-hidden max-h-72 overflow-y-auto divide-y divide-slate-100">
+                            {otherProducts.map(p => {
+                                const imgs = p.imagesJson ? JSON.parse(p.imagesJson) : [];
+                                const checked = addToCollSelected.has(p.id);
+                                return (
+                                    <label key={p.id} className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors ${checked ? "bg-brand-50" : "hover:bg-slate-50"}`}>
+                                        <input type="checkbox" checked={checked}
+                                            onChange={() => {
+                                                setAddToCollSelected(prev => {
+                                                    const next = new Set(prev);
+                                                    next.has(p.id) ? next.delete(p.id) : next.add(p.id);
+                                                    return next;
+                                                });
+                                            }}
+                                            className="accent-brand-600 w-4 h-4 rounded" />
+                                        {imgs[0] ? (
+                                            <img src={imgUrl(imgs[0])} alt={p.name} className="w-8 h-8 rounded-lg object-cover border border-slate-200 shrink-0" />
+                                        ) : (
+                                            <div className="w-8 h-8 rounded-lg bg-brand-50 border border-slate-200 flex items-center justify-center shrink-0">
+                                                <svg className="w-4 h-4 text-brand-200" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14"/></svg>
+                                            </div>
+                                        )}
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-semibold text-slate-800 truncate">{p.name}</p>
+                                            <p className="text-xs text-slate-400">{p.collection?.name ?? "No collection"} · {p.sku}</p>
+                                        </div>
+                                        <span className="text-sm font-bold text-slate-700 shrink-0">${(p.priceCents/100).toFixed(2)}</span>
+                                    </label>
+                                );
+                            })}
+                        </div>
+                    )}
+                    {addToCollSelected.size > 0 && (
+                        <p className="text-xs text-brand-600 font-medium">
+                            {addToCollSelected.size} product{addToCollSelected.size !== 1 ? "s" : ""} selected
+                        </p>
+                    )}
+                    <ModalFooter>
+                        <Button type="button" variant="outline" onClick={() => { setManagingCollection(null); setAddToCollSelected(new Set()); }}>Cancel</Button>
+                        <Button type="button" loading={addToCollSaving} disabled={addToCollSelected.size === 0} onClick={addProductsToCollection}>
+                            Add {addToCollSelected.size > 0 ? addToCollSelected.size : ""} Product{addToCollSelected.size !== 1 ? "s" : ""}
+                        </Button>
+                    </ModalFooter>
+                </div>
             </Modal>
         </div>
     );
