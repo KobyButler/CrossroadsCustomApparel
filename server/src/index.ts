@@ -1,10 +1,12 @@
 process.on('uncaughtException', (err) => {
     console.error('Uncaught Exception:', err);
-    process.exit(1);
+    // Give the server a moment to finish in-flight requests before exiting
+    setTimeout(() => process.exit(1), 1000);
 });
 process.on('unhandledRejection', (reason) => {
-    console.error('Unhandled Rejection:', reason);
-    process.exit(1);
+    // Log but do NOT exit — a single unhandled rejection in a background job
+    // should not kill the entire HTTP server and cause 502s for all users.
+    console.error('Unhandled Rejection (non-fatal):', reason);
 });
 
 console.log('Starting server...');
