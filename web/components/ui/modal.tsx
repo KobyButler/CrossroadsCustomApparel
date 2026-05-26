@@ -56,13 +56,14 @@ export function Modal({ open, onClose, title, description, size = "md", children
                         transition={{ duration: 0.22, ease: [0.32, 0.72, 0, 1] }}
                         className={cn(
                             "relative w-full bg-white rounded-2xl shadow-modal",
-                            "ring-1 ring-black/8 overflow-hidden",
-                            sizes[size]
+                            "ring-1 ring-black/8 flex flex-col",
+                            sizes[size],
+                            "max-h-[90vh]"
                         )}
                     >
                         {/* Header */}
                         {(title || description) && (
-                            <div className="px-6 pt-5 pb-4 border-b border-slate-100">
+                            <div className="px-6 pt-5 pb-4 border-b border-slate-100 shrink-0">
                                 {title && (
                                     <h2 className="text-base font-bold text-slate-900 leading-snug">
                                         {title}
@@ -90,7 +91,7 @@ export function Modal({ open, onClose, title, description, size = "md", children
                         </button>
 
                         {/* Body */}
-                        <div className="px-6 py-5">
+                        <div className="px-6 py-5 overflow-y-auto flex-1">
                             {children}
                         </div>
                     </motion.div>

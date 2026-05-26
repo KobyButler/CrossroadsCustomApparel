@@ -5,6 +5,7 @@ import { imgUrl } from "@/app/lib/api";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import Image from "next/image";
+import { getColorCss } from "@/app/admin/products/page";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Product = {
@@ -80,6 +81,243 @@ function StripePaymentForm({ orderId, totalCents, onSuccess, onBack }: {
     );
 }
 
+// ─── Product Detail Drawer ────────────────────────────────────────────────────
+function ProductDetailDrawer({
+    product, onClose, onAddToCart, cartCount
+}: {
+    product: Product;
+    onClose: () => void;
+    onAddToCart: (size?: string, color?: string, qty?: number) => void;
+    cartCount: number;
+}) {
+    const imgs: string[] = product.imagesJson ? JSON.parse(product.imagesJson) : [];
+    const sizes: string[] = product.sizesJson ? JSON.parse(product.sizesJson) : [];
+    const colors: string[] = product.colorsJson ? JSON.parse(product.colorsJson) : [];
+
+    const [imgIdx, setImgIdx] = useState(0);
+    const [selSize, setSelSize] = useState(sizes.length === 1 ? sizes[0] : "");
+    const [selColor, setSelColor] = useState(colors.length === 1 ? colors[0] : "");
+    const [qty, setQty] = useState(1);
+    const [added, setAdded] = useState(false);
+
+    function handleAdd() {
+        if (sizes.length > 0 && !selSize) { alert("Please select a size."); return; }
+        if (colors.length > 0 && !selColor) { alert("Please select a color."); return; }
+        onAddToCart(selSize || undefined, selColor || undefined, qty);
+        setAdded(true);
+        setTimeout(() => setAdded(false), 1500);
+    }
+
+    // Close on Escape
+    useEffect(() => {
+        const h = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+        window.addEventListener("keydown", h);
+        return () => window.removeEventListener("keydown", h);
+    }, [onClose]);
+
+    // Prevent body scroll
+    useEffect(() => {
+        document.body.style.overflow = "hidden";
+        return () => { document.body.style.overflow = ""; };
+    }, []);
+
+    const selectedColorCss = selColor ? getColorCss(selColor) : null;
+
+    return (
+        <div className="fixed inset-0 z-50 flex">
+            {/* Backdrop */}
+            <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }}
+                className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+
+            {/* Drawer panel */}
+            <motion.div
+                initial={{ x:"100%" }} animate={{ x:0 }} exit={{ x:"100%" }}
+                transition={{ type:"spring", stiffness:300, damping:35 }}
+                className="relative ml-auto w-full max-w-lg bg-white h-full flex flex-col overflow-hidden shadow-2xl">
+
+                {/* Close button */}
+                <button type="button" onClick={onClose} aria-label="Close product details"
+                    className="absolute top-4 right-4 z-10 w-9 h-9 rounded-xl bg-white/90 backdrop-blur-sm border border-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-800 hover:bg-white transition-colors shadow-sm">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+
+                {/* Scrollable content */}
+                <div className="flex-1 overflow-y-auto">
+
+                    {/* Image gallery */}
+                    <div className="relative bg-slate-50" style={{ aspectRatio:"4/3" }}>
+                        {imgs.length > 0 ? (
+                            <>
+                                <AnimatePresence mode="wait">
+                                    <motion.img key={imgIdx}
+                                        initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }}
+                                        transition={{ duration:0.2 }}
+                                        src={imgUrl(imgs[imgIdx])} alt={product.name}
+                                        className="w-full h-full object-contain" />
+                                </AnimatePresence>
+
+                                {imgs.length > 1 && (
+                                    <>
+                                        <button type="button" aria-label="Previous image" onClick={() => setImgIdx(i => (i - 1 + imgs.length) % imgs.length)}
+                                            className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 bg-white/90 backdrop-blur-sm rounded-xl border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-white transition-colors shadow-sm">
+                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/></svg>
+                                        </button>
+                                        <button type="button" aria-label="Next image" onClick={() => setImgIdx(i => (i + 1) % imgs.length)}
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 bg-white/90 backdrop-blur-sm rounded-xl border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-white transition-colors shadow-sm">
+                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/></svg>
+                                        </button>
+                                    </>
+                                )}
+
+                                {/* Dot indicators */}
+                                {imgs.length > 1 && (
+                                    <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
+                                        {imgs.map((_, i) => (
+                                            <button key={i} type="button" aria-label={`View image ${i + 1}`} onClick={() => setImgIdx(i)}
+                                                className={`rounded-full transition-all ${i === imgIdx ? "w-5 h-1.5 bg-violet-600" : "w-1.5 h-1.5 bg-slate-300 hover:bg-slate-400"}`} />
+                                        ))}
+                                    </div>
+                                )}
+                            </>
+                        ) : (
+                            <div className="w-full h-full flex items-center justify-center" style={{ background:"linear-gradient(135deg,#f3f0ff,#ede9fe)" }}>
+                                <svg className="w-20 h-20 text-violet-200" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                            </div>
+                        )}
+
+                        {cartCount > 0 && (
+                            <div className="absolute top-3 left-3 bg-violet-600 text-white text-xs font-bold px-2.5 py-1 rounded-full shadow">
+                                {cartCount} in cart
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Thumbnail strip */}
+                    {imgs.length > 1 && (
+                        <div className="flex gap-2 px-5 py-3 overflow-x-auto bg-white border-b border-slate-100">
+                            {imgs.map((url, i) => (
+                                <button key={i} type="button" onClick={() => setImgIdx(i)}
+                                    className={`shrink-0 w-14 h-14 rounded-xl overflow-hidden border-2 transition-all ${i === imgIdx ? "border-violet-500 ring-2 ring-violet-500/20" : "border-slate-200 hover:border-slate-300"}`}>
+                                    <img src={imgUrl(url)} alt={`View ${i+1}`} className="w-full h-full object-cover" />
+                                </button>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Product info */}
+                    <div className="p-5 space-y-5">
+                        <div>
+                            {product.brand && (
+                                <p className="text-xs font-bold text-violet-500 uppercase tracking-wider mb-1">{product.brand}</p>
+                            )}
+                            <h2 className="text-xl font-black text-slate-900 leading-tight">{product.name}</h2>
+                            <p className="text-2xl font-black mt-2" style={{ background:"linear-gradient(135deg,#8b5cf6,#7c3aed)", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent", backgroundClip:"text" }}>
+                                {fmt(product.priceCents)}
+                            </p>
+                        </div>
+
+                        {product.description && (
+                            <div>
+                                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Description</h3>
+                                <p className="text-sm text-slate-600 leading-relaxed">{product.description}</p>
+                            </div>
+                        )}
+
+                        {/* Color picker */}
+                        {colors.length > 0 && (
+                            <div>
+                                <div className="flex items-center justify-between mb-2">
+                                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Color</h3>
+                                    {selColor && (
+                                        <span className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
+                                            <span className="w-4 h-4 rounded-full border border-black/10 inline-block"
+                                                style={{ backgroundColor: getColorCss(selColor) }} />
+                                            {selColor}
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                    {colors.map(c => {
+                                        const css = getColorCss(c);
+                                        const isWhite = css === "#ffffff";
+                                        const isSelected = selColor === c;
+                                        return (
+                                            <button key={c} type="button" title={c}
+                                                onClick={() => setSelColor(prev => prev === c ? "" : c)}
+                                                className={`relative w-8 h-8 rounded-full border-2 transition-all ${isSelected ? "border-violet-500 scale-110 shadow-md" : isWhite ? "border-slate-300 hover:border-slate-400" : "border-transparent hover:scale-105"}`}
+                                                style={{ backgroundColor: css }}>
+                                                {isSelected && (
+                                                    <svg className={`absolute inset-0 m-auto w-4 h-4 ${isWhite || css === "#ffffff" || css.startsWith("#f") || css.startsWith("#e") || css.startsWith("#d") ? "text-slate-700" : "text-white"}`}
+                                                        fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/>
+                                                    </svg>
+                                                )}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Size picker */}
+                        {sizes.length > 0 && (
+                            <div>
+                                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Size</h3>
+                                <div className="flex flex-wrap gap-2">
+                                    {sizes.map(s => (
+                                        <button key={s} type="button"
+                                            onClick={() => setSelSize(prev => prev === s ? "" : s)}
+                                            className={`px-3.5 py-2 rounded-xl border text-sm font-semibold transition-all duration-150 ${selSize===s ? "bg-violet-600 text-white border-violet-600 shadow-sm" : "border-slate-200 text-slate-600 hover:border-violet-300 hover:text-violet-600"}`}>
+                                            {s}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Quantity */}
+                        <div>
+                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Quantity</h3>
+                            <div className="flex items-center gap-3">
+                                <div className="flex items-center border border-slate-200 rounded-xl overflow-hidden">
+                                    <button type="button" onClick={() => setQty(q => Math.max(1, q - 1))}
+                                        className="w-10 h-10 flex items-center justify-center text-slate-600 hover:bg-slate-100 transition-colors font-bold text-lg">
+                                        −
+                                    </button>
+                                    <span className="w-10 text-center text-sm font-bold text-slate-900">{qty}</span>
+                                    <button type="button" onClick={() => setQty(q => q + 1)}
+                                        className="w-10 h-10 flex items-center justify-center text-slate-600 hover:bg-slate-100 transition-colors font-bold text-lg">
+                                        +
+                                    </button>
+                                </div>
+                                <span className="text-sm text-slate-500 font-medium">{fmt(product.priceCents * qty)} total</span>
+                            </div>
+                        </div>
+
+                        {/* Product meta */}
+                        <div className="bg-slate-50 rounded-xl p-4 space-y-2 text-xs text-slate-500">
+                            {product.sku && <div className="flex justify-between"><span>SKU</span><span className="font-mono text-slate-700">{product.sku}</span></div>}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Sticky footer */}
+                <div className="border-t border-slate-100 p-4 bg-white shrink-0">
+                    <motion.button type="button" whileTap={{ scale:0.97 }} onClick={handleAdd}
+                        className={`btn-shine w-full text-white font-semibold py-3.5 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 ${added ? "" : ""}`}
+                        style={{ background: added ? "linear-gradient(135deg,#059669,#047857)" : "linear-gradient(135deg,#8b5cf6 0%,#7c3aed 100%)", boxShadow: added ? "0 4px 16px rgba(5,150,105,0.35)" : "0 4px 16px rgba(124,58,237,0.35)" }}>
+                        {added ? (
+                            <><svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>Added to cart!</>
+                        ) : (
+                            <><svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>Add to Cart · {fmt(product.priceCents * qty)}</>
+                        )}
+                    </motion.button>
+                </div>
+            </motion.div>
+        </div>
+    );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function ShopPage({ params }: { params: { slug: string } }) {
     const { slug } = params;
@@ -100,6 +338,7 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
     const [placing, setPlacing] = useState(false);
     const [error, setError]     = useState("");
     const [notFound, setNotFound] = useState(false);
+    const [detailProduct, setDetailProduct] = useState<Product | null>(null);
 
     useEffect(() => {
         publicFetch(`/shops/${slug}`).then(setShop).catch(() => setNotFound(true));
@@ -113,18 +352,21 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
     function setSelection(pid: string, key:"size"|"color", val:string) {
         setSelections(p => ({ ...p, [pid]:{ ...getSelection(pid), [key]:val } }));
     }
-    function addToCart(product: Product) {
+    function addToCart(product: Product, size?: string, color?: string, qty = 1) {
+        const key = `${product.id}|${size??""}|${color??""}`;
+        setCart(prev => {
+            const ex = prev.findIndex(x => `${x.productId}|${x.size??""}|${x.color??""}` === key);
+            if (ex >= 0) return prev.map((x,i) => i===ex ? { ...x, quantity:x.quantity+qty } : x);
+            return [...prev, { productId:product.id, name:product.name, priceCents:product.priceCents, quantity:qty, size, color }];
+        });
+    }
+    function addToCartFromCard(product: Product) {
         const sizes: string[] = product.sizesJson ? JSON.parse(product.sizesJson) : [];
         const colors: string[] = product.colorsJson ? JSON.parse(product.colorsJson) : [];
         const sel = getSelection(product.id);
         if (sizes.length > 0 && !sel.size) { alert("Please select a size."); return; }
         if (colors.length > 0 && !sel.color) { alert("Please select a color."); return; }
-        const key = `${product.id}|${sel.size}|${sel.color}`;
-        setCart(prev => {
-            const ex = prev.findIndex(x => `${x.productId}|${x.size??""}|${x.color??""}` === key);
-            if (ex >= 0) return prev.map((x,i) => i===ex ? { ...x, quantity:x.quantity+1 } : x);
-            return [...prev, { productId:product.id, name:product.name, priceCents:product.priceCents, quantity:1, size:sel.size||undefined, color:sel.color||undefined }];
-        });
+        addToCart(product, sel.size || undefined, sel.color || undefined, 1);
     }
     function updateQty(idx: number, qty: number) {
         setCart(p => qty < 1 ? p.filter((_,i) => i!==idx) : p.map((x,i) => i===idx ? { ...x, quantity:qty } : x));
@@ -229,11 +471,9 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
 
             {/* ── HERO HEADER ── */}
             <div className="relative overflow-hidden" style={{ background: "linear-gradient(135deg, #08080f 0%, #1a0a2e 50%, #0f0520 100%)" }}>
-                {/* Decorative orbs */}
                 <div className="absolute top-0 left-1/4 w-96 h-96 rounded-full opacity-20 pointer-events-none" style={{ background: "radial-gradient(circle, #7c3aed, transparent 70%)", filter: "blur(60px)" }} />
                 <div className="absolute bottom-0 right-1/4 w-64 h-64 rounded-full opacity-15 pointer-events-none" style={{ background: "radial-gradient(circle, #a78bfa, transparent 70%)", filter: "blur(50px)" }} />
 
-                {/* Top bar */}
                 <div className="relative z-10 border-b border-white/5">
                     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
                         <div className="flex items-center gap-2">
@@ -246,24 +486,18 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
                     </div>
                 </div>
 
-                {/* Hero content */}
                 <div className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 py-10 sm:py-14">
                     <motion.div initial={{ opacity:0, y:20 }} animate={{ opacity:1, y:0 }} transition={{ duration:0.5, ease:[0.32,0.72,0,1] }}>
-                        {/* Collection badge */}
                         <div className="inline-flex items-center gap-1.5 bg-white/8 border border-white/10 rounded-full px-3 py-1 mb-4">
                             <div className="w-1.5 h-1.5 rounded-full bg-violet-400" />
                             <span className="text-xs font-semibold text-violet-300 tracking-wide uppercase">{shop!.collection.name}</span>
                         </div>
-
                         <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white leading-tight mb-3 tracking-tight">
                             {shop!.name}
                         </h1>
-
                         {shop!.notes && (
                             <p className="text-base text-slate-300/80 max-w-xl leading-relaxed mb-4">{shop!.notes}</p>
                         )}
-
-                        {/* Info pills */}
                         <div className="flex flex-wrap gap-3 mt-5">
                             <div className="flex items-center gap-2 bg-white/5 border border-white/8 rounded-xl px-3.5 py-2">
                                 <svg className="w-4 h-4 text-violet-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/></svg>
@@ -286,7 +520,7 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
                 </div>
             </div>
 
-            {/* ── STICKY NAV BAR (shows on browse) ── */}
+            {/* ── STICKY NAV BAR ── */}
             {step === "browse" && (
                 <div className="sticky top-0 z-20 bg-white/90 backdrop-blur-sm border-b border-slate-200 shadow-sm">
                     <div className="max-w-5xl mx-auto px-4 sm:px-6 h-13 py-2.5 flex items-center justify-between">
@@ -357,8 +591,9 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
                                                 transition={{ delay:idx*0.05, duration:0.35, ease:[0.32,0.72,0,1] }}
                                                 className="bg-white rounded-2xl ring-1 ring-black/5 shadow-card hover:shadow-card-hover hover:-translate-y-1 transition-all duration-300 overflow-hidden flex flex-col group">
 
-                                                {/* Image */}
-                                                <div className="relative aspect-[4/3] overflow-hidden bg-slate-50">
+                                                {/* Image — clickable to open detail */}
+                                                <div className="relative aspect-[4/3] overflow-hidden bg-slate-50 cursor-pointer"
+                                                    onClick={() => setDetailProduct(p)}>
                                                     {imgs.length > 0 ? (
                                                         <img src={imgUrl(imgs[0])} alt={p.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                                                     ) : (
@@ -376,14 +611,24 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
                                                             {p.brand}
                                                         </div>
                                                     )}
+                                                    {/* View details overlay */}
+                                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
+                                                        <span className="opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 backdrop-blur-sm text-slate-800 text-xs font-bold px-3 py-1.5 rounded-full shadow">
+                                                            View Details
+                                                        </span>
+                                                    </div>
                                                 </div>
 
                                                 {/* Info */}
                                                 <div className="p-4 flex flex-col flex-1 gap-3">
                                                     <div className="flex-1">
-                                                        <h3 className="font-bold text-slate-900 text-sm leading-snug">{p.name}</h3>
+                                                        {/* Name — clickable to open detail */}
+                                                        <button type="button" className="text-left w-full"
+                                                            onClick={() => setDetailProduct(p)}>
+                                                            <h3 className="font-bold text-slate-900 text-sm leading-snug hover:text-violet-700 transition-colors">{p.name}</h3>
+                                                        </button>
                                                         {p.description && (
-                                                            <p className="text-xs text-slate-500 mt-1.5 line-clamp-2 leading-relaxed">{p.description}</p>
+                                                            <p className="text-xs text-slate-500 mt-1 line-clamp-2 leading-relaxed">{p.description}</p>
                                                         )}
                                                         <p className="text-lg font-black mt-2" style={{ background:"linear-gradient(135deg,#8b5cf6,#7c3aed)", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent", backgroundClip:"text" }}>
                                                             {fmt(p.priceCents)}
@@ -409,26 +654,39 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
                                                             )}
                                                             {colors.length > 0 && (
                                                                 <div>
-                                                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 block">Color</label>
-                                                                    <div className="flex flex-wrap gap-1">
-                                                                        {colors.map(c => (
-                                                                            <button key={c} type="button"
-                                                                                onClick={() => setSelection(p.id,"color", sel.color===c ? "" : c)}
-                                                                                className={`text-xs px-2.5 py-1 rounded-lg border font-semibold transition-all duration-150 ${sel.color===c ? "bg-violet-600 text-white border-violet-600 shadow-sm" : "border-slate-200 text-slate-500 hover:border-violet-300 hover:text-violet-600"}`}>
-                                                                                {c}
-                                                                            </button>
-                                                                        ))}
+                                                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 block">
+                                                                        Color{sel.color ? `: ${sel.color}` : ""}
+                                                                    </label>
+                                                                    <div className="flex flex-wrap gap-1.5">
+                                                                        {colors.map(c => {
+                                                                            const css = getColorCss(c);
+                                                                            const isSelected = sel.color === c;
+                                                                            return (
+                                                                                <button key={c} type="button" title={c}
+                                                                                    onClick={() => setSelection(p.id,"color", sel.color===c ? "" : c)}
+                                                                                    className={`w-6 h-6 rounded-full border-2 transition-all ${isSelected ? "border-violet-500 scale-110 shadow-md ring-2 ring-violet-500/20" : "border-slate-200 hover:scale-105 hover:border-slate-300"}`}
+                                                                                    style={{ backgroundColor: css }}>
+                                                                                </button>
+                                                                            );
+                                                                        })}
                                                                     </div>
                                                                 </div>
                                                             )}
                                                         </div>
                                                     )}
 
-                                                    <motion.button type="button" whileTap={{ scale:0.96 }} onClick={() => addToCart(p)}
-                                                        className="btn-shine w-full text-white text-sm font-semibold py-2.5 rounded-xl transition-all"
-                                                        style={{ background:"linear-gradient(135deg,#8b5cf6 0%,#7c3aed 100%)", boxShadow:"0 4px 16px rgba(124,58,237,0.25)" }}>
-                                                        Add to cart
-                                                    </motion.button>
+                                                    <div className="flex gap-2">
+                                                        <motion.button type="button" whileTap={{ scale:0.96 }} onClick={() => addToCartFromCard(p)}
+                                                            className="btn-shine flex-1 text-white text-sm font-semibold py-2.5 rounded-xl transition-all"
+                                                            style={{ background:"linear-gradient(135deg,#8b5cf6 0%,#7c3aed 100%)", boxShadow:"0 4px 16px rgba(124,58,237,0.25)" }}>
+                                                            Add to cart
+                                                        </motion.button>
+                                                        <button type="button" onClick={() => setDetailProduct(p)}
+                                                            className="px-3 py-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 hover:border-slate-300 transition-colors"
+                                                            title="View details">
+                                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             </motion.div>
                                         );
@@ -461,7 +719,6 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
                     <motion.div initial={{ opacity:0, x:16 }} animate={{ opacity:1, x:0 }} transition={{ duration:0.3, ease:[0.32,0.72,0,1] }}
                         className="grid grid-cols-1 lg:grid-cols-5 gap-6">
                         <div className="lg:col-span-3 space-y-4">
-                            {/* Contact */}
                             <div className="bg-white rounded-2xl ring-1 ring-black/5 p-5 space-y-4">
                                 <h2 className="text-sm font-bold text-slate-900">Contact information</h2>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -478,7 +735,6 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
                                 </div>
                             </div>
 
-                            {/* Shipping */}
                             <div className="bg-white rounded-2xl ring-1 ring-black/5 p-5 space-y-4">
                                 <h2 className="text-sm font-bold text-slate-900">Shipping address</h2>
                                 <div>
@@ -510,7 +766,6 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
                                 </div>
                             </div>
 
-                            {/* Payment method */}
                             <div className="bg-white rounded-2xl ring-1 ring-black/5 p-5">
                                 <h2 className="text-sm font-bold text-slate-900 mb-3">Payment method</h2>
                                 <div className="space-y-2">
@@ -539,7 +794,6 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
                                 </div>
                             </div>
 
-                            {/* Discount */}
                             <div className="bg-white rounded-2xl ring-1 ring-black/5 p-5">
                                 <h2 className="text-sm font-bold text-slate-900 mb-3">Discount code</h2>
                                 <div className="flex gap-2">
@@ -587,7 +841,11 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
                                         <div key={i} className="flex items-start gap-3">
                                             <div className="flex-1 min-w-0">
                                                 <p className="text-sm font-semibold text-slate-900 truncate">{item.name}</p>
-                                                <p className="text-xs text-slate-400 mt-0.5">
+                                                <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-1">
+                                                    {item.color && (
+                                                        <span className="w-2.5 h-2.5 rounded-full border border-black/10 inline-block"
+                                                            style={{ backgroundColor: getColorCss(item.color) }} />
+                                                    )}
                                                     {[item.size, item.color].filter(Boolean).join(" · ")}
                                                 </p>
                                             </div>
@@ -664,6 +922,20 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
                     </div>
                 </div>
             </footer>
+
+            {/* ── PRODUCT DETAIL DRAWER ── */}
+            <AnimatePresence>
+                {detailProduct && (
+                    <ProductDetailDrawer
+                        product={detailProduct}
+                        onClose={() => setDetailProduct(null)}
+                        cartCount={cart.filter(c => c.productId === detailProduct.id).reduce((a,c) => a+c.quantity, 0)}
+                        onAddToCart={(size, color, qty) => {
+                            addToCart(detailProduct, size, color, qty);
+                        }}
+                    />
+                )}
+            </AnimatePresence>
         </div>
     );
 }
