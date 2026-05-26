@@ -5,7 +5,7 @@ import { imgUrl } from "@/app/lib/api";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import Image from "next/image";
-import { getColorCss } from "@/app/admin/products/page";
+import { getColorCss } from "@/lib/colors";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Product = {
