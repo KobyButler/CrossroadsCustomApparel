@@ -162,14 +162,15 @@ type VendorItem = {
 function VendorSearchPanel({ source, onSelect }: { source: "SANMAR"|"SS"; onSelect:(item:VendorItem)=>void }) {
     const [query, setQuery] = useState("");
     const [results, setResults] = useState<any[]>([]);
+    const [notice, setNotice] = useState("");
     const [loading, setLoading] = useState(false);
     const [selecting, setSelecting] = useState(false);
     const [error, setError] = useState("");
     const timerRef = useRef<ReturnType<typeof setTimeout>>();
 
     async function doSearch(q: string) {
-        if (!q.trim()) { setResults([]); return; }
-        setLoading(true); setError("");
+        if (!q.trim()) { setResults([]); setNotice(""); return; }
+        setLoading(true); setError(""); setNotice("");
         try {
             if (source === "SANMAR") {
                 const data = await api(`/sanmar/catalog?q=${encodeURIComponent(q)}&limit=40`);
@@ -179,11 +180,24 @@ function VendorSearchPanel({ source, onSelect }: { source: "SANMAR"|"SS"; onSele
                     if (!seen.has(row.style)) { seen.add(row.style); unique.push(row); }
                 }
                 setResults(unique.slice(0, 15));
+                if (unique.length === 0) setNotice("No results. Make sure the SanMar catalog is synced (SanMar tab → Sync Catalog).");
             } else {
                 const data = await api(`/ss/search?q=${encodeURIComponent(q)}`);
-                setResults((data.products ?? data ?? []).slice(0, 15));
+                const products = data.products ?? data ?? [];
+                setResults(products.slice(0, 15));
+                if (data.notice) setNotice(data.notice);
+                else if (products.length === 0) setNotice("No results found.");
             }
-        } catch (e: any) { setError(e.message || "Search failed"); }
+        } catch (e: any) {
+            const msg: string = e.message ?? "Search failed";
+            if (msg.includes("504") || msg.includes("timed out")) {
+                setError("Search timed out — the vendor API is slow or unreachable. Try again in a moment.");
+            } else if (msg.includes("502") || msg.includes("Bad Gateway") || msg.includes("ERR_FAILED") || msg.toLowerCase().includes("failed to fetch")) {
+                setError("Server is starting up — wait a few seconds and try again.");
+            } else {
+                setError(msg);
+            }
+        }
         finally { setLoading(false); }
     }
 
@@ -236,7 +250,18 @@ function VendorSearchPanel({ source, onSelect }: { source: "SANMAR"|"SS"; onSele
                     <div className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
                 )}
             </div>
-            {error && <p className="text-xs text-red-500 px-1">{error}</p>}
+            {error && (
+                <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl px-3 py-2.5">
+                    <svg className="w-4 h-4 text-red-400 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                    <p className="text-xs text-red-700">{error}</p>
+                </div>
+            )}
+            {notice && !error && results.length === 0 && (
+                <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5">
+                    <svg className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    <p className="text-xs text-amber-800">{notice}</p>
+                </div>
+            )}
             {results.length > 0 && (
                 <div className="border border-slate-200 rounded-xl overflow-hidden max-h-52 overflow-y-auto divide-y divide-slate-100 bg-white shadow-sm">
                     {results.map((r, i) => (
@@ -251,11 +276,14 @@ function VendorSearchPanel({ source, onSelect }: { source: "SANMAR"|"SS"; onSele
                     ))}
                 </div>
             )}
-            {query && !loading && !selecting && results.length === 0 && !error && (
+            {query && !loading && !selecting && results.length === 0 && !error && !notice && (
                 <p className="text-xs text-slate-400 text-center py-2">No results for &ldquo;{query}&rdquo;</p>
             )}
             {source === "SANMAR" && !query && (
                 <p className="text-xs text-slate-400 px-1">Searches your synced SanMar catalog. Run a catalog sync in the SanMar tab if results are missing.</p>
+            )}
+            {source === "SS" && !query && (
+                <p className="text-xs text-slate-400 px-1">Searches the S&amp;S Activewear API live. Requires SS_USER and SS_API_KEY to be set in server environment.</p>
             )}
         </div>
     );
