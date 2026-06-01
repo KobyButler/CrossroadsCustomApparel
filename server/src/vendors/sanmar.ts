@@ -1,5 +1,34 @@
 import { config } from '../config.js';
-import soap from 'soap';
+import * as soap from 'soap';
+
+/* ─── Helpers ─────────────────────────────────────────────────────────────── */
+
+function asArray<T>(value: T | T[] | null | undefined): T[] {
+    if (Array.isArray(value)) return value;
+    return value == null ? [] : [value];
+}
+
+function sanmarReturnedError(ret: any): boolean {
+    return ret?.errorOccurred === true ||
+        ret?.errorOccured === true ||
+        ret?.errorOccurred === 'true' ||
+        ret?.errorOccured === 'true';
+}
+
+function sumInventoryQty(ret: any): number {
+    // Some SanMar inventory responses return listResponse values per warehouse.
+    if (ret?.listResponse !== undefined) {
+        return asArray(ret.listResponse)
+            .reduce((sum, qty) => sum + Number(qty ?? 0), 0);
+    }
+
+    // Style-level responses can return response.skus.sku[].whse[].qty
+    const skus = asArray(ret?.response?.skus?.sku);
+    return skus.reduce((skuTotal, sku: any) => {
+        return skuTotal + asArray(sku?.whse)
+            .reduce((whseTotal, whse: any) => whseTotal + Number(whse?.qty ?? 0), 0);
+    }, 0);
+}
 
 type LineGroup = Array<{
     item: any;
@@ -46,24 +75,21 @@ function buildPOEnvelope(order: any, lines: LineGroup) {
         department: '',
         webServicePoDetailList: lines.map(({ item, product }) => ({
             inventoryKey: product.vendorIdentifier ?? '',
-            sizeIndex: null,
+            sizeIndex: '',
             style: product.sku,
             color: item.color ?? '',
             size: item.size ?? '',
-            quantity: item.quantity,
-            whseNo: null
+            quantity: Number(item.quantity),
+            whseNo: '',
         }))
     };
 }
 
-// Auth object used for PO services (nested in arg1)
 function poAuthArgs() {
     return {
-        senderId: '',
-        senderPassword: '',
         sanMarCustomerNumber: Number(config.sanmar.customerNumber || 0),
-        sanMarUserName: config.sanmar.username,
-        sanMarUserPassword: config.sanmar.password
+        sanMarUserName: config.sanmar.poUsername,
+        sanMarUserPassword: config.sanmar.poPassword,
     };
 }
 
@@ -80,8 +106,13 @@ export interface InventoryResult {
 
 /**
  * Check inventory for a single style/color/size combination.
- * The SanMar inventory service uses individual positional args (arg0–arg5),
- * not a nested auth object like the PO service.
+ * SanMar inventory service uses positional args (arg0–arg5):
+ *   arg0 = SanMarCustomerNumber
+ *   arg1 = SanMarUsername
+ *   arg2 = SanMarPassword
+ *   arg3 = Style
+ *   arg4 = Catalog/Mainframe Color (not display color)
+ *   arg5 = Size
  */
 export async function checkSanMarInventory(
     style: string,
@@ -98,18 +129,21 @@ export async function checkSanMarInventory(
 
     const client = await soap.createClientAsync(wsdlUrl);
 
-    // Inventory service auth uses individual positional args (not a nested object)
     const [resp] = await client.getInventoryQtyForStyleColorSizeAsync({
-        arg0: style,
-        arg1: color,
-        arg2: size,
-        arg3: Number(config.sanmar.customerNumber),
-        arg4: config.sanmar.username,
-        arg5: config.sanmar.password,
+        arg0: Number(config.sanmar.customerNumber),
+        arg1: config.sanmar.username,
+        arg2: config.sanmar.password,
+        arg3: style,
+        arg4: color,
+        arg5: size,
     });
 
-    const qty = Number(resp?.return ?? resp?.qty ?? 0);
-    return { style, color, size, qty };
+    const ret = resp?.return ?? {};
+    if (sanmarReturnedError(ret)) {
+        throw new Error(ret?.message ?? 'SanMar inventory request failed');
+    }
+
+    return { style, color, size, qty: sumInventoryQty(ret) };
 }
 
 /* ─── Product Info ────────────────────────────────────────────────────────── */
@@ -126,9 +160,14 @@ export interface SanMarProduct {
 
 /**
  * Fetch product information from SanMar's Product Info service.
- * Auth pattern: nested object inside arg1 (same pattern as PO service).
+ * Uses getProductInfoByStyleColorSize which accepts style alone or with color/size.
+ * Auth pattern: nested object inside arg1 with senderId/senderPassword.
  */
-export async function getSanMarProductInfo(style: string): Promise<SanMarProduct> {
+export async function getSanMarProductInfo(
+    style: string,
+    color?: string,
+    size?: string
+): Promise<SanMarProduct> {
     if (!config.sanmar.enable) {
         return { style, dryRun: true } as any;
     }
@@ -139,23 +178,38 @@ export async function getSanMarProductInfo(style: string): Promise<SanMarProduct
 
     const client = await soap.createClientAsync(wsdlUrl);
 
-    const [resp] = await client.getProductInfoByStyleAsync({
-        arg0: style,
+    const [resp] = await client.getProductInfoByStyleColorSizeAsync({
+        arg0: {
+            style,
+            ...(color ? { color } : {}),
+            ...(size ? { size } : {}),
+        },
         arg1: {
             sanMarCustomerNumber: Number(config.sanmar.customerNumber),
             sanMarUserName: config.sanmar.username,
             sanMarUserPassword: config.sanmar.password,
+            senderId: '',
+            senderPassword: '',
         },
     });
 
-    const product = resp?.return ?? resp;
+    const ret = resp?.return ?? {};
+    if (sanmarReturnedError(ret)) {
+        throw new Error(ret?.message ?? 'SanMar product-info request failed');
+    }
+
+    const rows = asArray(ret.listResponse);
+    const first = rows[0] ?? {};
+    const basic = first.productBasicInfo ?? first;
+    const price = first.productPriceInfo ?? {};
+
     return {
         style,
-        title: product?.productTitle,
-        description: product?.description,
-        colors: product?.listOfAvailableColors?.string,
-        sizes: product?.listOfAvailableSizes?.string,
-        basePrice: product?.basePrice,
-        raw: product,
+        title: basic?.productTitle,
+        description: basic?.productDescription,
+        colors: [...new Set(rows.map((r: any) => r?.productBasicInfo?.color).filter(Boolean))],
+        sizes: [...new Set(rows.map((r: any) => r?.productBasicInfo?.size).filter(Boolean))],
+        basePrice: price?.piecePrice ? Number(price.piecePrice) : undefined,
+        raw: resp,
     };
 }

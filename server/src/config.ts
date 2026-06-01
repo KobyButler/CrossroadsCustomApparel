@@ -37,6 +37,9 @@ export const config = {
         customerNumber: process.env.SANMAR_CUSTOMER_NUMBER ?? '',
         username: process.env.SANMAR_USERNAME ?? '',
         password: process.env.SANMAR_PASSWORD ?? '',
+        // PO-specific credentials — fall back to main creds when not set (production)
+        poUsername: process.env.SANMAR_PO_USERNAME || process.env.SANMAR_USERNAME || '',
+        poPassword: process.env.SANMAR_PO_PASSWORD || process.env.SANMAR_PASSWORD || '',
         wsdlUrl: process.env.SANMAR_WSDL_URL ?? '',
         inventoryWsdlUrl: process.env.SANMAR_INVENTORY_WSDL_URL ?? '',
         inventoryStageWsdlUrl: process.env.SANMAR_INVENTORY_STAGE_WSDL_URL ?? '',
