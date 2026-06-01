@@ -51,10 +51,11 @@ router.post('/', async (req, res) => {
 
     const shop = shopSlug ? await prisma.shop.findFirst({ where: { slug: shopSlug } }) : null;
 
+    const uniqueProductIds = [...new Set(items.map((i: any) => i.productId))];
     const products = await prisma.product.findMany({
-        where: { id: { in: items.map((i: any) => i.productId) } }
+        where: { id: { in: uniqueProductIds } }
     });
-    if (products.length !== items.length) return res.status(400).json({ error: 'invalid product(s)' });
+    if (products.length !== uniqueProductIds.length) return res.status(400).json({ error: 'invalid product(s)' });
 
     let subtotal = 0;
     const orderItems = items.map((i: any) => {
@@ -106,8 +107,6 @@ router.post('/', async (req, res) => {
         });
     }
 
-    triggerVendorFulfillment(order).catch(err => console.error('fulfillment error', err));
-
     const emailItems = order.items.map(i => ({
         name: i.product.name, quantity: i.quantity,
         size: i.size, color: i.color, priceCents: i.priceCents
@@ -140,7 +139,12 @@ router.post('/', async (req, res) => {
 });
 
 router.post('/:id/fulfill', requireAuth, async (req, res) => {
-    const o = await prisma.order.update({ where: { id: String(req.params.id) }, data: { status: 'FULFILLED' } });
+    const o = await prisma.order.update({
+        where: { id: String(req.params.id) },
+        data: { status: 'FULFILLED' },
+        include: { items: { include: { product: true } } },
+    });
+    triggerVendorFulfillment(o).catch(err => console.error('[fulfill] vendor error:', err));
     res.json(o);
 });
 

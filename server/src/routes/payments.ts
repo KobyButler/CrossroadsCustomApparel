@@ -3,6 +3,7 @@ import Stripe from 'stripe';
 import { prisma } from '../prisma.js';
 import { config } from '../config.js';
 import { sendOrderConfirmation } from '../utils/email.js';
+import { triggerVendorFulfillment } from '../vendors/fulfill.js';
 
 export const router = Router();
 
@@ -27,10 +28,11 @@ router.post('/create-intent', async (req: Request, res: Response) => {
     }
 
     // Resolve products and calculate subtotal
+    const uniqueProductIds = [...new Set(items.map((i: any) => i.productId))];
     const products = await prisma.product.findMany({
-        where: { id: { in: items.map((i: any) => i.productId) } }
+        where: { id: { in: uniqueProductIds } }
     });
-    if (products.length !== items.length) {
+    if (products.length !== uniqueProductIds.length) {
         return res.status(400).json({ error: 'One or more products were not found' });
     }
 
@@ -159,6 +161,11 @@ export async function stripeWebhookHandler(req: Request, res: Response) {
                 where: { id: order.id },
                 data: { paymentStatus: 'PAID' }
             });
+
+            // Submit to vendor(s) now that payment is confirmed
+            triggerVendorFulfillment(order).catch(err =>
+                console.error('[stripe-webhook] fulfillment error:', err)
+            );
 
             // Recover abandoned checkout if any
             if (order.shopId) {

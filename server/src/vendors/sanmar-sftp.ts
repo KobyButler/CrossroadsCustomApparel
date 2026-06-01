@@ -3,6 +3,8 @@ import { parse } from 'csv-parse';
 import { createReadStream, createWriteStream } from 'fs';
 import { unlink } from 'fs/promises';
 import { createInterface } from 'readline';
+import { tmpdir } from 'os';
+import { join } from 'path';
 import { prisma } from '../prisma.js';
 import { config } from '../config.js';
 
@@ -70,7 +72,7 @@ export async function peekFile(filename: string, maxLines = 5): Promise<string> 
         await sftp.connect(buildConnectConfig());
         const dir  = await resolveRemoteDir(sftp);
         const remotePath = dir === '.' ? filename : `${dir}/${filename}`;
-        const localPath  = `/tmp/sanmar_peek_${Date.now()}.tmp`;
+        const localPath  = join(tmpdir(), `sanmar_peek_${Date.now()}.tmp`);
         await downloadToTemp(sftp, remotePath, localPath);
 
         const collected: string[] = [];
@@ -162,6 +164,7 @@ function mapSDLRow(row: Record<string, string>) {
         subcategory:      col(row, 'SUBCATEGORY_NAME', 'SubCategory')                  || null,
         priceCents:       toCents(col(row, 'PIECE_PRICE', 'Price1', 'Price')),
         inventoryKey:     col(row, 'INVENTORY_KEY', 'InventoryKey')                    || null,
+        sizeIndex:        col(row, 'SIZE_INDEX', 'SizeIndex')                          || null,
         colorSwatchImage: col(row, 'COLOR_SWATCH_IMAGE', 'ColorSwatch')                || null,
         productImage:     col(row, 'FRONT_MODEL_IMAGE_URL', 'BACK_MODEL_IMAGE_URL', 'PRODUCT_IMAGE', 'FrontModel') || null,
         weightLbs:        col(row, 'PIECE_WEIGHT', 'Weight')
@@ -233,7 +236,7 @@ export async function syncCatalogSDL(existingLogId?: string): Promise<SanmarSync
         const sdlFile = (files as any[]).find(f => /SanMar_SDL_N/i.test(f.name) && /\.csv$/i.test(f.name));
         if (!sdlFile) throw new Error(`SanMar_SDL_N CSV not found in "${dir}". Files: ${(files as any[]).map((f: any) => f.name).join(', ')}`);
 
-        const localPath = `/tmp/sanmar_sdl_${Date.now()}.csv`;
+        const localPath = join(tmpdir(), `sanmar_sdl_${Date.now()}.csv`);
         const remotePath = dir === '.' ? sdlFile.name : `${dir}/${sdlFile.name}`;
         await downloadToTemp(sftp, remotePath, localPath);
         await prisma.sanmarSyncLog.update({ where: { id: logId }, data: { fileSizeBytes: sdlFile.size } });
@@ -262,7 +265,7 @@ export async function syncCatalogEPDD(existingLogId?: string): Promise<SanmarSyn
         const epddFile = (files as any[]).find(f => /SanMar_EPDD/i.test(f.name) && /\.csv$/i.test(f.name));
         if (!epddFile) throw new Error(`SanMar_EPDD CSV not found in "${dir}". Files: ${(files as any[]).map((f: any) => f.name).join(', ')}`);
 
-        const localPath = `/tmp/sanmar_epdd_${Date.now()}.csv`;
+        const localPath = join(tmpdir(), `sanmar_epdd_${Date.now()}.csv`);
         const remotePath = dir === '.' ? epddFile.name : `${dir}/${epddFile.name}`;
         await downloadToTemp(sftp, remotePath, localPath);
         await prisma.sanmarSyncLog.update({ where: { id: logId }, data: { fileSizeBytes: epddFile.size } });
@@ -289,42 +292,46 @@ export async function syncInventoryDip(existingLogId?: string): Promise<SanmarSy
     return runSync('INVENTORY_DIP', async (sftp, logId) => {
         const dir = await resolveRemoteDir(sftp);
         const remotePath = dir === '.' ? 'sanmar_dip.txt' : `${dir}/sanmar_dip.txt`;
-        const localPath = `/tmp/sanmar_dip_${Date.now()}.txt`;
+        const localPath = join(tmpdir(), `sanmar_dip_${Date.now()}.txt`);
 
         await downloadToTemp(sftp, remotePath, localPath);
 
         try {
             let rowsTotal = 0;
-            let rowsProcessed = 0;
-            const BATCH = 200;
-            let batch: Array<{ key: string; qty: number }> = [];
+
+            // sanmar_dip.txt columns (pipe-delimited):
+            // 0=Inventory_Key, 1=Size_Index, 2=Catalog_No, 3=Catalog_Color,
+            // 4=Size, 5=Whse_No, 6=Quantity, ...
+            const qtyByVariant = new Map<string, number>();
 
             const rl = createInterface({ input: createReadStream(localPath, { encoding: 'utf8' }), crlfDelay: Infinity });
 
             for await (const line of rl) {
-                if (!line.includes('|')) continue;
-                const pipe = line.indexOf('|');
-                const key = line.slice(0, pipe).trim();
-                const qty = parseInt(line.slice(pipe + 1).trim(), 10);
-                if (!key || isNaN(qty)) continue;
+                const parts = line.split('|').map(p => p.trim());
+                if (parts.length < 7) continue;
+                if (!/^\d+$/.test(parts[0])) continue; // skip header/bad rows
+
+                const inventoryKey = parts[0];
+                const sizeIndex    = parts[1];
+                const qty          = parseInt(parts[6] || '0', 10) || 0;
 
                 rowsTotal++;
-                batch.push({ key, qty });
+                const key = `${inventoryKey}|${sizeIndex}`;
+                qtyByVariant.set(key, (qtyByVariant.get(key) ?? 0) + qty);
+            }
 
-                if (batch.length >= BATCH) {
-                    const toFlush = batch.splice(0);
-                    for (const { key: inventoryKey, qty: inventoryQty } of toFlush) {
-                        await prisma.sanmarCatalogProduct.updateMany({ where: { inventoryKey }, data: { inventoryQty } });
-                    }
-                    rowsProcessed += toFlush.length;
+            let rowsProcessed = 0;
+            for (const [key, inventoryQty] of qtyByVariant.entries()) {
+                const [inventoryKey, sizeIndex] = key.split('|');
+                await prisma.sanmarCatalogProduct.updateMany({
+                    where: { inventoryKey, sizeIndex },
+                    data: { inventoryQty },
+                });
+                rowsProcessed++;
+                if (rowsProcessed % 200 === 0) {
                     await prisma.sanmarSyncLog.update({ where: { id: logId }, data: { rowsProcessed } }).catch(() => {});
                 }
             }
-
-            for (const { key: inventoryKey, qty: inventoryQty } of batch) {
-                await prisma.sanmarCatalogProduct.updateMany({ where: { inventoryKey }, data: { inventoryQty } });
-            }
-            rowsProcessed += batch.length;
 
             return { rowsTotal, rowsProcessed };
         } finally {

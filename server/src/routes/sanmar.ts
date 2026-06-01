@@ -276,7 +276,11 @@ router.post('/inventory/bulk', async (req, res) => {
 
 router.get('/product-info/:style', async (req, res) => {
     try {
-        const info = await getSanMarProductInfo(req.params.style);
+        const info = await getSanMarProductInfo(
+            req.params.style,
+            req.query.color as string | undefined,
+            req.query.size as string | undefined
+        );
         res.json(info);
     } catch (err: any) {
         res.status(500).json({ error: err.message });
