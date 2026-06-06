@@ -1,5 +1,6 @@
 import { config } from '../config.js';
 import * as soap from 'soap';
+import { prisma } from '../prisma.js';
 
 /* ─── Helpers ─────────────────────────────────────────────────────────────── */
 
@@ -44,7 +45,7 @@ export async function submitOrderToSanMar(order: any, lines: LineGroup) {
 
     const client = await soap.createClientAsync(config.sanmar.wsdlUrl);
 
-    const poEnvelope = buildPOEnvelope(order, lines);
+    const poEnvelope = await buildPOEnvelope(order, lines);
     const auth = poAuthArgs();
 
     // Optional pre-submit availability check (non-fatal if it fails)
@@ -58,30 +59,46 @@ export async function submitOrderToSanMar(order: any, lines: LineGroup) {
     return { message: resp?.return?.message ?? 'Submitted', poNumber: order.id, raw: resp };
 }
 
-function buildPOEnvelope(order: any, lines: LineGroup) {
+async function buildPOEnvelope(order: any, lines: LineGroup) {
+    const detailList = await Promise.all(lines.map(async ({ item, product }) => {
+        // Look up the exact variant for inventoryKey + sizeIndex (SanMar's recommended approach)
+        const variant = await prisma.sanmarCatalogProduct.findFirst({
+            where: {
+                style:     product.sku,
+                colorName: item.color ?? '',
+                sizeName:  item.size  ?? '',
+            },
+            select: { inventoryKey: true, sizeIndex: true },
+        });
+
+        const inventoryKey = variant?.inventoryKey ? Number(variant.inventoryKey) : null;
+        const sizeIndex    = variant?.sizeIndex    ? Number(variant.sizeIndex)    : null;
+
+        return {
+            ...(inventoryKey && sizeIndex ? { inventoryKey, sizeIndex } : {}),
+            style:    product.sku,
+            color:    item.color    ?? '',
+            size:     item.size     ?? '',
+            quantity: Number(item.quantity),
+            whseNo:   '',
+        };
+    }));
+
     return {
-        attention: order.customerName,
-        notes: '',
-        poNum: order.id,
-        shipTo: order.customerName,
+        attention:    order.customerName,
+        notes:        '',
+        poNum:        order.id,
+        shipTo:       order.customerName,
         shipAddress1: order.shipAddress1,
         shipAddress2: order.shipAddress2 ?? '',
-        shipCity: order.shipCity,
-        shipState: order.shipState,
-        shipZip: order.shipZip,
-        shipMethod: 'UPS',
-        shipEmail: order.customerEmail ?? 'hello@crossroadscustomapparel.com',
-        residence: order.residential ? 'Y' : 'N',
-        department: '',
-        webServicePoDetailList: lines.map(({ item, product }) => ({
-            inventoryKey: product.vendorIdentifier ?? '',
-            sizeIndex: '',
-            style: product.sku,
-            color: item.color ?? '',
-            size: item.size ?? '',
-            quantity: Number(item.quantity),
-            whseNo: '',
-        }))
+        shipCity:     order.shipCity,
+        shipState:    order.shipState,
+        shipZip:      order.shipZip,
+        shipMethod:   'UPS',
+        shipEmail:    order.customerEmail ?? 'hello@crossroadscustomapparel.com',
+        residence:    order.residential ? 'Y' : 'N',
+        department:   '',
+        webServicePoDetailList: detailList,
     };
 }
 
