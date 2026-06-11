@@ -5,7 +5,7 @@ import { config } from '../config.js';
 export const router = Router();
 
 const SS_BASE = 'https://api.ssactivewear.com/v2';
-const TIMEOUT = 6000; // 6s — fast enough to fail before the client gives up
+const TIMEOUT = 10000; // 10s
 
 function authHeader() {
     const basic = Buffer.from(`${config.ss.user}:${config.ss.apiKey}`).toString('base64');
@@ -62,46 +62,28 @@ router.get('/search', async (req, res) => {
     }
 
     try {
-        // Run style-number and keyword searches in parallel; take whichever returns results
-        const [styleResult, kwResult] = await Promise.allSettled([
-            axios.get(`${SS_BASE}/products/`, {
-                headers: authHeader(),
-                params: { style: q, fields: 'sku,title,brandName,description,colors,sizes,piecePrice' },
-                timeout: TIMEOUT,
-            }),
-            axios.get(`${SS_BASE}/products/`, {
-                headers: authHeader(),
-                params: { keywords: q, fields: 'sku,title,brandName,description,colors,sizes,piecePrice' },
-                timeout: TIMEOUT,
-            }),
-        ]);
+        const resp = await axios.get(`${SS_BASE}/products/`, {
+            headers: authHeader(),
+            params: { style: q, fields: 'sku,title,brandName,description,colors,sizes,piecePrice' },
+            timeout: TIMEOUT,
+            // Treat 404 as empty results, not an error
+            validateStatus: (s) => s < 500,
+        });
 
-        // Prefer style matches (exact); fall back to keyword matches
-        let raw: any[] = [];
-        if (styleResult.status === 'fulfilled' && Array.isArray(styleResult.value.data) && styleResult.value.data.length > 0) {
-            raw = styleResult.value.data;
-        } else if (kwResult.status === 'fulfilled' && Array.isArray(kwResult.value.data)) {
-            raw = kwResult.value.data;
+        if (resp.status === 401) {
+            return res.status(401).json({ error: 'S&S API authentication failed — check SS_USER and SS_API_KEY' });
         }
 
-        // If both failed, surface the first error
-        if (raw.length === 0 && styleResult.status === 'rejected' && kwResult.status === 'rejected') {
-            const err = styleResult.reason;
-            if (isAxiosError(err) && err.response?.status === 401) {
-                return res.status(401).json({ error: 'S&S API authentication failed — check SS_USER and SS_API_KEY' });
-            }
-            if (isAxiosError(err) && err.code === 'ECONNABORTED') {
-                return res.status(504).json({ error: 'S&S API timed out. The service may be temporarily unavailable.' });
-            }
-            return res.status(502).json({ error: 'S&S API is unreachable. Check network/credentials.' });
-        }
-
+        const raw: any[] = Array.isArray(resp.data) ? resp.data : [];
         return res.json({ products: normalizeProducts(raw).slice(0, 20) });
     } catch (err: any) {
+        if (isAxiosError(err) && err.code === 'ECONNABORTED') {
+            return res.status(504).json({ error: 'S&S API timed out. The service may be temporarily unavailable.' });
+        }
         if (isAxiosError(err) && err.response?.status === 401) {
             return res.status(401).json({ error: 'S&S API authentication failed — check SS_USER and SS_API_KEY' });
         }
-        return res.status(500).json({ error: err.message ?? 'S&S search failed' });
+        return res.status(502).json({ error: 'S&S API is unreachable. Check network/credentials.' });
     }
 });
 
