@@ -185,59 +185,70 @@ router.get('/catalog', async (req, res) => {
         };
     }
 
-    const [data, total] = await Promise.all([
-        prisma.sanmarCatalogProduct.findMany({ where, take: limit, skip, orderBy: [{ style: 'asc' }, { colorName: 'asc' }, { sizeName: 'asc' }] }),
-        prisma.sanmarCatalogProduct.count({ where }),
-    ]);
-
-    res.json({ data, total, page, limit, pages: Math.ceil(total / limit) });
+    try {
+        const [data, total] = await Promise.all([
+            prisma.sanmarCatalogProduct.findMany({ where, take: limit, skip, orderBy: [{ style: 'asc' }, { colorName: 'asc' }, { sizeName: 'asc' }] }),
+            prisma.sanmarCatalogProduct.count({ where }),
+        ]);
+        res.json({ data, total, page, limit, pages: Math.ceil(total / limit) });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message ?? 'Catalog query failed' });
+    }
 });
 
 /* ─── Catalog categories / brands ────────────────────────────────────────── */
 
 router.get('/catalog/meta', async (_req, res) => {
-    const [cats, subcatPairs, brands, colors] = await Promise.all([
-        prisma.sanmarCatalogProduct.findMany({
-            select: { category: true }, distinct: ['category'], orderBy: { category: 'asc' },
-        }),
-        prisma.sanmarCatalogProduct.findMany({
-            select: { category: true, subcategory: true },
-            distinct: ['category', 'subcategory'],
-            where: { subcategory: { not: null } },
-            orderBy: [{ category: 'asc' }, { subcategory: 'asc' }],
-        }),
-        prisma.sanmarCatalogProduct.findMany({
-            select: { brand: true }, distinct: ['brand'], orderBy: { brand: 'asc' },
-        }),
-        prisma.sanmarCatalogProduct.findMany({
-            select: { colorName: true }, distinct: ['colorName'], orderBy: { colorName: 'asc' },
-        }),
-    ]);
-    res.json({
-        categories:    cats.map(c => c.category).filter(Boolean),
-        subcategories: subcatPairs.filter(r => r.category && r.subcategory)
-            .map(r => ({ category: r.category!, subcategory: r.subcategory! })),
-        brands:        brands.map(b => b.brand).filter(Boolean),
-        colors:        colors.map(c => c.colorName).filter(Boolean),
-    });
+    try {
+        const [cats, subcatPairs, brands, colors] = await Promise.all([
+            prisma.sanmarCatalogProduct.findMany({
+                select: { category: true }, distinct: ['category'], orderBy: { category: 'asc' },
+            }),
+            prisma.sanmarCatalogProduct.findMany({
+                select: { category: true, subcategory: true },
+                distinct: ['category', 'subcategory'],
+                where: { subcategory: { not: null } },
+                orderBy: [{ category: 'asc' }, { subcategory: 'asc' }],
+            }),
+            prisma.sanmarCatalogProduct.findMany({
+                select: { brand: true }, distinct: ['brand'], orderBy: { brand: 'asc' },
+            }),
+            prisma.sanmarCatalogProduct.findMany({
+                select: { colorName: true }, distinct: ['colorName'], orderBy: { colorName: 'asc' },
+            }),
+        ]);
+        res.json({
+            categories:    cats.map(c => c.category).filter(Boolean),
+            subcategories: subcatPairs.filter(r => r.category && r.subcategory)
+                .map(r => ({ category: r.category!, subcategory: r.subcategory! })),
+            brands:        brands.map(b => b.brand).filter(Boolean),
+            colors:        colors.map(c => c.colorName).filter(Boolean),
+        });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message ?? 'Catalog meta query failed' });
+    }
 });
 
 /* ─── Get single style (all sizes/colors) ────────────────────────────────── */
 
 router.get('/catalog/:style', async (req, res) => {
-    const rows = await prisma.sanmarCatalogProduct.findMany({
-        where:   { style: req.params.style },
-        orderBy: [{ colorName: 'asc' }, { sizeName: 'asc' }],
-    });
-    if (!rows.length) return res.status(404).json({ error: 'Style not found in catalog' });
+    try {
+        const rows = await prisma.sanmarCatalogProduct.findMany({
+            where:   { style: req.params.style },
+            orderBy: [{ colorName: 'asc' }, { sizeName: 'asc' }],
+        });
+        if (!rows.length) return res.status(404).json({ error: 'Style not found in catalog' });
 
-    // Group into a summary
-    const first   = rows[0];
-    const colors  = [...new Set(rows.map(r => r.colorName).filter(Boolean))];
-    const sizes   = [...new Set(rows.map(r => r.sizeName).filter(Boolean))];
-    const minPrice = Math.min(...rows.map(r => r.priceCents).filter(p => p > 0));
+        const first    = rows[0];
+        const colors   = [...new Set(rows.map(r => r.colorName).filter(Boolean))];
+        const sizes    = [...new Set(rows.map(r => r.sizeName).filter(Boolean))];
+        const prices   = rows.map(r => r.priceCents).filter(p => p != null && p > 0);
+        const minPrice = prices.length > 0 ? Math.min(...prices) : 0;
 
-    res.json({ style: req.params.style, title: first.title, description: first.description, brand: first.brand, category: first.category, subcategory: first.subcategory, colors, sizes, priceCents: minPrice, variants: rows });
+        res.json({ style: req.params.style, title: first.title, description: first.description, brand: first.brand, category: first.category, subcategory: first.subcategory, colors, sizes, priceCents: minPrice, variants: rows });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message ?? 'Style lookup failed' });
+    }
 });
 
 /* ─── Real-time SOAP inventory check ─────────────────────────────────────── */
