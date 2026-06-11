@@ -152,30 +152,30 @@ router.get('/catalog', async (req, res) => {
     const andClauses: any[] = [];
 
     if (style) {
-        where.style = { equals: style, mode: 'insensitive' };
+        where.style = { equals: style };
     } else {
         if (q) {
             andClauses.push({ OR: [
-                { style:       { contains: q, mode: 'insensitive' } },
-                { title:       { contains: q, mode: 'insensitive' } },
-                { brand:       { contains: q, mode: 'insensitive' } },
-                { description: { contains: q, mode: 'insensitive' } },
+                { style:       { contains: q } },
+                { title:       { contains: q } },
+                { brand:       { contains: q } },
+                { description: { contains: q } },
             ]});
         }
         if (category) {
             // Match the exact path (e.g. "Activewear") OR any deeper path ("Activewear;Bottoms")
             andClauses.push({ OR: [
-                { category: { equals: category,          mode: 'insensitive' } },
-                { category: { startsWith: category + ';', mode: 'insensitive' } },
+                { category: { equals: category } },
+                { category: { startsWith: category + ';' } },
             ]});
         }
     }
 
     if (andClauses.length > 0) where.AND = andClauses;
-    if (subcategory) where.subcategory   = { contains: subcategory, mode: 'insensitive' };
-    if (brand)       where.brand         = { contains: brand,       mode: 'insensitive' };
-    if (colorName)   where.colorName     = { contains: colorName,   mode: 'insensitive' };
-    if (size)        where.sizeName      = { equals: size,          mode: 'insensitive' };
+    if (subcategory) where.subcategory   = { contains: subcategory };
+    if (brand)       where.brand         = { contains: brand };
+    if (colorName)   where.colorName     = { contains: colorName };
+    if (size)        where.sizeName      = { equals: size };
     if (inStock)     where.inventoryQty  = { gt: 0 };
     if (priceMin !== undefined || priceMax !== undefined) {
         where.priceCents = {
