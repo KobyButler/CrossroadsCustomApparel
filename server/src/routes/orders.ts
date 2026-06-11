@@ -51,7 +51,7 @@ router.post('/', async (req, res) => {
 
     const shop = shopSlug ? await prisma.shop.findFirst({ where: { slug: shopSlug } }) : null;
 
-    const uniqueProductIds = [...new Set(items.map((i: any) => i.productId))];
+    const uniqueProductIds = [...new Set<string>(items.map((i: any) => i.productId))];
     const products = await prisma.product.findMany({
         where: { id: { in: uniqueProductIds } }
     });
