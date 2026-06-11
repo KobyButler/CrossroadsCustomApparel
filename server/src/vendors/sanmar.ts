@@ -230,3 +230,73 @@ export async function getSanMarProductInfo(
         raw: resp,
     };
 }
+
+/* ─── Order Status ────────────────────────────────────────────────────────── */
+
+/**
+ * PromoStandards Order Status V2.0.0 — query by PO number.
+ * Auth: PromoStandards style (id + password, no customer number).
+ * Call no more than 3x/day; wait 2 hours after PO submission before first call.
+ */
+export async function getOrderStatus(poNumber: string) {
+    if (!config.sanmar.enable) return { dryRun: true };
+    const wsdlUrl = config.sanmar.orderStatusWsdlUrl;
+    if (!wsdlUrl) throw new Error('SANMAR_ORDER_STATUS_WSDL_URL is required');
+
+    const client = await soap.createClientAsync(wsdlUrl);
+    const [resp] = await client.getOrderStatusAsync({
+        wsVersion: '2.0.0',
+        id: config.sanmar.poUsername,
+        password: config.sanmar.poPassword,
+        queryType: 'poSearch',
+        referenceNumber: poNumber,
+        returnIssueDetailType: 'openIssues',
+        returnProductDetail: true,
+    });
+    return resp;
+}
+
+/* ─── Order Shipment Notification ────────────────────────────────────────── */
+
+/**
+ * PromoStandards Order Shipment Notification V1.0.0 — query by PO number.
+ * Auth: PromoStandards style (id + password).
+ * Returns tracking number, carrier, ship date, and line items per package.
+ */
+export async function getOrderShipmentNotification(poNumber: string) {
+    if (!config.sanmar.enable) return { dryRun: true };
+    const wsdlUrl = config.sanmar.shipmentWsdlUrl;
+    if (!wsdlUrl) throw new Error('SANMAR_SHIPMENT_WSDL_URL is required');
+
+    const client = await soap.createClientAsync(wsdlUrl);
+    const [resp] = await client.getOrderShipmentNotificationAsync({
+        wsVersion: '1.0.0',
+        id: config.sanmar.poUsername,
+        password: config.sanmar.poPassword,
+        queryType: '1',
+        referenceNumber: poNumber,
+    });
+    return resp;
+}
+
+/* ─── Invoice ─────────────────────────────────────────────────────────────── */
+
+/**
+ * SanMar Standard Invoice Service — retrieve invoice by PO number.
+ * Auth: standard SanMar (CustomerNo + UserName + Password).
+ * SanMar invoices once/day after 9pm PT; pull the next day after 3pm PT.
+ */
+export async function getInvoiceByPO(poNumber: string) {
+    if (!config.sanmar.enable) return { dryRun: true };
+    const wsdlUrl = config.sanmar.invoiceWsdlUrl;
+    if (!wsdlUrl) throw new Error('SANMAR_INVOICE_WSDL_URL is required');
+
+    const client = await soap.createClientAsync(wsdlUrl);
+    const [resp] = await client.GetInvoicesByPurchaseOrderNoAsync({
+        CustomerNo: config.sanmar.customerNumber,
+        UserName: config.sanmar.poUsername,
+        Password: config.sanmar.poPassword,
+        PurchaseOrderNo: poNumber,
+    });
+    return resp;
+}

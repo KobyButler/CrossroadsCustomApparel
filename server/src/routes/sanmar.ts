@@ -8,7 +8,8 @@ import {
     syncCatalogEPDD,
     syncInventoryDip,
 } from '../vendors/sanmar-sftp.js';
-import { checkSanMarInventory, getSanMarProductInfo } from '../vendors/sanmar.js';
+import { checkSanMarInventory, getSanMarProductInfo, getOrderStatus, getOrderShipmentNotification, getInvoiceByPO } from '../vendors/sanmar.js';
+import { requireAuth } from '../middleware/auth.js';
 
 export const router = Router();
 
@@ -349,6 +350,39 @@ router.post('/import', async (req, res) => {
             include: { collection: true },
         });
         res.json({ action: 'created', product: created });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/* ─── Order Status ────────────────────────────────────────────────────────── */
+
+router.get('/order-status/:poNumber', requireAuth, async (req, res) => {
+    try {
+        const result = await getOrderStatus(req.params.poNumber as string);
+        res.json(result);
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/* ─── Order Shipment Notification ────────────────────────────────────────── */
+
+router.get('/shipment/:poNumber', requireAuth, async (req, res) => {
+    try {
+        const result = await getOrderShipmentNotification(req.params.poNumber as string);
+        res.json(result);
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/* ─── Invoice ─────────────────────────────────────────────────────────────── */
+
+router.get('/invoice/:poNumber', requireAuth, async (req, res) => {
+    try {
+        const result = await getInvoiceByPO(req.params.poNumber as string);
+        res.json(result);
     } catch (err: any) {
         res.status(500).json({ error: err.message });
     }
