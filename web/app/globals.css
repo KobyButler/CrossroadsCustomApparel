@@ -4,6 +4,12 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ─── Print ────────────────────────────────────────────────────────────────── */
+@media print {
+  .no-print { display: none !important; }
+  .print-full-width { max-width: 100% !important; padding: 0 !important; }
+}
+
 /* ─── Base ─────────────────────────────────────────────────────────────────── */
 @layer base {
   *, *::before, *::after { box-sizing: border-box; }

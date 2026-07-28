@@ -8,28 +8,45 @@ export const router = Router();
 // List all shops (admin only)
 router.get('/', requireAuth, async (_req, res) => {
     const data = await prisma.shop.findMany({
-        include: { collection: true },
+        include: { _count: { select: { products: true } } },
         orderBy: { createdAt: 'desc' }
     });
     res.json(data);
 });
 
+// Public directory of active, non-expired shops — powers the /shops landing page.
+// Registered before the /:slug route below so "directory" is never treated as a slug.
+router.get('/directory', async (_req, res) => {
+    const now = new Date();
+    const shops = await prisma.shop.findMany({
+        where: { active: true, OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+        include: { _count: { select: { products: true } } },
+        orderBy: { createdAt: 'desc' }
+    });
+    res.json(shops.map(s => ({
+        id: s.id, name: s.name, slug: s.slug, notes: s.notes, expiresAt: s.expiresAt,
+        productCount: s._count.products
+    })));
+});
+
 // Create shop (admin only)
 router.post('/', requireAuth, async (req, res) => {
-    const { name, collectionId, expiresAt, notes } = req.body;
-    if (!name || !collectionId) {
-        return res.status(400).json({ error: 'name and collectionId are required' });
+    const { name, expiresAt, notes, productIds } = req.body;
+    if (!name) {
+        return res.status(400).json({ error: 'name is required' });
     }
     const slug = slugify(name) + '-' + Math.random().toString(36).slice(2, 6);
     const s = await prisma.shop.create({
         data: {
             name,
             slug,
-            collectionId,
             notes: notes ?? null,
-            expiresAt: expiresAt ? new Date(expiresAt) : null
+            expiresAt: expiresAt ? new Date(expiresAt) : null,
+            ...(Array.isArray(productIds) && productIds.length
+                ? { products: { connect: productIds.map((id: string) => ({ id })) } }
+                : {})
         },
-        include: { collection: true }
+        include: { _count: { select: { products: true } } }
     });
     res.json(s);
 });
@@ -43,16 +60,16 @@ router.get('/:slug', async (req, res) => {
             active: true,
             OR: [{ expiresAt: null }, { expiresAt: { gt: now } }]
         },
-        include: { collection: { include: { products: true } } }
+        include: { products: { orderBy: { createdAt: 'desc' } } }
     });
     if (!s) return res.status(404).json({ error: 'not found' });
     res.json(s);
 });
 
-// Update shop (toggle active, update name/notes/collection/expiry) — admin only
+// Update shop (toggle active, update name/notes/expiry/products) — admin only
 router.patch('/:id', requireAuth, async (req, res) => {
     const id = String(req.params.id);
-    const { name, collectionId, expiresAt, notes, active } = req.body;
+    const { name, expiresAt, notes, active, productIds } = req.body;
 
     const existing = await prisma.shop.findUnique({ where: { id } });
     if (!existing) return res.status(404).json({ error: 'shop not found' });
@@ -61,12 +78,12 @@ router.patch('/:id', requireAuth, async (req, res) => {
         where: { id },
         data: {
             ...(name !== undefined && { name }),
-            ...(collectionId !== undefined && { collectionId }),
             ...(expiresAt !== undefined && { expiresAt: expiresAt ? new Date(expiresAt) : null }),
             ...(notes !== undefined && { notes: notes ?? null }),
-            ...(active !== undefined && { active })
+            ...(active !== undefined && { active }),
+            ...(Array.isArray(productIds) && { products: { set: productIds.map((pid: string) => ({ id: pid })) } })
         },
-        include: { collection: true }
+        include: { _count: { select: { products: true } } }
     });
     res.json(updated);
 });

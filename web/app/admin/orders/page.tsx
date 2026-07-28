@@ -22,12 +22,13 @@ type Order = {
     vendorOrders?: VendorOrder[];
 };
 type Product = { id: string; name: string; priceCents: number; sku: string };
+type Shop = { id: string; name: string };
 
 const TABS = [
-    { key: "all",         label: "All"         },
     { key: "UNFULFILLED", label: "Unfulfilled"  },
     { key: "FULFILLED",   label: "Fulfilled"    },
     { key: "CANCELLED",   label: "Cancelled"    },
+    { key: "all",         label: "All"         },
 ] as const;
 
 const fmt = (cents: number) =>
@@ -37,8 +38,10 @@ export default function OrdersPage() {
     const { toast } = useToast();
     const [orders, setOrders]             = useState<Order[]>([]);
     const [products, setProducts]         = useState<Product[]>([]);
+    const [shops, setShops]               = useState<Shop[]>([]);
     const [loading, setLoading]           = useState(true);
-    const [tab, setTab]                   = useState<string>("all");
+    const [tab, setTab]                   = useState<string>("UNFULFILLED");
+    const [filterShop, setFilterShop]     = useState("");
     const [search, setSearch]             = useState("");
     const [selectedIds, setSelectedIds]   = useState<Set<string>>(new Set());
     const [detailOrder, setDetailOrder]   = useState<Order | null>(null);
@@ -57,15 +60,17 @@ export default function OrdersPage() {
     });
     const [cartItems, setCartItems] = useState<{ productId: string; quantity: number }[]>([]);
 
-    useEffect(() => { setPage(1); }, [tab]);
-    useEffect(() => { fetchOrders(); }, [tab, page]);
+    useEffect(() => { setPage(1); }, [tab, filterShop]);
+    useEffect(() => { fetchOrders(); }, [tab, page, filterShop]);
     useEffect(() => { api("/products").then(d => setProducts(Array.isArray(d) ? d : d?.data ?? [])).catch(() => {}); }, []);
+    useEffect(() => { api("/shops").then(d => setShops(Array.isArray(d) ? d : d?.data ?? [])).catch(() => {}); }, []);
 
     async function fetchOrders() {
         setLoading(true);
         try {
             const params = new URLSearchParams({ limit: String(PAGE_SIZE), page: String(page) });
             if (tab !== "all") params.set("status", tab);
+            if (filterShop) params.set("shopId", filterShop);
             const result = await api(`/orders?${params}`);
             setOrders(result.data ?? []);
             setTotalPages(result.pages ?? 1);
@@ -183,6 +188,10 @@ export default function OrdersPage() {
                         value={search} onChange={e => setSearch(e.target.value)}
                     />
                 </div>
+                <Select value={filterShop} onChange={e => setFilterShop(e.target.value)} className="w-full sm:w-44">
+                    <option value="">All shops</option>
+                    {shops.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </Select>
                 <AnimatePresence>
                     {selectedIds.size > 0 && (
                         <motion.div initial={{ opacity:0, scale:0.92 }} animate={{ opacity:1, scale:1 }} exit={{ opacity:0, scale:0.92 }}

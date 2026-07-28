@@ -2,9 +2,9 @@ import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.js';
 import { router as auth } from './auth.js';
 import { router as products } from './products.js';
-import { router as collections } from './collections.js';
 import { router as shops } from './shops.js';
 import { router as orders } from './orders.js';
+import { router as orderReport } from './order-report.js';
 import { router as discounts } from './discounts.js';
 import { router as content } from './content.js';
 import { router as finance } from './finance.js';
@@ -22,9 +22,9 @@ router.use('/auth', auth);
 
 // Admin routes — require a valid JWT
 router.use('/products', requireAuth, products);
-router.use('/collections', requireAuth, collections);
-// Orders: POST / (checkout) is public; all other ops are protected in orders.ts
+// Orders: POST / (checkout) and POST /checkout are public; all other ops are protected in orders.ts
 router.use('/orders', orders);
+router.use('/order-report', requireAuth, orderReport);
 router.use('/discounts', requireAuth, discounts);
 router.use('/content', requireAuth, content);
 router.use('/finance', requireAuth, finance);

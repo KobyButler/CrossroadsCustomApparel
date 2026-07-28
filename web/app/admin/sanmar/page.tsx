@@ -30,6 +30,7 @@ type StyleDetail = {
     style: string; title?: string; description?: string; brand?: string;
     category?: string; subcategory?: string; colors: string[]; sizes: string[];
     priceCents: number; variants: CatalogRow[];
+    images?: string[]; colorImages?: Record<string, string>; upchargeDetected?: boolean;
 };
 
 type StyleCard = {
@@ -46,7 +47,7 @@ type CatMeta = {
     colors: string[];
 };
 
-type Collection = { id: string; name: string };
+type Shop = { id: string; name: string };
 
 type Filters = {
     q: string;
@@ -474,8 +475,9 @@ export default function SanMarPage() {
     const [selectedColor, setColor]         = useState<string | null>(null);
 
     // Import state
-    const [collections, setCollections]   = useState<Collection[]>([]);
-    const [collectionId, setCollectionId] = useState("");
+    const [shops, setShops]               = useState<Shop[]>([]);
+    const [shopIds, setShopIds]           = useState<Set<string>>(new Set());
+    const [importColors, setImportColors] = useState<Set<string>>(new Set());
     const [priceVal, setPriceVal]         = useState("");
     const [importing, setImporting]       = useState(false);
     const [importDone, setImportDone]     = useState(false);
@@ -487,7 +489,7 @@ export default function SanMarPage() {
     useEffect(() => {
         api("/sanmar/status").then(setStatus).catch(console.error);
         api("/sanmar/catalog/meta").then(setCatMeta).catch(() => {});
-        api("/collections").then((c: any) => setCollections(Array.isArray(c) ? c : c?.data ?? [])).catch(console.error);
+        api("/shops").then((s: any) => setShops(Array.isArray(s) ? s : s?.data ?? [])).catch(console.error);
     }, []);
 
     /* ── Derived category tree ── */
@@ -619,7 +621,8 @@ export default function SanMarPage() {
         setDetail(null);
         setDetailLoading(true);
         setColor(null);
-        setCollectionId("");
+        setShopIds(new Set());
+        setImportColors(new Set());
         setImportDone(false);
         try {
             const r = await api(`/sanmar/catalog/${encodeURIComponent(style)}`);
@@ -671,12 +674,17 @@ export default function SanMarPage() {
 
     /* ── Import ── */
     async function doImport() {
-        if (!collectionId || !panelStyle) return;
+        if (!panelStyle) return;
         setImporting(true);
         try {
             const res = await api("/sanmar/import", {
                 method: "POST",
-                body: JSON.stringify({ style: panelStyle, collectionId, priceCents: Math.round(parseFloat(priceVal) * 100) }),
+                body: JSON.stringify({
+                    style: panelStyle,
+                    shopIds: [...shopIds],
+                    colors: [...importColors],
+                    priceCents: Math.round(parseFloat(priceVal) * 100),
+                }),
             });
             setImportDone(true);
             toast(`${res.action === "created" ? "Added" : "Updated"}: ${res.product.name}`);
@@ -1373,19 +1381,66 @@ export default function SanMarPage() {
                                                     </div>
                                                     <button type="button" onClick={() => setImportDone(false)}
                                                         className="text-sm text-violet-600 hover:text-violet-800 font-semibold underline underline-offset-2">
-                                                        Add to another collection
+                                                        Add another style
                                                     </button>
                                                 </motion.div>
                                             ) : (
                                                 <>
+                                                    {detail.colors.length > 0 && (
+                                                        <div>
+                                                            <div className="flex items-center justify-between mb-1.5">
+                                                                <label className="text-xs text-slate-500 font-bold block">Which colors do you want to offer?</label>
+                                                                <div className="flex gap-2">
+                                                                    <button type="button" onClick={() => setImportColors(new Set(detail.colors))}
+                                                                        className="text-xs font-semibold text-violet-600 hover:text-violet-800">Select all</button>
+                                                                    <button type="button" onClick={() => setImportColors(new Set())}
+                                                                        className="text-xs font-semibold text-slate-400 hover:text-slate-600">Clear</button>
+                                                                </div>
+                                                            </div>
+                                                            <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto border border-slate-200 rounded-xl p-2.5">
+                                                                {detail.colors.map(c => {
+                                                                    const checked = importColors.has(c);
+                                                                    const thumb = detail.colorImages?.[c];
+                                                                    return (
+                                                                        <label key={c} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition-colors ${checked ? "bg-violet-50 ring-1 ring-violet-200" : "hover:bg-slate-50"}`}>
+                                                                            <input type="checkbox" checked={checked} className="accent-violet-600 w-3.5 h-3.5 shrink-0"
+                                                                                onChange={() => setImportColors(prev => {
+                                                                                    const next = new Set(prev);
+                                                                                    next.has(c) ? next.delete(c) : next.add(c);
+                                                                                    return next;
+                                                                                })} />
+                                                                            {thumb ? (
+                                                                                <img src={thumb} alt={c} className="w-6 h-6 rounded object-cover border border-slate-200 shrink-0" />
+                                                                            ) : null}
+                                                                            <span className="text-xs text-slate-700 truncate">{c}</span>
+                                                                        </label>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                     <div>
-                                                        <label className="text-xs text-slate-500 font-bold mb-1.5 block">Collection</label>
-                                                        <select aria-label="Choose a collection"
-                                                            value={collectionId} onChange={e => setCollectionId(e.target.value)}
-                                                            className="w-full px-3.5 py-3 text-sm border border-slate-200 rounded-xl outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-400/20 bg-white">
-                                                            <option value="">Choose a collection…</option>
-                                                            {collections.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                                                        </select>
+                                                        <label className="text-xs text-slate-500 font-bold mb-1.5 block">Assign to Shop(s) (optional)</label>
+                                                        {shops.length === 0 ? (
+                                                            <p className="text-xs text-slate-400">No group shops yet — you can assign this product to a shop later.</p>
+                                                        ) : (
+                                                            <div className="flex flex-wrap gap-2">
+                                                                {shops.map(s => {
+                                                                    const checked = shopIds.has(s.id);
+                                                                    return (
+                                                                        <button key={s.id} type="button"
+                                                                            onClick={() => setShopIds(prev => {
+                                                                                const next = new Set(prev);
+                                                                                next.has(s.id) ? next.delete(s.id) : next.add(s.id);
+                                                                                return next;
+                                                                            })}
+                                                                            className={`text-xs font-medium px-3 py-1.5 rounded-xl border transition-all ${checked ? "bg-violet-600 text-white border-violet-600" : "border-slate-200 text-slate-600 hover:border-violet-300 hover:bg-violet-50"}`}>
+                                                                            {s.name}
+                                                                        </button>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                     <div>
                                                         <label className="text-xs text-slate-500 font-bold mb-1.5 block">Your Selling Price</label>
@@ -1406,9 +1461,12 @@ export default function SanMarPage() {
                                                                 )}
                                                             </p>
                                                         )}
+                                                        {detail.upchargeDetected && (
+                                                            <p className="text-xs text-amber-600 mt-1.5 font-medium">⚠ SanMar charges more for larger sizes on this style — a +$3 upcharge for XL and up will be turned on automatically.</p>
+                                                        )}
                                                     </div>
                                                     <button type="button"
-                                                        disabled={!collectionId || importing || !priceVal}
+                                                        disabled={importing || !priceVal || (detail.colors.length > 0 && importColors.size === 0)}
                                                         onClick={doImport}
                                                         className="w-full py-3.5 text-sm font-black rounded-xl text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all active:scale-95"
                                                         style={{ background: "linear-gradient(135deg,#7c3aed 0%,#4f46e5 50%,#2563eb 100%)", boxShadow: "0 4px 20px rgba(109,40,217,0.3)" }}>

@@ -10,6 +10,7 @@ import {
 } from '../vendors/sanmar-sftp.js';
 import { checkSanMarInventory, getSanMarProductInfo, getOrderStatus, getOrderShipmentNotification, getInvoiceByPO } from '../vendors/sanmar.js';
 import { requireAuth } from '../middleware/auth.js';
+import { isUpchargeSize } from '../utils/pricing.js';
 
 export const router = Router();
 
@@ -245,7 +246,25 @@ router.get('/catalog/:style', async (req, res) => {
         const prices   = rows.map(r => r.priceCents).filter(p => p != null && p > 0);
         const minPrice = prices.length > 0 ? Math.min(...prices) : 0;
 
-        res.json({ style: req.params.style, title: first.title, description: first.description, brand: first.brand, category: first.category, subcategory: first.subcategory, colors, sizes, priceCents: minPrice, variants: rows });
+        // One representative image per color (falls back to the style's first image)
+        const colorImages: Record<string, string> = {};
+        for (const r of rows) {
+            if (r.colorName && r.productImage && !colorImages[r.colorName]) colorImages[r.colorName] = r.productImage;
+        }
+        const images = [...new Set(rows.map(r => r.productImage).filter(Boolean))] as string[];
+
+        // Detect a "bigger sizes cost more" pricing pattern (XL and up priced higher than the base sizes)
+        const basePrices = rows.filter(r => !isUpchargeSize(r.sizeName) && r.priceCents > 0).map(r => r.priceCents);
+        const bigPrices  = rows.filter(r => isUpchargeSize(r.sizeName) && r.priceCents > 0).map(r => r.priceCents);
+        const baseMin = basePrices.length ? Math.min(...basePrices) : 0;
+        const bigMax  = bigPrices.length ? Math.max(...bigPrices) : 0;
+        const upchargeDetected = baseMin > 0 && bigMax > baseMin;
+
+        res.json({
+            style: req.params.style, title: first.title, description: first.description, brand: first.brand,
+            category: first.category, subcategory: first.subcategory, colors, sizes, priceCents: minPrice,
+            images, colorImages, upchargeDetected, variants: rows,
+        });
     } catch (err: any) {
         res.status(500).json({ error: err.message ?? 'Style lookup failed' });
     }
@@ -302,25 +321,41 @@ router.get('/product-info/:style', async (req, res) => {
 /* ─── Import catalog product into local Products ─────────────────────────── */
 
 router.post('/import', async (req, res) => {
-    const { style, collectionId, priceCents } = req.body as {
+    const { style, shopIds, colors: colorSelection, priceCents } = req.body as {
         style: string;
-        collectionId: string;
+        shopIds?: string[];
+        colors?: string[];
         priceCents?: number;
     };
 
-    if (!style || !collectionId) {
-        return res.status(400).json({ error: 'style and collectionId are required' });
+    if (!style) {
+        return res.status(400).json({ error: 'style is required' });
     }
 
     // Fetch all variants from catalog
     const rows = await prisma.sanmarCatalogProduct.findMany({ where: { style } });
     if (!rows.length) return res.status(404).json({ error: 'Style not found in SanMar catalog' });
 
-    const first  = rows[0];
-    const colors = [...new Set(rows.map(r => r.colorName).filter(Boolean))];
-    const sizes  = [...new Set(rows.map(r => r.sizeName).filter(Boolean))];
-    const price  = priceCents ?? Math.min(...rows.map(r => r.priceCents).filter(p => p > 0)) ?? 0;
-    const image  = first.productImage ?? undefined;
+    const first     = rows[0];
+    const allColors = [...new Set(rows.map(r => r.colorName).filter(Boolean))];
+    // Only the colors the shop owner explicitly picked (falls back to all if none specified)
+    const colors    = Array.isArray(colorSelection) && colorSelection.length ? colorSelection.filter(c => allColors.includes(c)) : allColors;
+    const sizeRows  = colors.length ? rows.filter(r => colors.includes(r.colorName)) : rows;
+    const sizes     = [...new Set(sizeRows.map(r => r.sizeName).filter(Boolean))];
+    const price     = priceCents ?? Math.min(...rows.map(r => r.priceCents).filter(p => p > 0)) ?? 0;
+    // Prefer an image from one of the selected colors; fall back to the style's default image
+    const colorImage = rows.find(r => colors.includes(r.colorName) && r.productImage)?.productImage;
+    const images    = [...new Set([colorImage, first.productImage].filter(Boolean))] as string[];
+
+    // Auto-detect "bigger sizes cost more" and enable the upcharge toggle for them
+    const basePrices = rows.filter(r => !isUpchargeSize(r.sizeName) && r.priceCents > 0).map(r => r.priceCents);
+    const bigPrices  = rows.filter(r => isUpchargeSize(r.sizeName) && r.priceCents > 0).map(r => r.priceCents);
+    const baseMin = basePrices.length ? Math.min(...basePrices) : 0;
+    const bigMax  = bigPrices.length ? Math.max(...bigPrices) : 0;
+    const upchargeEnabled = baseMin > 0 && bigMax > baseMin;
+
+    const shopConnect = Array.isArray(shopIds) && shopIds.length ? { connect: shopIds.map(id => ({ id })) } : undefined;
+    const shopSet = Array.isArray(shopIds) ? { set: shopIds.map(id => ({ id })) } : undefined;
 
     try {
         const existing = await prisma.product.findUnique({ where: { sku: style } });
@@ -336,10 +371,11 @@ router.post('/import', async (req, res) => {
                     priceCents:       price,
                     sizesJson:        sizes.length  ? JSON.stringify(sizes)  : null,
                     colorsJson:       colors.length ? JSON.stringify(colors) : null,
-                    imagesJson:       image ? JSON.stringify([image]) : existing.imagesJson,
-                    collectionId,
+                    imagesJson:       images.length ? JSON.stringify(images) : existing.imagesJson,
+                    upchargeEnabled:  upchargeEnabled || existing.upchargeEnabled,
+                    ...(shopSet ? { shops: shopSet } : {}),
                 },
-                include: { collection: true },
+                include: { shops: { select: { id: true, name: true, slug: true } } },
             });
             return res.json({ action: 'updated', product: updated });
         }
@@ -355,10 +391,11 @@ router.post('/import', async (req, res) => {
                 priceCents:       price,
                 sizesJson:        sizes.length  ? JSON.stringify(sizes)  : null,
                 colorsJson:       colors.length ? JSON.stringify(colors) : null,
-                imagesJson:       image ? JSON.stringify([image]) : null,
-                collectionId,
+                imagesJson:       images.length ? JSON.stringify(images) : null,
+                upchargeEnabled,
+                ...(shopConnect ? { shops: shopConnect } : {}),
             },
-            include: { collection: true },
+            include: { shops: { select: { id: true, name: true, slug: true } } },
         });
         res.json({ action: 'created', product: created });
     } catch (err: any) {

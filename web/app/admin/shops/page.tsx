@@ -4,24 +4,21 @@ import { api } from "@/app/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
 import { Modal, ModalFooter } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
 import { motion } from "framer-motion";
 
 type Shop = {
     id: string; name: string; slug: string;
-    collectionId: string; collection?: { name: string };
     active: boolean; expiresAt?: string; notes?: string; createdAt: string;
+    _count?: { products: number };
 };
-type Collection = { id: string; name: string; slug: string };
 
-const EMPTY = { name:"", collectionId:"", expiresAt:"", notes:"" };
+const EMPTY = { name:"", expiresAt:"", notes:"" };
 
 export default function ShopsPage() {
     const { toast } = useToast();
     const [shops, setShops]           = useState<Shop[]>([]);
-    const [collections, setCollections] = useState<Collection[]>([]);
     const [loading, setLoading]       = useState(true);
     const [showCreate, setShowCreate] = useState(false);
     const [editShop, setEditShop]     = useState<Shop | null>(null);
@@ -30,11 +27,8 @@ export default function ShopsPage() {
     const [search, setSearch]         = useState("");
 
     useEffect(() => {
-        Promise.all([api("/shops"), api("/collections")])
-            .then(([s, c]) => {
-                setShops(Array.isArray(s) ? s : s?.data ?? []);
-                setCollections(Array.isArray(c) ? c : c?.data ?? []);
-            })
+        api("/shops")
+            .then((s: any) => setShops(Array.isArray(s) ? s : s?.data ?? []))
             .catch(console.error)
             .finally(() => setLoading(false));
     }, []);
@@ -46,11 +40,11 @@ export default function ShopsPage() {
         e.preventDefault(); setSaving(true);
         try {
             const shop = await api("/shops", { method:"POST", body:JSON.stringify({
-                name:form.name, collectionId:form.collectionId,
+                name:form.name,
                 expiresAt:form.expiresAt ? new Date(form.expiresAt).toISOString() : undefined,
                 notes:form.notes || undefined
             })});
-            setShops(p => [{ ...shop, collection:collections.find(c => c.id === shop.collectionId) }, ...p]);
+            setShops(p => [shop, ...p]);
             setShowCreate(false); setForm({ ...EMPTY }); toast("Shop created! Link is ready to share.");
         } catch (err: any) { toast(err.message || "Failed to create shop", "error"); }
         finally { setSaving(false); }
@@ -60,10 +54,10 @@ export default function ShopsPage() {
         e.preventDefault(); if (!editShop) return; setSaving(true);
         try {
             const u = await api(`/shops/${editShop.id}`, { method:"PATCH", body:JSON.stringify({
-                name:form.name, collectionId:form.collectionId,
+                name:form.name,
                 expiresAt:form.expiresAt ? new Date(form.expiresAt).toISOString() : null, notes:form.notes||null
             })});
-            setShops(p => p.map(s => s.id===editShop.id ? { ...u, collection:collections.find(c => c.id===u.collectionId) } : s));
+            setShops(p => p.map(s => s.id===editShop.id ? { ...s, ...u } : s));
             setEditShop(null); toast("Shop updated");
         } catch (err: any) { toast(err.message || "Failed to update shop", "error"); }
         finally { setSaving(false); }
@@ -83,7 +77,7 @@ export default function ShopsPage() {
 
     function openEdit(shop: Shop) {
         setEditShop(shop);
-        setForm({ name:shop.name, collectionId:shop.collectionId,
+        setForm({ name:shop.name,
             expiresAt:shop.expiresAt ? new Date(shop.expiresAt).toISOString().split("T")[0] : "",
             notes:shop.notes ?? "" });
     }
@@ -149,7 +143,7 @@ export default function ShopsPage() {
                 ) : (
                     <div className="overflow-x-auto">
                         <div className="table-wrap"><table className="data-table">
-                            <thead><tr><th>Shop Name</th><th>Collection</th><th>Link</th><th>Status</th><th>Expires</th><th className="text-right pr-5">Actions</th></tr></thead>
+                            <thead><tr><th>Shop Name</th><th>Products</th><th>Link</th><th>Status</th><th>Expires</th><th className="text-right pr-5">Actions</th></tr></thead>
                             <tbody>
                                 {filtered.map((shop, idx) => {
                                     const expired = shop.expiresAt && new Date(shop.expiresAt) < new Date();
@@ -166,7 +160,7 @@ export default function ShopsPage() {
                                                     </div>
                                                 </div>
                                             </td>
-                                            <td><span className="text-sm text-slate-500">{shop.collection?.name ?? "—"}</span></td>
+                                            <td><span className="text-sm text-slate-500">{shop._count?.products ?? 0} product{shop._count?.products === 1 ? "" : "s"}</span></td>
                                             <td>
                                                 <div className="flex items-center gap-1.5">
                                                     <a href={`/shop/${shop.slug}`} target="_blank" rel="noopener noreferrer"
@@ -215,18 +209,11 @@ export default function ShopsPage() {
             {/* Create/Edit Modal */}
             <Modal open={showCreate || !!editShop} onClose={() => { setShowCreate(false); setEditShop(null); }}
                 title={editShop ? "Edit Shop" : "Create Group Shop"}
-                description={editShop ? undefined : "A unique shareable link will be generated automatically"}
+                description={editShop ? undefined : "A unique shareable link will be generated automatically. Add products to this shop from the Products page."}
                 size="md">
                 <form onSubmit={editShop ? saveEdit : createShop} className="space-y-4">
                     <Input label="Shop Name" required placeholder="e.g. Central High Football 2024"
                         value={form.name} onChange={e => setForm(p => ({ ...p, name:e.target.value }))} />
-                    <div>
-                        <label className="field-label">Collection</label>
-                        <Select required value={form.collectionId} onChange={e => setForm(p => ({ ...p, collectionId:e.target.value }))}>
-                            <option value="">Select a collection</option>
-                            {collections.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                        </Select>
-                    </div>
                     <Input label="Expiry Date (optional)" type="date" value={form.expiresAt} onChange={e => setForm(p => ({ ...p, expiresAt:e.target.value }))} />
                     <div>
                         <label className="field-label">Notes (optional)</label>
