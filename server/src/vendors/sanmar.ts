@@ -1,6 +1,7 @@
 import { config } from '../config.js';
 import * as soap from 'soap';
 import { prisma } from '../prisma.js';
+import { vendorStyleCode } from '../utils/vendorGrouping.js';
 
 /* ─── Helpers ─────────────────────────────────────────────────────────────── */
 
@@ -56,15 +57,25 @@ export async function submitOrderToSanMar(order: any, lines: LineGroup) {
     }
 
     const [resp] = await client.submitPOAsync({ arg0: poEnvelope, arg1: auth });
+    // SanMar returns HTTP 200 even when it rejects the PO (bad style/color/size,
+    // validation failures, etc) — errorOccurred is the only signal, so check it
+    // explicitly rather than treating any non-throwing response as success.
+    if (sanmarReturnedError(resp?.return)) {
+        throw new Error(resp?.return?.message ?? 'SanMar rejected the purchase order');
+    }
     return { message: resp?.return?.message ?? 'Submitted', poNumber: order.id, raw: resp };
 }
 
 async function buildPOEnvelope(order: any, lines: LineGroup) {
     const detailList = await Promise.all(lines.map(async ({ item, product }) => {
+        // Use the vendor's own style code, not the (freely-editable, possibly
+        // duplicate-suffixed) Crossroads SKU — SanMar only recognizes its own codes.
+        const style = vendorStyleCode(product);
+
         // Look up the exact variant for inventoryKey + sizeIndex (SanMar's recommended approach)
         const variant = await prisma.sanmarCatalogProduct.findFirst({
             where: {
-                style:     product.sku,
+                style,
                 colorName: item.color ?? '',
                 sizeName:  item.size  ?? '',
             },
@@ -76,7 +87,7 @@ async function buildPOEnvelope(order: any, lines: LineGroup) {
 
         return {
             ...(inventoryKey && sizeIndex ? { inventoryKey, sizeIndex } : {}),
-            style:    product.sku,
+            style,
             color:    item.color    ?? '',
             size:     item.size     ?? '',
             quantity: Number(item.quantity),
