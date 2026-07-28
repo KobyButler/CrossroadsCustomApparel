@@ -182,6 +182,9 @@ export default function OrderReportPage() {
                         const totalQty = lines.reduce((a, l) => a + l.quantity, 0);
                         const alreadyOrderedCount = report.alreadyOrdered[vendor]?.length ?? 0;
                         const isRealVendor = vendor === "SANMAR" || vendor === "SSACTIVEWEAR";
+                        // Placing a new vendor PO only makes sense against pending (Unfulfilled)
+                        // orders — never against orders already shipped or cancelled.
+                        const canPlaceOrders = isRealVendor && status === "UNFULFILLED";
                         const vendorSelectedCount = lines.filter(l => selected.has(lineKey(l))).length;
                         const allChecked = lines.length > 0 && vendorSelectedCount === lines.length;
 
@@ -193,7 +196,7 @@ export default function OrderReportPage() {
                                         <h2 className="text-sm font-bold text-slate-900">{VENDOR_LABELS[vendor] ?? vendor}</h2>
                                         <p className="text-xs text-slate-400">{lines.length} line item{lines.length !== 1 ? "s" : ""} · {totalQty} unit{totalQty !== 1 ? "s" : ""} total</p>
                                     </div>
-                                    {isRealVendor && (
+                                    {canPlaceOrders ? (
                                         <div className="flex items-center gap-2 no-print">
                                             {alreadyOrderedCount > 0 && (
                                                 <Badge variant="warning" size="sm">{alreadyOrderedCount} order{alreadyOrderedCount !== 1 ? "s" : ""} already ordered</Badge>
@@ -204,12 +207,14 @@ export default function OrderReportPage() {
                                                     : `Place Order — All ${lines.length} Items`}
                                             </Button>
                                         </div>
-                                    )}
+                                    ) : isRealVendor ? (
+                                        <p className="text-xs text-slate-400 no-print">Ordering is only available for Unfulfilled orders</p>
+                                    ) : null}
                                 </div>
                                 <div className="overflow-x-auto">
                                     <div className="table-wrap"><table className="data-table">
                                         <thead><tr>
-                                            {isRealVendor && (
+                                            {canPlaceOrders && (
                                                 <th className="w-10 pl-5 no-print">
                                                     <input type="checkbox" title="Select all" aria-label={`Select all ${VENDOR_LABELS[vendor]} lines`}
                                                         checked={allChecked} onChange={() => toggleVendorAll(lines)}
@@ -224,7 +229,7 @@ export default function OrderReportPage() {
                                                 const checked = selected.has(key);
                                                 return (
                                                     <tr key={key} className={checked ? "bg-brand-50/40" : undefined}>
-                                                        {isRealVendor && (
+                                                        {canPlaceOrders && (
                                                             <td className="pl-5 no-print">
                                                                 <input type="checkbox" checked={checked} onChange={() => toggleLine(key)}
                                                                     title={`Select ${l.vendorStyle}`} aria-label={`Select ${l.vendorStyle} ${l.color ?? ""} ${l.size ?? ""}`}
