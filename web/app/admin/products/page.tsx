@@ -7,20 +7,25 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Modal, ModalFooter } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
-import { motion, AnimatePresence } from "framer-motion";
-import { COLOR_MAP, getColorCss } from "@/lib/colors";
+import { motion } from "framer-motion";
+import { getColorCss } from "@/lib/colors";
 
+type Shop = { id: string; name: string; slug: string };
 type Product = {
     id: string; name: string; sku: string; vendor: string;
     vendorIdentifier?: string; brand?: string; description?: string;
-    priceCents: number; collectionId: string; collection?: { name: string };
+    priceCents: number; shops?: Shop[];
     sizesJson?: string; colorsJson?: string; imagesJson?: string;
+    upchargeEnabled?: boolean; upchargeCents?: number;
 };
-type Collection = { id: string; name: string; slug: string; description?: string };
 
 const VENDOR_LABELS: Record<string, string> = { SANMAR:"SanMar", SSACTIVEWEAR:"S&S Activewear", OTHER:"Other" };
 const VENDOR_COLORS: Record<string, string> = { SANMAR:"info", SSACTIVEWEAR:"success", OTHER:"default" };
-const EMPTY = { name:"", sku:"", vendor:"OTHER", vendorIdentifier:"", brand:"", description:"", priceDollars:"", collectionId:"", sizes:[] as string[], colors:[] as string[] };
+const EMPTY = {
+    name:"", sku:"", vendor:"OTHER", vendorIdentifier:"", brand:"", description:"", priceDollars:"",
+    shopIds:[] as string[], sizes:[] as string[], colors:[] as string[], images:[] as string[],
+    upchargeEnabled:false, upchargeDollars:"3.00"
+};
 
 // ── TagInput ──────────────────────────────────────────────────────────────────
 function TagInput({ label, tags, onChange, placeholder }: { label:string; tags:string[]; onChange:(t:string[])=>void; placeholder?:string }) {
@@ -104,6 +109,58 @@ function ColorTagInput({ label, tags, onChange, placeholder }: { label:string; t
     );
 }
 
+// ── Auto-growing, manually-resizable description textarea ─────────────────────
+function DescriptionField({ value, onChange }: { value:string; onChange:(v:string)=>void }) {
+    const ref = useRef<HTMLTextAreaElement>(null);
+
+    useEffect(() => {
+        const el = ref.current;
+        if (!el) return;
+        el.style.height = "auto";
+        el.style.height = `${Math.max(el.scrollHeight, 84)}px`;
+    }, [value]);
+
+    return (
+        <div>
+            <label className="field-label">Description</label>
+            <textarea ref={ref} value={value} onChange={e => onChange(e.target.value)}
+                placeholder="Product description…"
+                style={{ resize: "vertical", minHeight: "84px" }}
+                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all" />
+            <p className="text-xs text-slate-300 mt-1">Drag the bottom-right corner to resize — it also grows automatically as you type.</p>
+        </div>
+    );
+}
+
+// ── ShopMultiSelect ────────────────────────────────────────────────────────────
+function ShopMultiSelect({ shops, selected, onChange }: { shops:Shop[]; selected:string[]; onChange:(ids:string[])=>void }) {
+    function toggle(id: string) {
+        onChange(selected.includes(id) ? selected.filter(x => x !== id) : [...selected, id]);
+    }
+    return (
+        <div>
+            <label className="field-label">Assign to Shop(s)</label>
+            {shops.length === 0 ? (
+                <p className="text-xs text-slate-400 bg-slate-50 border border-dashed border-slate-200 rounded-xl px-3 py-2.5">
+                    No group shops yet — you can create one under Group Shops, or assign this product to a shop later.
+                </p>
+            ) : (
+                <div className="flex flex-wrap gap-2">
+                    {shops.map(s => {
+                        const checked = selected.includes(s.id);
+                        return (
+                            <button key={s.id} type="button" onClick={() => toggle(s.id)}
+                                className={`text-xs font-medium px-3 py-1.5 rounded-xl border transition-all ${checked ? "bg-brand-600 text-white border-brand-600" : "border-slate-200 text-slate-600 hover:border-brand-300 hover:bg-brand-50"}`}>
+                                {s.name}
+                            </button>
+                        );
+                    })}
+                </div>
+            )}
+        </div>
+    );
+}
+
 // ── ImageUploader ─────────────────────────────────────────────────────────────
 function ImageUploader({ productId, existingImages, onUploaded }: { productId:string; existingImages:string[]; onUploaded:(url:string)=>void }) {
     const { toast } = useToast();
@@ -157,7 +214,10 @@ function ImageUploader({ productId, existingImages, onUploaded }: { productId:st
 type VendorItem = {
     style: string; title: string; brand?: string;
     colors: string[]; sizes: string[]; priceCents: number; description?: string;
+    images: string[]; vendorIdentifier?: string; upchargeDetected?: boolean;
 };
+
+type VendorDetail = VendorItem & { colorImages?: Record<string,string> };
 
 function VendorSearchPanel({ source, onSelect }: { source: "SANMAR"|"SS"; onSelect:(item:VendorItem)=>void }) {
     const [query, setQuery] = useState("");
@@ -166,14 +226,19 @@ function VendorSearchPanel({ source, onSelect }: { source: "SANMAR"|"SS"; onSele
     const [loading, setLoading] = useState(false);
     const [selecting, setSelecting] = useState(false);
     const [error, setError] = useState("");
+    const [detail, setDetail] = useState<VendorDetail | null>(null);
+    const [selectedColors, setSelectedColors] = useState<Set<string>>(new Set());
     const timerRef = useRef<ReturnType<typeof setTimeout>>();
+    const requestSeq = useRef(0);
 
     async function doSearch(q: string) {
-        if (!q.trim()) { setResults([]); setNotice(""); return; }
+        const seq = ++requestSeq.current;
+        if (!q.trim()) { setResults([]); setNotice(""); setError(""); return; }
         setLoading(true); setError(""); setNotice("");
         try {
             if (source === "SANMAR") {
                 const data = await api(`/sanmar/catalog?q=${encodeURIComponent(q)}&limit=40`);
+                if (seq !== requestSeq.current) return; // a newer search superseded this one
                 const seen = new Set<string>();
                 const unique: any[] = [];
                 for (const row of data.data ?? []) {
@@ -183,12 +248,14 @@ function VendorSearchPanel({ source, onSelect }: { source: "SANMAR"|"SS"; onSele
                 if (unique.length === 0) setNotice("No results. Make sure the SanMar catalog is synced (SanMar tab → Sync Catalog).");
             } else {
                 const data = await api(`/ss/search?q=${encodeURIComponent(q)}`);
-                const products = data.products ?? data ?? [];
+                if (seq !== requestSeq.current) return;
+                const products = data.products ?? [];
                 setResults(products.slice(0, 15));
                 if (data.notice) setNotice(data.notice);
                 else if (products.length === 0) setNotice("No results found.");
             }
         } catch (e: any) {
+            if (seq !== requestSeq.current) return;
             const msg: string = e.message ?? "Search failed";
             if (msg.includes("504") || msg.includes("timed out")) {
                 setError("Search timed out — the vendor API is slow or unreachable. Try again in a moment.");
@@ -197,8 +264,9 @@ function VendorSearchPanel({ source, onSelect }: { source: "SANMAR"|"SS"; onSele
             } else {
                 setError(msg);
             }
+        } finally {
+            if (seq === requestSeq.current) setLoading(false);
         }
-        finally { setLoading(false); }
     }
 
     function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -208,43 +276,132 @@ function VendorSearchPanel({ source, onSelect }: { source: "SANMAR"|"SS"; onSele
         timerRef.current = setTimeout(() => doSearch(q), 400);
     }
 
-    async function handleSelect(result: any) {
+    async function handlePick(result: any) {
         setSelecting(true); setError("");
         try {
             if (source === "SANMAR") {
-                const detail = await api(`/sanmar/catalog/${result.style}`);
-                onSelect({
-                    style: detail.style,
-                    title: detail.title ?? result.style,
-                    brand: detail.brand ?? undefined,
-                    colors: detail.colors ?? [],
-                    sizes: detail.sizes ?? [],
-                    priceCents: detail.priceCents ?? 0,
-                    description: detail.description ?? undefined,
-                });
+                const d = await api(`/sanmar/catalog/${result.style}`);
+                const det: VendorDetail = {
+                    style: d.style, title: d.title ?? result.style, brand: d.brand ?? undefined,
+                    colors: d.colors ?? [], sizes: d.sizes ?? [], priceCents: d.priceCents ?? 0,
+                    description: d.description ?? undefined, images: d.images ?? [],
+                    colorImages: d.colorImages ?? {}, vendorIdentifier: d.style,
+                    upchargeDetected: Boolean(d.upchargeDetected),
+                };
+                setDetail(det);
+                setSelectedColors(new Set());
             } else {
-                onSelect({
-                    style: result.sku ?? result.style ?? result.partNumber ?? "",
-                    title: result.title ?? result.name ?? result.sku ?? "",
-                    brand: result.brandName ?? result.brand ?? undefined,
-                    colors: result.colors ?? [],
-                    sizes: result.sizes ?? [],
-                    priceCents: result.priceCents ?? Math.round((result.price ?? 0) * 100),
-                    description: result.description ?? undefined,
-                });
+                const d = await api(`/ss/styles/${result.styleId}`);
+                const det: VendorDetail = {
+                    style: d.style ?? result.style, title: d.title ?? result.style, brand: d.brand ?? undefined,
+                    colors: d.colors ?? [], sizes: d.sizes ?? [], priceCents: d.priceCents ?? 0,
+                    description: d.description ?? undefined, images: d.images ?? [],
+                    colorImages: d.colorImages ?? {}, vendorIdentifier: String(d.styleId ?? result.styleId),
+                    upchargeDetected: Boolean(d.upchargeDetected),
+                };
+                setDetail(det);
+                setSelectedColors(new Set());
             }
         } catch (e: any) { setError(e.message || "Failed to load details"); }
         finally { setSelecting(false); }
     }
 
+    function confirmColors() {
+        if (!detail) return;
+        const chosenColors = detail.colors.length > 0 ? [...selectedColors] : [];
+        const images = chosenColors.length > 0
+            ? [...new Set(chosenColors.map(c => detail.colorImages?.[c]).filter(Boolean) as string[])]
+            : detail.images.slice(0, 1);
+        onSelect({
+            style: detail.style, title: detail.title, brand: detail.brand,
+            colors: chosenColors, sizes: detail.sizes, priceCents: detail.priceCents,
+            description: detail.description, images: images.length ? images : detail.images,
+            vendorIdentifier: detail.vendorIdentifier, upchargeDetected: detail.upchargeDetected,
+        });
+        setDetail(null);
+        setSelectedColors(new Set());
+    }
+
     const label = source === "SANMAR" ? "SanMar" : "S&S Activewear";
 
+    // ── Color confirmation step ──
+    if (detail) {
+        return (
+            <div className="space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                    <div>
+                        <p className="text-sm font-bold text-slate-900">{detail.title}</p>
+                        <p className="text-xs text-slate-400">{detail.brand} · Style {detail.style}</p>
+                    </div>
+                    <button type="button" onClick={() => { setDetail(null); setSelectedColors(new Set()); }}
+                        className="text-xs text-slate-500 hover:text-slate-700 underline shrink-0">
+                        ← Back to search
+                    </button>
+                </div>
+
+                {detail.upchargeDetected && (
+                    <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5">
+                        <svg className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        <p className="text-xs text-amber-800">This vendor charges more for larger sizes — the &quot;Upcharge for bigger sizes&quot; toggle below has been turned on automatically.</p>
+                    </div>
+                )}
+
+                {detail.colors.length === 0 ? (
+                    <p className="text-xs text-slate-400">This style has no color options — click Confirm to add it.</p>
+                ) : (
+                    <div>
+                        <div className="flex items-center justify-between mb-2">
+                            <label className="field-label mb-0">Which colors do you want to offer?</label>
+                            <div className="flex gap-2">
+                                <button type="button" onClick={() => setSelectedColors(new Set(detail.colors))}
+                                    className="text-xs font-semibold text-brand-600 hover:text-brand-700">Select all</button>
+                                <button type="button" onClick={() => setSelectedColors(new Set())}
+                                    className="text-xs font-semibold text-slate-400 hover:text-slate-600">Clear</button>
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-64 overflow-y-auto border border-slate-200 rounded-xl p-2.5">
+                            {detail.colors.map(c => {
+                                const checked = selectedColors.has(c);
+                                const thumb = detail.colorImages?.[c];
+                                return (
+                                    <label key={c} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition-colors ${checked ? "bg-brand-50 ring-1 ring-brand-200" : "hover:bg-slate-50"}`}>
+                                        <input type="checkbox" checked={checked} className="accent-brand-600 w-3.5 h-3.5 shrink-0"
+                                            onChange={() => setSelectedColors(prev => {
+                                                const next = new Set(prev);
+                                                next.has(c) ? next.delete(c) : next.add(c);
+                                                return next;
+                                            })} />
+                                        {thumb ? (
+                                            <img src={thumb} alt={c} className="w-6 h-6 rounded object-cover border border-slate-200 shrink-0" />
+                                        ) : (
+                                            <span className="w-3.5 h-3.5 rounded-full border border-black/15 shrink-0" style={{ backgroundColor: getColorCss(c) }} />
+                                        )}
+                                        <span className="text-xs text-slate-700 truncate">{c}</span>
+                                    </label>
+                                );
+                            })}
+                        </div>
+                        <p className="text-xs text-slate-400 mt-1.5">{selectedColors.size} of {detail.colors.length} selected · all {detail.sizes.length} sizes will be added for the colors you pick</p>
+                    </div>
+                )}
+
+                <button type="button" onClick={confirmColors}
+                    disabled={detail.colors.length > 0 && selectedColors.size === 0}
+                    className="w-full py-2.5 text-sm font-bold rounded-xl text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all active:scale-95"
+                    style={{ background:"linear-gradient(135deg,#8b5cf6 0%,#7c3aed 100%)" }}>
+                    Confirm &amp; Add to Product
+                </button>
+            </div>
+        );
+    }
+
+    // ── Search step ──
     return (
         <div className="space-y-2">
             <div className="relative">
                 <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                 <input value={query} onChange={handleChange}
-                    placeholder={source === "SS" ? `Search S&S by style # (e.g. G200, PC61…)` : `Search ${label} by style # or name…`}
+                    placeholder={source === "SS" ? `Search S&S by style # or keyword (e.g. G200, hoodie…)` : `Search ${label} by style # or name…`}
                     className="w-full pl-9 pr-8 py-2.5 text-sm border border-slate-200 rounded-xl outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 bg-white transition-all" />
                 {(loading || selecting) && (
                     <div className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -265,13 +422,16 @@ function VendorSearchPanel({ source, onSelect }: { source: "SANMAR"|"SS"; onSele
                 </div>
             )}
             {results.length > 0 && (
-                <div className="border border-slate-200 rounded-xl overflow-hidden max-h-52 overflow-y-auto divide-y divide-slate-100 bg-white shadow-sm">
+                <div className="border border-slate-200 rounded-xl overflow-hidden max-h-64 overflow-y-auto divide-y divide-slate-100 bg-white shadow-sm">
                     {results.map((r, i) => (
-                        <button key={i} type="button" onClick={() => handleSelect(r)}
-                            className="w-full text-left px-4 py-2.5 hover:bg-brand-50 transition-colors flex items-center justify-between gap-3">
-                            <div className="min-w-0">
-                                <p className="text-sm font-semibold text-slate-800 truncate">{r.title ?? r.name ?? r.sku}</p>
-                                <p className="text-xs text-slate-400 truncate">{r.brand ?? ""} {r.brand ? "·" : ""} Style {r.style ?? r.sku}</p>
+                        <button key={i} type="button" onClick={() => handlePick(r)}
+                            className="w-full text-left px-4 py-2.5 hover:bg-brand-50 transition-colors flex items-center gap-3">
+                            {r.image ? (
+                                <img src={r.image} alt="" className="w-8 h-8 rounded-lg object-cover border border-slate-200 shrink-0" />
+                            ) : null}
+                            <div className="min-w-0 flex-1">
+                                <p className="text-sm font-semibold text-slate-800 truncate">{r.title ?? r.name ?? r.style}</p>
+                                <p className="text-xs text-slate-400 truncate">{r.brand ?? ""} {r.brand ? "·" : ""} Style {r.style}</p>
                             </div>
                             <span className="text-xs text-brand-600 font-semibold shrink-0">Select →</span>
                         </button>
@@ -285,7 +445,7 @@ function VendorSearchPanel({ source, onSelect }: { source: "SANMAR"|"SS"; onSele
                 <p className="text-xs text-slate-400 px-1">Searches your synced SanMar catalog. Run a catalog sync in the SanMar tab if results are missing.</p>
             )}
             {source === "SS" && !query && (
-                <p className="text-xs text-slate-400 px-1">Enter an S&amp;S style number to look up a product (e.g. G200, PC61, 2000). Requires SS_USER and SS_API_KEY in server env.</p>
+                <p className="text-xs text-slate-400 px-1">Search S&amp;S by style number or keyword (e.g. G200, hoodie, Gildan). Requires SS_USER and SS_API_KEY in server env.</p>
             )}
         </div>
     );
@@ -295,36 +455,28 @@ function VendorSearchPanel({ source, onSelect }: { source: "SANMAR"|"SS"; onSele
 export default function ProductsPage() {
     const { toast } = useToast();
     const [products, setProducts]         = useState<Product[]>([]);
-    const [collections, setCollections]   = useState<Collection[]>([]);
+    const [shops, setShops]               = useState<Shop[]>([]);
     const [loading, setLoading]           = useState(true);
-    const [tab, setTab]                   = useState<"products"|"collections">("products");
     const [search, setSearch]             = useState("");
-    const [filterCollection, setFilterCollection] = useState("");
+    const [filterShop, setFilterShop]     = useState("");
     const [filterVendor, setFilterVendor] = useState("");
     const [showAdd, setShowAdd]           = useState(false);
-    const [showAddColl, setShowAddColl]   = useState(false);
     const [editProduct, setEditProduct]   = useState<Product | null>(null);
     const [form, setForm]                 = useState({ ...EMPTY });
-    const [collForm, setCollForm]         = useState({ name:"", description:"" });
     const [saving, setSaving]             = useState(false);
     const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
     const [deleting, setDeleting]         = useState(false);
+    const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
 
     // Vendor import state
     const [importSource, setImportSource] = useState<"MANUAL"|"SANMAR"|"SS">("MANUAL");
     const [importedFrom, setImportedFrom] = useState<string>("");
 
-    // Collection management state
-    const [managingCollection, setManagingCollection] = useState<Collection | null>(null);
-    const [addToCollSearch, setAddToCollSearch]       = useState("");
-    const [addToCollSelected, setAddToCollSelected]   = useState<Set<string>>(new Set());
-    const [addToCollSaving, setAddToCollSaving]       = useState(false);
-
     useEffect(() => {
-        Promise.all([api("/products"), api("/collections")])
-            .then(([p, c]) => {
+        Promise.all([api("/products"), api("/shops")])
+            .then(([p, s]) => {
                 setProducts(Array.isArray(p) ? p : p?.data ?? []);
-                setCollections(Array.isArray(c) ? c : c?.data ?? []);
+                setShops(Array.isArray(s) ? s : s?.data ?? []);
             })
             .catch(console.error)
             .finally(() => setLoading(false));
@@ -333,7 +485,7 @@ export default function ProductsPage() {
     const filtered = products.filter(p => {
         const q = search.toLowerCase();
         return (!q || p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q) || (p.brand ?? "").toLowerCase().includes(q))
-            && (!filterCollection || p.collectionId === filterCollection)
+            && (!filterShop || (p.shops ?? []).some(s => s.id === filterShop))
             && (!filterVendor || p.vendor === filterVendor);
     });
 
@@ -341,9 +493,13 @@ export default function ProductsPage() {
         setEditProduct(p);
         setImportSource("MANUAL");
         setImportedFrom("");
-        setForm({ name:p.name, sku:p.sku, vendor:p.vendor, vendorIdentifier:p.vendorIdentifier??"", brand:p.brand??"", description:p.description??"",
-            priceDollars:(p.priceCents/100).toFixed(2), collectionId:p.collectionId,
-            sizes:p.sizesJson?JSON.parse(p.sizesJson):[], colors:p.colorsJson?JSON.parse(p.colorsJson):[] });
+        setForm({
+            name:p.name, sku:p.sku, vendor:p.vendor, vendorIdentifier:p.vendorIdentifier??"", brand:p.brand??"", description:p.description??"",
+            priceDollars:(p.priceCents/100).toFixed(2), shopIds:(p.shops ?? []).map(s => s.id),
+            sizes:p.sizesJson?JSON.parse(p.sizesJson):[], colors:p.colorsJson?JSON.parse(p.colorsJson):[],
+            images:p.imagesJson?JSON.parse(p.imagesJson):[],
+            upchargeEnabled: Boolean(p.upchargeEnabled), upchargeDollars: ((p.upchargeCents ?? 300)/100).toFixed(2),
+        });
     }
 
     function openAdd() {
@@ -361,12 +517,14 @@ export default function ProductsPage() {
             name:             item.title,
             sku:              item.style,
             vendor,
-            vendorIdentifier: item.style,
+            vendorIdentifier: item.vendorIdentifier ?? item.style,
             brand:            item.brand ?? p.brand,
             description:      item.description ?? p.description,
             priceDollars:     item.priceCents > 0 ? (item.priceCents / 100).toFixed(2) : p.priceDollars,
             sizes:            item.sizes.length > 0 ? item.sizes : p.sizes,
             colors:           item.colors.length > 0 ? item.colors : p.colors,
+            images:           item.images.length > 0 ? item.images : p.images,
+            upchargeEnabled:  item.upchargeDetected ? true : p.upchargeEnabled,
         }));
         setImportedFrom(item.title);
     }
@@ -374,9 +532,14 @@ export default function ProductsPage() {
     async function saveProduct(e: React.FormEvent) {
         e.preventDefault(); setSaving(true);
         try {
-            const payload = { name:form.name, sku:form.sku, vendor:form.vendor, vendorIdentifier:form.vendorIdentifier||undefined,
+            const payload = {
+                name:form.name, sku:form.sku, vendor:form.vendor, vendorIdentifier:form.vendorIdentifier||undefined,
                 brand:form.brand||undefined, description:form.description||undefined,
-                priceCents:Math.round(parseFloat(form.priceDollars)*100), sizes:form.sizes, colors:form.colors, collectionId:form.collectionId };
+                priceCents:Math.round(parseFloat(form.priceDollars)*100), sizes:form.sizes, colors:form.colors,
+                images:form.images, shopIds:form.shopIds,
+                upchargeEnabled:form.upchargeEnabled,
+                upchargeCents:Math.round(parseFloat(form.upchargeDollars || "0")*100) || 300,
+            };
             if (editProduct) {
                 const u = await api(`/products/${editProduct.id}`, { method:"PUT", body:JSON.stringify(payload) });
                 setProducts(p => p.map(x => x.id===editProduct.id ? u : x));
@@ -402,46 +565,15 @@ export default function ProductsPage() {
         finally { setDeleting(false); }
     }
 
-    async function saveCollection(e: React.FormEvent) {
-        e.preventDefault(); setSaving(true);
+    async function duplicateProduct(p: Product) {
+        setDuplicatingId(p.id);
         try {
-            const c = await api("/collections", { method:"POST", body:JSON.stringify(collForm) });
-            setCollections(p => [c,...p]); setCollForm({ name:"", description:"" });
-            setShowAddColl(false); toast("Collection created");
-        } catch (err: any) { toast(err.message||"Failed", "error"); }
-        finally { setSaving(false); }
+            const copy = await api(`/products/${p.id}/duplicate`, { method: "POST" });
+            setProducts(prev => [copy, ...prev]);
+            toast(`Duplicated as ${copy.sku}`);
+        } catch (err: any) { toast(err.message || "Failed to duplicate product", "error"); }
+        finally { setDuplicatingId(null); }
     }
-
-    async function addProductsToCollection() {
-        if (!managingCollection || addToCollSelected.size === 0) return;
-        setAddToCollSaving(true);
-        try {
-            await Promise.all([...addToCollSelected].map(id =>
-                api(`/products/${id}`, { method:"PUT", body:JSON.stringify({ collectionId: managingCollection.id }) })
-            ));
-            setProducts(prev => prev.map(p =>
-                addToCollSelected.has(p.id) ? { ...p, collectionId: managingCollection.id, collection: { name: managingCollection.name } } : p
-            ));
-            toast(`Added ${addToCollSelected.size} product${addToCollSelected.size !== 1 ? "s" : ""} to ${managingCollection.name}`);
-            setManagingCollection(null);
-            setAddToCollSelected(new Set());
-        } catch (err: any) { toast(err.message || "Failed to update products", "error"); }
-        finally { setAddToCollSaving(false); }
-    }
-
-    const TABS = [
-        { key:"products", label:"Products", count:products.length },
-        { key:"collections", label:"Collections", count:collections.length }
-    ] as const;
-
-    // Products not in the managing collection (for "add to collection" modal)
-    const otherProducts = managingCollection
-        ? products.filter(p => p.collectionId !== managingCollection.id)
-            .filter(p => {
-                const q = addToCollSearch.toLowerCase();
-                return !q || p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q);
-            })
-        : [];
 
     return (
         <div className="space-y-6">
@@ -449,235 +581,152 @@ export default function ProductsPage() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                     <h1 className="page-title">Products</h1>
-                    <p className="page-subtitle">Manage your product catalog and collections</p>
+                    <p className="page-subtitle">Manage your product catalog</p>
                 </div>
-                <div className="flex gap-2.5 flex-wrap">
-                    {tab === "products" && (
-                        <motion.button whileHover={{ y:-1 }} whileTap={{ scale:0.97 }}
-                            onClick={openAdd}
-                            className="btn-shine flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white transition-all duration-200"
-                            style={{ background:"linear-gradient(135deg,#8b5cf6 0%,#7c3aed 100%)", boxShadow:"0 4px 16px rgba(124,58,237,0.35)" }}
-                        >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg>
-                            Add Product
-                        </motion.button>
-                    )}
-                    {tab === "collections" && (
-                        <motion.button whileHover={{ y:-1 }} whileTap={{ scale:0.97 }}
-                            onClick={() => setShowAddColl(true)}
-                            className="btn-shine flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white transition-all duration-200"
-                            style={{ background:"linear-gradient(135deg,#8b5cf6 0%,#7c3aed 100%)", boxShadow:"0 4px 16px rgba(124,58,237,0.35)" }}
-                        >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg>
-                            Add Collection
-                        </motion.button>
-                    )}
-                </div>
+                <motion.button whileHover={{ y:-1 }} whileTap={{ scale:0.97 }}
+                    onClick={openAdd}
+                    className="btn-shine flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white transition-all duration-200"
+                    style={{ background:"linear-gradient(135deg,#8b5cf6 0%,#7c3aed 100%)", boxShadow:"0 4px 16px rgba(124,58,237,0.35)" }}
+                >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg>
+                    Add Product
+                </motion.button>
             </div>
 
-            {/* Tabs */}
-            <div className="flex items-center gap-1 border-b border-slate-200">
-                {TABS.map(t => (
-                    <button key={t.key} type="button" onClick={() => setTab(t.key)}
-                        className={`relative px-4 py-2.5 text-sm font-medium transition-colors -mb-px ${tab===t.key ? "text-brand-700" : "text-slate-500 hover:text-slate-700"}`}
-                    >
-                        {tab===t.key && <motion.div layoutId="products-tab-bar" className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand-600 rounded-full" transition={{ duration:0.2 }} />}
-                        {t.label}
-                        <span className={`ml-1.5 text-xs px-1.5 py-0.5 rounded-full ${tab===t.key ? "bg-brand-100 text-brand-700" : "bg-slate-100 text-slate-500"}`}>{t.count}</span>
+            <div className="flex items-center gap-3 flex-wrap">
+                <div className="relative flex-1 max-w-xs">
+                    <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                    <input className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-xl outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 bg-white shadow-sm transition-all"
+                        placeholder="Search products…" value={search} onChange={e => setSearch(e.target.value)} />
+                </div>
+                <Select value={filterShop} onChange={e => setFilterShop(e.target.value)} className="w-full sm:w-44">
+                    <option value="">All shops</option>
+                    {shops.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </Select>
+                <Select value={filterVendor} onChange={e => setFilterVendor(e.target.value)} className="w-full sm:w-40">
+                    <option value="">All vendors</option>
+                    <option value="SANMAR">SanMar</option>
+                    <option value="SSACTIVEWEAR">S&S Activewear</option>
+                    <option value="OTHER">Other</option>
+                </Select>
+                {(search || filterShop || filterVendor) && (
+                    <button type="button" onClick={() => { setSearch(""); setFilterShop(""); setFilterVendor(""); }}
+                        className="text-xs font-medium text-slate-500 hover:text-slate-700 transition-colors">
+                        Clear filters
                     </button>
-                ))}
+                )}
             </div>
 
-            {/* Products Tab */}
-            {tab === "products" && (
-                <>
-                    <div className="flex items-center gap-3 flex-wrap">
-                        <div className="relative flex-1 max-w-xs">
-                            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-                            <input className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-xl outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 bg-white shadow-sm transition-all"
-                                placeholder="Search products…" value={search} onChange={e => setSearch(e.target.value)} />
-                        </div>
-                        <Select value={filterCollection} onChange={e => setFilterCollection(e.target.value)} className="w-full sm:w-44">
-                            <option value="">All collections</option>
-                            {collections.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                        </Select>
-                        <Select value={filterVendor} onChange={e => setFilterVendor(e.target.value)} className="w-full sm:w-40">
-                            <option value="">All vendors</option>
-                            <option value="SANMAR">SanMar</option>
-                            <option value="SSACTIVEWEAR">S&S Activewear</option>
-                            <option value="OTHER">Other</option>
-                        </Select>
-                        {(search || filterCollection || filterVendor) && (
-                            <button type="button" onClick={() => { setSearch(""); setFilterCollection(""); setFilterVendor(""); }}
-                                className="text-xs font-medium text-slate-500 hover:text-slate-700 transition-colors">
-                                Clear filters
-                            </button>
-                        )}
+            <div className="bg-white rounded-2xl ring-1 ring-black/5 shadow-card overflow-hidden">
+                {loading ? (
+                    <div className="p-8 space-y-3">
+                        {[1,2,3,4].map(i => (
+                            <div key={i} className="animate-pulse flex items-center gap-4">
+                                <div className="w-8 h-8 bg-slate-100 rounded-lg" />
+                                <div className="flex-1 space-y-1.5">
+                                    <div className="h-3 w-36 bg-slate-200 rounded" />
+                                    <div className="h-2.5 w-20 bg-slate-100 rounded" />
+                                </div>
+                                <div className="h-5 w-16 bg-slate-100 rounded-full" />
+                                <div className="h-4 w-12 bg-slate-100 rounded" />
+                            </div>
+                        ))}
                     </div>
-
-                    <div className="bg-white rounded-2xl ring-1 ring-black/5 shadow-card overflow-hidden">
-                        {loading ? (
-                            <div className="p-8 space-y-3">
-                                {[1,2,3,4].map(i => (
-                                    <div key={i} className="animate-pulse flex items-center gap-4">
-                                        <div className="w-8 h-8 bg-slate-100 rounded-lg" />
-                                        <div className="flex-1 space-y-1.5">
-                                            <div className="h-3 w-36 bg-slate-200 rounded" />
-                                            <div className="h-2.5 w-20 bg-slate-100 rounded" />
-                                        </div>
-                                        <div className="h-5 w-16 bg-slate-100 rounded-full" />
-                                        <div className="h-4 w-12 bg-slate-100 rounded" />
-                                    </div>
-                                ))}
-                            </div>
-                        ) : filtered.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center py-16 text-slate-300">
-                                <svg className="w-12 h-12 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/></svg>
-                                <p className="text-sm text-slate-400 font-medium">No products found</p>
-                                <p className="text-xs text-slate-300 mt-0.5">{search ? "Try a different search" : "Click \"Add Product\" to get started"}</p>
-                            </div>
-                        ) : (
-                            <div className="overflow-x-auto">
-                                <div className="table-wrap"><table className="data-table">
-                                    <thead><tr><th>Product</th><th>SKU</th><th>Collection</th><th>Vendor</th><th>Variants</th><th>Price</th><th className="text-right pr-5">Actions</th></tr></thead>
-                                    <tbody>
-                                        {filtered.map((p, idx) => (
-                                            <motion.tr key={p.id} initial={{ opacity:0, y:4 }} animate={{ opacity:1, y:0 }} transition={{ delay:idx*0.02, duration:0.2 }}>
-                                                <td>
-                                                    <div className="flex items-center gap-3">
-                                                        {p.imagesJson && JSON.parse(p.imagesJson)[0] ? (
-                                                            <img src={imgUrl(JSON.parse(p.imagesJson)[0])}
-                                                                alt={p.name} className="w-8 h-8 rounded-lg object-cover shrink-0 ring-1 ring-black/5" />
-                                                        ) : (
-                                                            <div className="w-8 h-8 rounded-lg bg-brand-50 flex items-center justify-center shrink-0">
-                                                                <svg className="w-4 h-4 text-brand-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14"/></svg>
-                                                            </div>
-                                                        )}
-                                                        <div>
-                                                            <p className="font-semibold text-slate-800 text-sm">{p.name}</p>
-                                                            {p.brand && <p className="text-xs text-slate-400">{p.brand}</p>}
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td><code className="text-xs font-mono bg-slate-100 px-1.5 py-0.5 rounded-md text-slate-600">{p.sku}</code></td>
-                                                <td><span className="text-sm text-slate-500">{p.collection?.name ?? "—"}</span></td>
-                                                <td><Badge variant={VENDOR_COLORS[p.vendor] as any} size="sm">{VENDOR_LABELS[p.vendor] ?? p.vendor}</Badge></td>
-                                                <td>
-                                                    <div className="flex gap-1 flex-wrap items-center">
-                                                        {p.sizesJson && JSON.parse(p.sizesJson).length > 0 && (
-                                                            <span className="text-xs bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">{JSON.parse(p.sizesJson).length} sizes</span>
-                                                        )}
-                                                        {p.colorsJson && JSON.parse(p.colorsJson).length > 0 && (
-                                                            <span className="flex items-center gap-0.5">
-                                                                {JSON.parse(p.colorsJson).slice(0,4).map((c: string) => (
-                                                                    <span key={c} title={c} className="w-3 h-3 rounded-full border border-black/10 inline-block"
-                                                                        style={{ backgroundColor: getColorCss(c) }} />
-                                                                ))}
-                                                                {JSON.parse(p.colorsJson).length > 4 && (
-                                                                    <span className="text-xs text-slate-400 ml-0.5">+{JSON.parse(p.colorsJson).length - 4}</span>
-                                                                )}
-                                                            </span>
-                                                        )}
-                                                        {(!p.sizesJson || JSON.parse(p.sizesJson).length === 0) && (!p.colorsJson || JSON.parse(p.colorsJson).length === 0) && (
-                                                            <span className="text-xs text-slate-300">—</span>
-                                                        )}
-                                                    </div>
-                                                </td>
-                                                <td><span className="text-sm font-bold text-slate-900 tabular-nums">${(p.priceCents/100).toFixed(2)}</span></td>
-                                                <td className="text-right pr-5">
-                                                    <div className="flex items-center justify-end gap-1">
-                                                        <button type="button" onClick={() => openEdit(p)}
-                                                            className="px-2.5 py-1 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors">
-                                                            Edit
-                                                        </button>
-                                                        <button type="button" onClick={() => setDeleteTarget(p)}
-                                                            className="px-2.5 py-1 rounded-lg text-xs font-medium text-red-500 hover:bg-red-50 hover:text-red-700 transition-colors">
-                                                            Delete
-                                                        </button>
-                                                    </div>
-                                                </td>
-                                            </motion.tr>
-                                        ))}
-                                    </tbody>
-                                </table></div>
-                            </div>
-                        )}
+                ) : filtered.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-16 text-slate-300">
+                        <svg className="w-12 h-12 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/></svg>
+                        <p className="text-sm text-slate-400 font-medium">No products found</p>
+                        <p className="text-xs text-slate-300 mt-0.5">{search ? "Try a different search" : "Click \"Add Product\" to get started"}</p>
                     </div>
-                </>
-            )}
-
-            {/* Collections Tab */}
-            {tab === "collections" && (
-                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {loading ? (
-                        [1,2,3].map(i => (
-                            <div key={i} className="bg-white rounded-2xl ring-1 ring-black/5 p-5 animate-pulse">
-                                <div className="h-4 w-32 bg-slate-200 rounded mb-3" />
-                                <div className="h-3 w-24 bg-slate-100 rounded" />
-                            </div>
-                        ))
-                    ) : collections.length === 0 ? (
-                        <div className="col-span-full flex flex-col items-center py-16 text-slate-300">
-                            <svg className="w-12 h-12 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
-                            <p className="text-sm text-slate-400 font-medium">No collections yet</p>
-                            <p className="text-xs text-slate-300 mt-0.5">Create a collection to organize your products</p>
-                        </div>
-                    ) : (
-                        collections.map((c, idx) => {
-                            const count = products.filter(p => p.collectionId === c.id).length;
-                            const collProducts = products.filter(p => p.collectionId === c.id);
-                            return (
-                                <motion.div key={c.id} initial={{ opacity:0, y:8 }} animate={{ opacity:1, y:0 }}
-                                    transition={{ delay:idx*0.05, duration:0.3 }}
-                                    className="bg-white rounded-2xl ring-1 ring-black/5 shadow-card hover:shadow-card-hover hover:-translate-y-0.5 transition-all duration-300 p-5"
-                                >
-                                    <div className="flex items-start justify-between mb-2">
-                                        <div className="w-9 h-9 rounded-xl bg-brand-50 flex items-center justify-center shrink-0">
-                                            <svg className="w-4.5 h-4.5 text-brand-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
-                                        </div>
-                                        <span className="text-xs font-semibold bg-brand-50 text-brand-600 px-2 py-0.5 rounded-full">
-                                            {count} product{count !== 1 ? "s" : ""}
-                                        </span>
-                                    </div>
-                                    <h3 className="text-sm font-bold text-slate-900 mt-3">{c.name}</h3>
-                                    {c.description && <p className="text-xs text-slate-500 mt-0.5 mb-2">{c.description}</p>}
-                                    <code className="text-xs font-mono text-slate-400">/collections/{c.slug}</code>
-
-                                    {/* Mini product thumbnails */}
-                                    {collProducts.length > 0 && (
-                                        <div className="flex gap-1 mt-3 flex-wrap">
-                                            {collProducts.slice(0,5).map(p => {
-                                                const imgs = p.imagesJson ? JSON.parse(p.imagesJson) : [];
-                                                return imgs[0] ? (
-                                                    <img key={p.id} src={imgUrl(imgs[0])} alt={p.name}
-                                                        title={p.name}
-                                                        className="w-8 h-8 rounded-lg object-cover border border-slate-200 ring-1 ring-black/5" />
+                ) : (
+                    <div className="overflow-x-auto">
+                        <div className="table-wrap"><table className="data-table">
+                            <thead><tr><th>Product</th><th>Crossroads SKU</th><th>Shops</th><th>Vendor</th><th>Variants</th><th>Price</th><th className="text-right pr-5">Actions</th></tr></thead>
+                            <tbody>
+                                {filtered.map((p, idx) => (
+                                    <motion.tr key={p.id} initial={{ opacity:0, y:4 }} animate={{ opacity:1, y:0 }} transition={{ delay:idx*0.02, duration:0.2 }}>
+                                        <td>
+                                            <div className="flex items-center gap-3">
+                                                {p.imagesJson && JSON.parse(p.imagesJson)[0] ? (
+                                                    <img src={imgUrl(JSON.parse(p.imagesJson)[0])}
+                                                        alt={p.name} className="w-8 h-8 rounded-lg object-cover shrink-0 ring-1 ring-black/5" />
                                                 ) : (
-                                                    <div key={p.id} title={p.name}
-                                                        className="w-8 h-8 rounded-lg bg-brand-50 border border-slate-200 flex items-center justify-center">
-                                                        <svg className="w-4 h-4 text-brand-200" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/></svg>
+                                                    <div className="w-8 h-8 rounded-lg bg-brand-50 flex items-center justify-center shrink-0">
+                                                        <svg className="w-4 h-4 text-brand-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14"/></svg>
                                                     </div>
-                                                );
-                                            })}
-                                            {collProducts.length > 5 && (
-                                                <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-xs text-slate-500 font-semibold border border-slate-200">
-                                                    +{collProducts.length - 5}
+                                                )}
+                                                <div>
+                                                    <p className="font-semibold text-slate-800 text-sm">{p.name}</p>
+                                                    {p.brand && <p className="text-xs text-slate-400">{p.brand}</p>}
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td><code className="text-xs font-mono bg-slate-100 px-1.5 py-0.5 rounded-md text-slate-600">{p.sku}</code></td>
+                                        <td>
+                                            {(p.shops ?? []).length === 0 ? (
+                                                <span className="text-sm text-slate-300">—</span>
+                                            ) : (
+                                                <div className="flex flex-wrap gap-1">
+                                                    {(p.shops ?? []).slice(0,2).map(s => (
+                                                        <Badge key={s.id} variant="purple" size="sm">{s.name}</Badge>
+                                                    ))}
+                                                    {(p.shops ?? []).length > 2 && (
+                                                        <span className="text-xs text-slate-400">+{(p.shops ?? []).length - 2}</span>
+                                                    )}
                                                 </div>
                                             )}
-                                        </div>
-                                    )}
-
-                                    <button type="button"
-                                        onClick={() => { setManagingCollection(c); setAddToCollSelected(new Set()); setAddToCollSearch(""); }}
-                                        className="mt-3 w-full text-xs font-semibold text-brand-600 hover:text-brand-700 border border-brand-200 hover:border-brand-400 hover:bg-brand-50 rounded-xl py-2 transition-all">
-                                        + Add Products to Collection
-                                    </button>
-                                </motion.div>
-                            );
-                        })
-                    )}
-                </div>
-            )}
+                                        </td>
+                                        <td><Badge variant={VENDOR_COLORS[p.vendor] as any} size="sm">{VENDOR_LABELS[p.vendor] ?? p.vendor}</Badge></td>
+                                        <td>
+                                            <div className="flex gap-1 flex-wrap items-center">
+                                                {p.sizesJson && JSON.parse(p.sizesJson).length > 0 && (
+                                                    <span className="text-xs bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">{JSON.parse(p.sizesJson).length} sizes</span>
+                                                )}
+                                                {p.colorsJson && JSON.parse(p.colorsJson).length > 0 && (
+                                                    <span className="flex items-center gap-0.5">
+                                                        {JSON.parse(p.colorsJson).slice(0,4).map((c: string) => (
+                                                            <span key={c} title={c} className="w-3 h-3 rounded-full border border-black/10 inline-block"
+                                                                style={{ backgroundColor: getColorCss(c) }} />
+                                                        ))}
+                                                        {JSON.parse(p.colorsJson).length > 4 && (
+                                                            <span className="text-xs text-slate-400 ml-0.5">+{JSON.parse(p.colorsJson).length - 4}</span>
+                                                        )}
+                                                    </span>
+                                                )}
+                                                {(!p.sizesJson || JSON.parse(p.sizesJson).length === 0) && (!p.colorsJson || JSON.parse(p.colorsJson).length === 0) && (
+                                                    <span className="text-xs text-slate-300">—</span>
+                                                )}
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span className="text-sm font-bold text-slate-900 tabular-nums">${(p.priceCents/100).toFixed(2)}</span>
+                                            {p.upchargeEnabled && (
+                                                <span title={`+$${((p.upchargeCents??0)/100).toFixed(2)} for XL and up`} className="ml-1 text-[10px] text-amber-600 font-semibold align-middle">+XL</span>
+                                            )}
+                                        </td>
+                                        <td className="text-right pr-5">
+                                            <div className="flex items-center justify-end gap-1">
+                                                <button type="button" onClick={() => openEdit(p)}
+                                                    className="px-2.5 py-1 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors">
+                                                    Edit
+                                                </button>
+                                                <button type="button" disabled={duplicatingId===p.id} onClick={() => duplicateProduct(p)}
+                                                    className="px-2.5 py-1 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors disabled:opacity-50">
+                                                    {duplicatingId===p.id ? "…" : "Duplicate"}
+                                                </button>
+                                                <button type="button" onClick={() => setDeleteTarget(p)}
+                                                    className="px-2.5 py-1 rounded-lg text-xs font-medium text-red-500 hover:bg-red-50 hover:text-red-700 transition-colors">
+                                                    Delete
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </motion.tr>
+                                ))}
+                            </tbody>
+                        </table></div>
+                    </div>
+                )}
+            </div>
 
             {/* ── Add/Edit Product Modal ── */}
             <Modal open={showAdd || !!editProduct}
@@ -726,10 +775,22 @@ export default function ProductsPage() {
                         </div>
                     )}
 
+                    {/* Imported image preview (create flow only, before a productId exists to upload against) */}
+                    {!editProduct && form.images.length > 0 && (
+                        <div>
+                            <label className="field-label">Imported Images</label>
+                            <div className="flex flex-wrap gap-2">
+                                {form.images.map((url, i) => (
+                                    <img key={i} src={url} alt="" className="w-16 h-16 object-cover rounded-xl border border-slate-200" />
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                     {/* Fields */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <Input label="Product Name" required value={form.name} onChange={e => setForm(p => ({ ...p, name:e.target.value }))} />
-                        <Input label="SKU" required value={form.sku} onChange={e => setForm(p => ({ ...p, sku:e.target.value }))} />
+                        <Input label="Crossroads SKU" required value={form.sku} onChange={e => setForm(p => ({ ...p, sku:e.target.value }))} />
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
@@ -740,30 +801,50 @@ export default function ProductsPage() {
                                 <option value="OTHER">Other</option>
                             </Select>
                         </div>
-                        <Input label="Vendor SKU / Style #" placeholder="e.g. PC61"
+                        <Input label="Vendor SKU" placeholder="e.g. PC61"
                             value={form.vendorIdentifier} onChange={e => setForm(p => ({ ...p, vendorIdentifier:e.target.value }))} />
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <Input label="Brand" placeholder="e.g. Port & Company" value={form.brand} onChange={e => setForm(p => ({ ...p, brand:e.target.value }))} />
                         <Input label="Price ($)" type="number" step="0.01" min="0" required value={form.priceDollars} onChange={e => setForm(p => ({ ...p, priceDollars:e.target.value }))} />
                     </div>
-                    <div>
-                        <label className="field-label">Description</label>
-                        <textarea value={form.description} onChange={e => setForm(p => ({ ...p, description:e.target.value }))}
-                            placeholder="Product description…" rows={3}
-                            className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all resize-none" />
-                    </div>
+
+                    <DescriptionField value={form.description} onChange={v => setForm(p => ({ ...p, description:v }))} />
+
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <TagInput label="Available Sizes" tags={form.sizes} onChange={sizes => setForm(p => ({ ...p, sizes }))} placeholder="S, M, L, XL…" />
                         <ColorTagInput label="Available Colors" tags={form.colors} onChange={colors => setForm(p => ({ ...p, colors }))} />
                     </div>
-                    <div>
-                        <label className="field-label">Collection</label>
-                        <Select required value={form.collectionId} onChange={e => setForm(p => ({ ...p, collectionId:e.target.value }))}>
-                            <option value="">Select a collection</option>
-                            {collections.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                        </Select>
+
+                    <ShopMultiSelect shops={shops} selected={form.shopIds} onChange={shopIds => setForm(p => ({ ...p, shopIds }))} />
+
+                    {/* Upcharge toggle */}
+                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm font-semibold text-slate-800">Upcharge for bigger sizes</p>
+                                <p className="text-xs text-slate-400 mt-0.5">Adds extra cost automatically for XL and larger sizes at checkout</p>
+                            </div>
+                            <button type="button" role="switch" aria-checked={form.upchargeEnabled}
+                                onClick={() => setForm(p => ({ ...p, upchargeEnabled: !p.upchargeEnabled }))}
+                                className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${form.upchargeEnabled ? "bg-brand-600" : "bg-slate-300"}`}>
+                                <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${form.upchargeEnabled ? "translate-x-5" : ""}`} />
+                            </button>
+                        </div>
+                        {form.upchargeEnabled && (
+                            <div className="mt-3 flex items-center gap-2">
+                                <span className="text-sm text-slate-500">Extra charge:</span>
+                                <div className="relative w-28">
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">$</span>
+                                    <input type="number" step="0.01" min="0" value={form.upchargeDollars}
+                                        onChange={e => setForm(p => ({ ...p, upchargeDollars:e.target.value }))}
+                                        className="w-full pl-6 pr-2 py-1.5 text-sm border border-slate-200 rounded-lg outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" />
+                                </div>
+                                <span className="text-xs text-slate-400">for XL and up</span>
+                            </div>
+                        )}
                     </div>
+
                     {editProduct && (
                         <ImageUploader productId={editProduct.id}
                             existingImages={editProduct.imagesJson ? JSON.parse(editProduct.imagesJson) : []}
@@ -781,7 +862,6 @@ export default function ProductsPage() {
                             }}
                         />
                     )}
-                    {!editProduct && <p className="text-xs text-slate-400">Images can be added after creating the product.</p>}
                     <ModalFooter>
                         <Button type="button" variant="outline" onClick={() => { setShowAdd(false); setEditProduct(null); }}>Cancel</Button>
                         <Button type="submit" loading={saving}>{editProduct ? "Save Changes" : "Create Product"}</Button>
@@ -799,79 +879,6 @@ export default function ProductsPage() {
                     <Button type="button" variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
                     <Button type="button" variant="danger" loading={deleting} onClick={deleteProduct}>Delete</Button>
                 </ModalFooter>
-            </Modal>
-
-            {/* ── Add Collection Modal ── */}
-            <Modal open={showAddColl} onClose={() => setShowAddColl(false)} title="New Collection" size="sm">
-                <form onSubmit={saveCollection} className="space-y-4">
-                    <Input label="Collection Name" required value={collForm.name} onChange={e => setCollForm(p => ({ ...p, name:e.target.value }))} />
-                    <Input label="Description (optional)" value={collForm.description} onChange={e => setCollForm(p => ({ ...p, description:e.target.value }))} />
-                    <ModalFooter>
-                        <Button type="button" variant="outline" onClick={() => setShowAddColl(false)}>Cancel</Button>
-                        <Button type="submit" loading={saving}>Create Collection</Button>
-                    </ModalFooter>
-                </form>
-            </Modal>
-
-            {/* ── Manage Collection Products Modal ── */}
-            <Modal open={!!managingCollection}
-                onClose={() => { setManagingCollection(null); setAddToCollSelected(new Set()); }}
-                title={`Add Products to "${managingCollection?.name}"`} size="lg">
-                <div className="space-y-4">
-                    <div className="relative">
-                        <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-                        <input className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-xl outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all"
-                            placeholder="Search products…" value={addToCollSearch} onChange={e => setAddToCollSearch(e.target.value)} />
-                    </div>
-                    {otherProducts.length === 0 ? (
-                        <p className="text-sm text-slate-400 text-center py-4">
-                            {addToCollSearch ? "No matching products found." : "All products are already in this collection."}
-                        </p>
-                    ) : (
-                        <div className="border border-slate-200 rounded-xl overflow-hidden max-h-72 overflow-y-auto divide-y divide-slate-100">
-                            {otherProducts.map(p => {
-                                const imgs = p.imagesJson ? JSON.parse(p.imagesJson) : [];
-                                const checked = addToCollSelected.has(p.id);
-                                return (
-                                    <label key={p.id} className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors ${checked ? "bg-brand-50" : "hover:bg-slate-50"}`}>
-                                        <input type="checkbox" checked={checked}
-                                            onChange={() => {
-                                                setAddToCollSelected(prev => {
-                                                    const next = new Set(prev);
-                                                    next.has(p.id) ? next.delete(p.id) : next.add(p.id);
-                                                    return next;
-                                                });
-                                            }}
-                                            className="accent-brand-600 w-4 h-4 rounded" />
-                                        {imgs[0] ? (
-                                            <img src={imgUrl(imgs[0])} alt={p.name} className="w-8 h-8 rounded-lg object-cover border border-slate-200 shrink-0" />
-                                        ) : (
-                                            <div className="w-8 h-8 rounded-lg bg-brand-50 border border-slate-200 flex items-center justify-center shrink-0">
-                                                <svg className="w-4 h-4 text-brand-200" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14"/></svg>
-                                            </div>
-                                        )}
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-sm font-semibold text-slate-800 truncate">{p.name}</p>
-                                            <p className="text-xs text-slate-400">{p.collection?.name ?? "No collection"} · {p.sku}</p>
-                                        </div>
-                                        <span className="text-sm font-bold text-slate-700 shrink-0">${(p.priceCents/100).toFixed(2)}</span>
-                                    </label>
-                                );
-                            })}
-                        </div>
-                    )}
-                    {addToCollSelected.size > 0 && (
-                        <p className="text-xs text-brand-600 font-medium">
-                            {addToCollSelected.size} product{addToCollSelected.size !== 1 ? "s" : ""} selected
-                        </p>
-                    )}
-                    <ModalFooter>
-                        <Button type="button" variant="outline" onClick={() => { setManagingCollection(null); setAddToCollSelected(new Set()); }}>Cancel</Button>
-                        <Button type="button" loading={addToCollSaving} disabled={addToCollSelected.size === 0} onClick={addProductsToCollection}>
-                            Add {addToCollSelected.size > 0 ? addToCollSelected.size : ""} Product{addToCollSelected.size !== 1 ? "s" : ""}
-                        </Button>
-                    </ModalFooter>
-                </div>
             </Modal>
         </div>
     );

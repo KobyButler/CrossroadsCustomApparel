@@ -20,6 +20,7 @@ const NAV: NavItem[] = [
         href: "/admin/orders", label: "Orders",
         icon: <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4"><path fillRule="evenodd" d="M10 2a4 4 0 00-4 4v1H5a1 1 0 00-.994.89l-1 9A1 1 0 004 18h12a1 1 0 00.994-1.11l-1-9A1 1 0 0015 7h-1V6a4 4 0 00-4-4zm2 5V6a2 2 0 10-4 0v1h4zm-6 3a1 1 0 112 0 1 1 0 01-2 0zm7-1a1 1 0 100 2 1 1 0 000-2z" clipRule="evenodd" /></svg>,
         children: [
+            { href: "/admin/orders/report",           label: "Order Report"    },
             { href: "/admin/orders/drafts",          label: "Drafts"          },
             { href: "/admin/orders/shipping-labels",  label: "Shipping Labels" },
             { href: "/admin/checkouts",               label: "Abandoned Carts" },
@@ -185,7 +186,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
     const router = useRouter();
     const [mobileOpen, setMobileOpen] = useState(false);
 
-    const isPublic = pathname?.startsWith("/shop/") || pathname === "/login";
+    const isPublic = pathname?.startsWith("/shop/") || pathname === "/shops" || pathname === "/checkout" || pathname === "/login";
 
     // Auth guard
     useEffect(() => {
@@ -208,7 +209,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
             <div className="app-bg min-h-screen flex">
 
                 {/* ── Desktop sidebar (always visible ≥ lg) ── */}
-                <aside className="sidebar-root hidden lg:flex w-[220px] shrink-0 flex-col sticky top-0 h-screen overflow-y-auto scrollbar-none">
+                <aside className="no-print sidebar-root hidden lg:flex w-[220px] shrink-0 flex-col sticky top-0 h-screen overflow-y-auto scrollbar-none">
                     <SidebarContent />
                 </aside>
 
@@ -245,7 +246,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
                 <div className="flex-1 min-w-0 flex flex-col">
 
                     {/* Mobile top bar */}
-                    <div className="lg:hidden sticky top-0 z-30 flex items-center gap-3 px-4 py-3 border-b border-slate-200 bg-white/80 backdrop-blur-sm">
+                    <div className="no-print lg:hidden sticky top-0 z-30 flex items-center gap-3 px-4 py-3 border-b border-slate-200 bg-white/80 backdrop-blur-sm">
                         <button
                             type="button"
                             onClick={() => setMobileOpen(true)}

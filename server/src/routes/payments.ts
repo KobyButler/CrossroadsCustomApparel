@@ -4,6 +4,7 @@ import { prisma } from '../prisma.js';
 import { config } from '../config.js';
 import { sendOrderConfirmation } from '../utils/email.js';
 import { triggerVendorFulfillment } from '../vendors/fulfill.js';
+import { buildShopGroups, applyDiscountAcrossGroups, newOrderGroupId } from '../utils/checkoutHelpers.js';
 
 export const router = Router();
 
@@ -12,10 +13,22 @@ function getStripe() {
     return new Stripe(config.stripe.secretKey);
 }
 
+async function resolveDiscount(discountCode?: string) {
+    if (!discountCode) return null;
+    const d = await prisma.discountCode.findFirst({
+        where: { code: discountCode, active: true, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }
+    });
+    if (d && (d.maxUses === null || d.usedCount < d.maxUses)) return d;
+    return null;
+}
+
 // ─── POST /api/payments/create-intent ─────────────────────────────────────────
 // Called by the storefront checkout when the customer selects online payment.
-// Creates a pending order + a Stripe PaymentIntent; returns the clientSecret so
-// the frontend can render the Stripe Payment Element.
+// Supports a cross-shop cart: items may each carry their own shopSlug (falling
+// back to the top-level shopSlug for single-shop carts). Creates one Order per
+// shop (sharing an orderGroupId when >1) and a single Stripe PaymentIntent for
+// the combined total; returns the clientSecret so the frontend can render the
+// Stripe Payment Element.
 router.post('/create-intent', async (req: Request, res: Response) => {
     const {
         shopSlug, customerName, customerEmail,
@@ -27,105 +40,70 @@ router.post('/create-intent', async (req: Request, res: Response) => {
         return res.status(400).json({ error: 'customerEmail and items are required' });
     }
 
-    // Resolve products and calculate subtotal
-    const uniqueProductIds = [...new Set(items.map((i: any) => i.productId))];
-    const products = await prisma.product.findMany({
-        where: { id: { in: uniqueProductIds } }
-    });
-    if (products.length !== uniqueProductIds.length) {
-        return res.status(400).json({ error: 'One or more products were not found' });
+    let groups;
+    try {
+        groups = await buildShopGroups(items, shopSlug ?? null);
+    } catch (err: any) {
+        return res.status(400).json({ error: err.message });
     }
 
-    let subtotal = 0;
-    const orderItems = items.map((i: any) => {
-        const p = products.find(pp => pp.id === i.productId)!;
-        subtotal += p.priceCents * i.quantity;
-        return {
-            productId: p.id,
-            quantity: i.quantity,
-            size: i.size ?? null,
-            color: i.color ?? null,
-            priceCents: p.priceCents
-        };
-    });
-
-    // Apply discount if present
-    let discountId: string | undefined;
-    if (discountCode) {
-        const d = await prisma.discountCode.findFirst({
-            where: {
-                code: discountCode, active: true,
-                OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }]
-            }
-        });
-        if (d && (d.maxUses === null || d.usedCount < d.maxUses)) {
-            if (d.type === 'PERCENT') subtotal = Math.max(0, Math.round(subtotal * (100 - d.value) / 100));
-            else subtotal = Math.max(0, subtotal - d.value);
-            discountId = d.id;
-        }
-    }
+    const discount = await resolveDiscount(discountCode);
+    const { groups: finalGroups, discountedTotal } = applyDiscountAcrossGroups(groups, discount);
 
     // Stripe requires a minimum of 50 cents
-    if (subtotal < 50) {
+    if (discountedTotal < 50) {
         return res.status(400).json({ error: 'Order total is too low for card payment (minimum $0.50)' });
     }
 
-    const shop = shopSlug ? await prisma.shop.findFirst({ where: { slug: shopSlug } }) : null;
-
-    // Upsert customer
     const customer = await prisma.customer.upsert({
         where: { email: customerEmail },
         update: { name: customerName },
         create: { email: customerEmail, name: customerName }
     });
 
-    // Create the order now as UNFULFILLED/UNPAID — the webhook will flip it to PAID
-    const order = await prisma.order.create({
-        data: {
-            shopId: shop?.id ?? null,
-            status: 'UNFULFILLED',
-            paymentStatus: 'UNPAID',
-            paymentMethod: 'stripe',
-            customerId: customer.id,
-            customerName, customerEmail,
-            shipAddress1,
-            shipAddress2: shipAddress2 ?? null,
-            shipCity, shipState, shipZip, residential,
-            totalCents: subtotal,
-            discountCodeId: discountId ?? null,
-            items: { createMany: { data: orderItems } }
-        }
-    });
+    const orderGroupId = finalGroups.length > 1 ? newOrderGroupId() : null;
 
-    // Increment discount usage counter
-    if (discountId) {
-        await prisma.discountCode.update({
-            where: { id: discountId },
-            data: { usedCount: { increment: 1 } }
-        });
-    }
-
-    // Create the Stripe PaymentIntent
+    // Create the Stripe PaymentIntent first so every order can be stamped with its id
     const stripe = getStripe();
     const pi = await stripe.paymentIntents.create({
-        amount: subtotal,
+        amount: discountedTotal,
         currency: 'usd',
-        metadata: { orderId: order.id },
+        metadata: { orderGroupId: orderGroupId ?? '' },
         automatic_payment_methods: { enabled: true }
     });
 
-    // Save the PI ID so the webhook can find the order later
-    await prisma.order.update({
-        where: { id: order.id },
-        data: { stripePaymentIntentId: pi.id }
-    });
+    const createdOrders = [];
+    for (const g of finalGroups) {
+        const order = await prisma.order.create({
+            data: {
+                shopId: g.shopId, orderGroupId,
+                status: 'UNFULFILLED', paymentStatus: 'UNPAID', paymentMethod: 'stripe',
+                stripePaymentIntentId: pi.id,
+                customerId: customer.id, customerName, customerEmail,
+                shipAddress1, shipAddress2: shipAddress2 ?? null,
+                shipCity, shipState, shipZip, residential,
+                totalCents: g.subtotal,
+                items: { createMany: { data: g.items } }
+            }
+        });
+        createdOrders.push(order);
+    }
 
-    res.json({ clientSecret: pi.client_secret, orderId: order.id });
+    if (discount) {
+        await prisma.discountCode.update({ where: { id: discount.id }, data: { usedCount: { increment: 1 } } });
+    }
+
+    res.json({
+        clientSecret: pi.client_secret,
+        orderId: createdOrders[0].id,
+        orderGroupId,
+        orders: createdOrders.map(o => ({ id: o.id, shopId: o.shopId, totalCents: o.totalCents }))
+    });
 });
 
 // ─── POST /api/payments/webhook ───────────────────────────────────────────────
 // Called by Stripe (raw body required — registered with express.raw() in index.ts).
-// Marks the order PAID and sends confirmation emails.
+// Marks every order tied to this PaymentIntent PAID and sends confirmation emails.
 export async function stripeWebhookHandler(req: Request, res: Response) {
     const sig = req.headers['stripe-signature'] as string;
     if (!sig) return res.status(400).send('Missing stripe-signature header');
@@ -146,17 +124,19 @@ export async function stripeWebhookHandler(req: Request, res: Response) {
     if (event.type === 'payment_intent.succeeded') {
         const pi = event.data.object as Stripe.PaymentIntent;
 
-        const order = await prisma.order.findFirst({
+        const orders = await prisma.order.findMany({
             where: { stripePaymentIntentId: pi.id },
             include: { items: { include: { product: true } }, shop: true }
         });
 
-        if (!order) {
+        if (orders.length === 0) {
             console.warn(`[stripe-webhook] No order found for PI ${pi.id}`);
             return res.json({ received: true });
         }
 
-        if (order.paymentStatus !== 'PAID') {
+        for (const order of orders) {
+            if (order.paymentStatus === 'PAID') continue;
+
             await prisma.order.update({
                 where: { id: order.id },
                 data: { paymentStatus: 'PAID' }

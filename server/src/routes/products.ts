@@ -15,6 +15,8 @@ const upload = multer({
 
 export const router = Router();
 
+const shopSelect = { select: { id: true, name: true, slug: true } };
+
 router.get('/', async (req, res) => {
     const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 100;
     const page = req.query.page ? Math.max(1, parseInt(req.query.page as string, 10)) : 1;
@@ -23,7 +25,7 @@ router.get('/', async (req, res) => {
     // Omit pagination wrapper when limit is not specified (keeps backwards compat for small catalogs)
     if (!req.query.page && !req.query.limit) {
         const data = await prisma.product.findMany({
-            include: { collection: true },
+            include: { shops: shopSelect },
             orderBy: { createdAt: 'desc' }
         });
         return res.json(data);
@@ -31,7 +33,7 @@ router.get('/', async (req, res) => {
 
     const [data, total] = await Promise.all([
         prisma.product.findMany({
-            include: { collection: true },
+            include: { shops: shopSelect },
             orderBy: { createdAt: 'desc' },
             take: limit,
             skip
@@ -42,7 +44,10 @@ router.get('/', async (req, res) => {
 });
 
 router.post('/', async (req, res) => {
-    const { name, sku, vendor, vendorIdentifier, brand, description, priceCents, images, sizes, colors, collectionId } = req.body;
+    const {
+        name, sku, vendor, vendorIdentifier, brand, description, priceCents, images, sizes, colors,
+        shopIds, upchargeEnabled, upchargeCents
+    } = req.body;
     try {
         const p = await prisma.product.create({
             data: {
@@ -51,9 +56,13 @@ router.post('/', async (req, res) => {
                 imagesJson: JSON.stringify(images ?? []),
                 sizesJson: sizes?.length ? JSON.stringify(sizes) : null,
                 colorsJson: colors?.length ? JSON.stringify(colors) : null,
-                collectionId
+                upchargeEnabled: Boolean(upchargeEnabled),
+                ...(upchargeCents !== undefined ? { upchargeCents } : {}),
+                ...(Array.isArray(shopIds) && shopIds.length
+                    ? { shops: { connect: shopIds.map((id: string) => ({ id })) } }
+                    : {})
             },
-            include: { collection: true }
+            include: { shops: shopSelect }
         });
         res.json(p);
     } catch (err: any) {
@@ -67,14 +76,17 @@ router.post('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
     const p = await prisma.product.findUnique({
         where: { id: req.params.id },
-        include: { collection: true }
+        include: { shops: shopSelect }
     });
     if (!p) return res.status(404).json({ error: 'not found' });
     res.json(p);
 });
 
 router.put('/:id', async (req, res) => {
-    const { name, sku, vendor, vendorIdentifier, brand, description, priceCents, sizes, colors, collectionId } = req.body;
+    const {
+        name, sku, vendor, vendorIdentifier, brand, description, priceCents, sizes, colors,
+        shopIds, upchargeEnabled, upchargeCents
+    } = req.body;
     try {
         const p = await prisma.product.update({
             where: { id: req.params.id },
@@ -86,9 +98,13 @@ router.put('/:id', async (req, res) => {
                 priceCents,
                 sizesJson: sizes?.length ? JSON.stringify(sizes) : null,
                 colorsJson: colors?.length ? JSON.stringify(colors) : null,
-                collectionId
+                ...(upchargeEnabled !== undefined ? { upchargeEnabled: Boolean(upchargeEnabled) } : {}),
+                ...(upchargeCents !== undefined ? { upchargeCents } : {}),
+                ...(Array.isArray(shopIds)
+                    ? { shops: { set: shopIds.map((id: string) => ({ id })) } }
+                    : {})
             },
-            include: { collection: true }
+            include: { shops: shopSelect }
         });
         res.json(p);
     } catch (err: any) {
@@ -106,6 +122,43 @@ router.delete('/:id', async (req, res) => {
     } catch {
         res.status(404).json({ error: 'not found' });
     }
+});
+
+// Duplicate a product — copies all fields (and shop assignments), appends "(1)",
+// "(2)", … to the SKU until a free one is found.
+router.post('/:id/duplicate', async (req, res) => {
+    const source = await prisma.product.findUnique({
+        where: { id: req.params.id },
+        include: { shops: { select: { id: true } } }
+    });
+    if (!source) return res.status(404).json({ error: 'not found' });
+
+    let n = 1;
+    let newSku = `${source.sku} (${n})`;
+    while (await prisma.product.findUnique({ where: { sku: newSku } })) {
+        n += 1;
+        newSku = `${source.sku} (${n})`;
+    }
+
+    const copy = await prisma.product.create({
+        data: {
+            name: source.name,
+            sku: newSku,
+            vendor: source.vendor,
+            vendorIdentifier: source.vendorIdentifier,
+            brand: source.brand,
+            description: source.description,
+            priceCents: source.priceCents,
+            imagesJson: source.imagesJson,
+            sizesJson: source.sizesJson,
+            colorsJson: source.colorsJson,
+            upchargeEnabled: source.upchargeEnabled,
+            upchargeCents: source.upchargeCents,
+            shops: source.shops.length ? { connect: source.shops.map(s => ({ id: s.id })) } : undefined
+        },
+        include: { shops: shopSelect }
+    });
+    res.json(copy);
 });
 
 // Upload an image for a product — returns the public URL

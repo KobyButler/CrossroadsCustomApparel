@@ -23,6 +23,19 @@ export const config = {
         enable: bool(process.env.SS_ENABLE)
     },
 
+    // Ship-to address used when placing consolidated restock POs with vendors
+    // (Order Report → Place Order) — blanks ship here to be decorated, not to customers.
+    business: {
+        name: process.env.BUSINESS_NAME ?? 'Crossroads Custom Apparel',
+        email: process.env.BUSINESS_EMAIL ?? process.env.ADMIN_NOTIFY_EMAIL ?? 'hello@crossroadscustomapparel.com',
+        address1: process.env.BUSINESS_ADDRESS1 ?? '',
+        address2: process.env.BUSINESS_ADDRESS2 ?? '',
+        city: process.env.BUSINESS_CITY ?? '',
+        state: process.env.BUSINESS_STATE ?? '',
+        zip: process.env.BUSINESS_ZIP ?? '',
+        residential: bool(process.env.BUSINESS_RESIDENTIAL, false)
+    },
+
     smtp: {
         host: process.env.SMTP_HOST ?? '',
         port: Number(process.env.SMTP_PORT ?? 587),

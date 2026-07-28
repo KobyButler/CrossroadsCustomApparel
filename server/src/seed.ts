@@ -13,15 +13,8 @@ async function main() {
     });
     console.log(`Admin user: ${adminEmail} / ${adminPassword}`);
 
-    // --- Sample collection ---
-    const col = await prisma.collection.upsert({
-        where: { slug: 'booster-club' },
-        update: {},
-        create: { name: 'Booster Club', slug: 'booster-club', description: 'Team merch' }
-    });
-
     // --- Sample products ---
-    await prisma.product.upsert({
+    const polo = await prisma.product.upsert({
         where: { sku: 'K420' },
         update: {},
         create: {
@@ -32,12 +25,11 @@ async function main() {
             brand: 'Port Authority',
             description: 'Pique Knit Polo',
             priceCents: 1999,
-            imagesJson: JSON.stringify([]),
-            collectionId: col.id
+            imagesJson: JSON.stringify([])
         }
     });
 
-    await prisma.product.upsert({
+    const hoodie = await prisma.product.upsert({
         where: { sku: 'B22060655' },
         update: {},
         create: {
@@ -48,8 +40,7 @@ async function main() {
             brand: 'Gildan',
             description: 'Heavy Blend Hoodie',
             priceCents: 2899,
-            imagesJson: JSON.stringify([]),
-            collectionId: col.id
+            imagesJson: JSON.stringify([])
         }
     });
 
@@ -57,7 +48,10 @@ async function main() {
     await prisma.shop.upsert({
         where: { slug: 'panthers-boosters-1234' },
         update: {},
-        create: { name: 'Panthers Boosters', slug: 'panthers-boosters-1234', collectionId: col.id }
+        create: {
+            name: 'Panthers Boosters', slug: 'panthers-boosters-1234',
+            products: { connect: [{ id: polo.id }, { id: hoodie.id }] }
+        }
     });
 
     // --- Sample discount ---

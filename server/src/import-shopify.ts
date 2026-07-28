@@ -103,15 +103,6 @@ async function importProducts(filePath: string) {
 
         if (!title) { skipped++; continue; }
 
-        // Ensure a collection exists for this product type
-        const collectionName = productType || 'Imported from Shopify';
-        const collectionSlug = slugify(collectionName);
-        const collection = await prisma.collection.upsert({
-            where: { slug: collectionSlug },
-            update: {},
-            create: { name: collectionName, slug: collectionSlug, description: `Imported from Shopify` }
-        });
-
         // Build a stable SKU: prefer the Shopify SKU, fall back to handle
         const finalSku = sku || handle;
 
@@ -130,7 +121,6 @@ async function importProducts(filePath: string) {
             imagesJson: JSON.stringify(images),
             sizesJson: sizeValues.size > 0 ? JSON.stringify([...sizeValues]) : null,
             colorsJson: colorValues.size > 0 ? JSON.stringify([...colorValues]) : null,
-            collectionId: collection.id
         };
 
         try {
@@ -261,12 +251,7 @@ async function importOrders(filePath: string) {
             }
 
             if (!product) {
-                // Create a placeholder product in an "Archived" collection so the order still imports
-                const archiveColl = await prisma.collection.upsert({
-                    where: { slug: 'shopify-archived' },
-                    update: {},
-                    create: { name: 'Shopify Archived', slug: 'shopify-archived', description: 'Products from Shopify that no longer exist' }
-                });
+                // Create a placeholder product so the order still imports
                 const safeSku = lineSku || `shopify-${slugify(lineName || 'item').slice(0, 40)}-${Date.now()}`;
                 try {
                     product = await prisma.product.create({
@@ -275,8 +260,7 @@ async function importOrders(filePath: string) {
                             sku: safeSku,
                             vendor: 'OTHER',
                             priceCents: linePrice,
-                            imagesJson: '[]',
-                            collectionId: archiveColl.id
+                            imagesJson: '[]'
                         }
                     });
                 } catch {

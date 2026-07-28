@@ -15,20 +15,20 @@ export default function DraftsPage() {
     const { toast }   = useToast();
     const [drafts, setDrafts]       = useState<any[]>([]);
     const [products, setProducts]   = useState<any[]>([]);
-    const [collections, setCollections] = useState<any[]>([]);
+    const [shops, setShops]         = useState<any[]>([]);
     const [loading, setLoading]     = useState(true);
     const [showCreate, setShowCreate] = useState(false);
     const [saving, setSaving]       = useState(false);
-    const [filterColl, setFilterColl] = useState("");
+    const [filterShop, setFilterShop] = useState("");
     const [form, setForm] = useState({ customerName:"", customerEmail:"", shipAddress1:"", shipCity:"", shipState:"", shipZip:"" });
     const [lines, setLines] = useState<{ productId:string; name:string; quantity:number }[]>([]);
 
     useEffect(() => {
-        Promise.all([api("/orders?status=DRAFT"), api("/products"), api("/collections")])
-            .then(([d, p, c]) => {
+        Promise.all([api("/orders?status=DRAFT"), api("/products"), api("/shops")])
+            .then(([d, p, s]) => {
                 setDrafts(Array.isArray(d) ? d : d?.data ?? []);
                 setProducts(Array.isArray(p) ? p : p?.data ?? []);
-                setCollections(Array.isArray(c) ? c : c?.data ?? []);
+                setShops(Array.isArray(s) ? s : s?.data ?? []);
             }).catch(console.error).finally(() => setLoading(false));
     }, []);
 
@@ -57,7 +57,7 @@ export default function DraftsPage() {
         finally { setSaving(false); }
     }
 
-    const filteredProducts = products.filter(p => !filterColl || p.collectionId === filterColl);
+    const filteredProducts = products.filter(p => !filterShop || (p.shops ?? []).some((s: any) => s.id === filterShop));
 
     return (
         <div className="space-y-6">
@@ -114,9 +114,9 @@ export default function DraftsPage() {
                         <div className="flex items-center justify-between mb-2">
                             <label className="field-label mb-0">Items</label>
                             <div className="flex flex-col sm:flex-row gap-2">
-                                <Select value={filterColl} onChange={e => setFilterColl(e.target.value)} className="w-full sm:w-40">
-                                    <option value="">All collections</option>
-                                    {collections.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                <Select value={filterShop} onChange={e => setFilterShop(e.target.value)} className="w-full sm:w-40">
+                                    <option value="">All shops</option>
+                                    {shops.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
                                 </Select>
                                 <Select value="" onChange={e => { if (e.target.value) addLine(e.target.value); }} className="w-full sm:w-52">
                                     <option value="">+ Add product</option>
