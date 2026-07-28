@@ -16,7 +16,7 @@ type Product = {
     vendorIdentifier?: string; brand?: string; description?: string;
     priceCents: number; shops?: Shop[];
     sizesJson?: string; colorsJson?: string; imagesJson?: string;
-    upchargeEnabled?: boolean; upchargeCents?: number;
+    upchargeEnabled?: boolean; upchargeCents?: number; weightOz?: number | null;
 };
 
 const VENDOR_LABELS: Record<string, string> = { SANMAR:"SanMar", SSACTIVEWEAR:"S&S Activewear", OTHER:"Other" };
@@ -24,7 +24,7 @@ const VENDOR_COLORS: Record<string, string> = { SANMAR:"info", SSACTIVEWEAR:"suc
 const EMPTY = {
     name:"", sku:"", vendor:"OTHER", vendorIdentifier:"", brand:"", description:"", priceDollars:"",
     shopIds:[] as string[], sizes:[] as string[], colors:[] as string[], images:[] as string[],
-    upchargeEnabled:false, upchargeDollars:"3.00"
+    upchargeEnabled:false, upchargeDollars:"3.00", weightOz:""
 };
 
 // ── TagInput ──────────────────────────────────────────────────────────────────
@@ -242,7 +242,7 @@ function ImageUploader({ productId, existingImages, onUploaded, onRemoved }: {
 type VendorItem = {
     style: string; title: string; brand?: string;
     colors: string[]; sizes: string[]; priceCents: number; description?: string;
-    images: string[]; vendorIdentifier?: string; upchargeDetected?: boolean;
+    images: string[]; vendorIdentifier?: string; upchargeDetected?: boolean; weightOz?: number | null;
 };
 
 type VendorDetail = VendorItem & { colorImages?: Record<string,string> };
@@ -314,7 +314,7 @@ function VendorSearchPanel({ source, onSelect }: { source: "SANMAR"|"SS"; onSele
                     colors: d.colors ?? [], sizes: d.sizes ?? [], priceCents: d.priceCents ?? 0,
                     description: d.description ?? undefined, images: d.images ?? [],
                     colorImages: d.colorImages ?? {}, vendorIdentifier: d.style,
-                    upchargeDetected: Boolean(d.upchargeDetected),
+                    upchargeDetected: Boolean(d.upchargeDetected), weightOz: d.weightOz ?? null,
                 };
                 setDetail(det);
                 setSelectedColors(new Set());
@@ -325,7 +325,7 @@ function VendorSearchPanel({ source, onSelect }: { source: "SANMAR"|"SS"; onSele
                     colors: d.colors ?? [], sizes: d.sizes ?? [], priceCents: d.priceCents ?? 0,
                     description: d.description ?? undefined, images: d.images ?? [],
                     colorImages: d.colorImages ?? {}, vendorIdentifier: String(d.styleId ?? result.styleId),
-                    upchargeDetected: Boolean(d.upchargeDetected),
+                    upchargeDetected: Boolean(d.upchargeDetected), weightOz: d.weightOz ?? null,
                 };
                 setDetail(det);
                 setSelectedColors(new Set());
@@ -345,6 +345,7 @@ function VendorSearchPanel({ source, onSelect }: { source: "SANMAR"|"SS"; onSele
             colors: chosenColors, sizes: detail.sizes, priceCents: detail.priceCents,
             description: detail.description, images: images.length ? images : detail.images,
             vendorIdentifier: detail.vendorIdentifier, upchargeDetected: detail.upchargeDetected,
+            weightOz: detail.weightOz,
         });
         setDetail(null);
         setSelectedColors(new Set());
@@ -359,7 +360,7 @@ function VendorSearchPanel({ source, onSelect }: { source: "SANMAR"|"SS"; onSele
                 <div className="flex items-start justify-between gap-3">
                     <div>
                         <p className="text-sm font-bold text-slate-900">{detail.title}</p>
-                        <p className="text-xs text-slate-400">{detail.brand} · Style {detail.style}</p>
+                        <p className="text-xs text-slate-400">{detail.brand} · Style {detail.style}{detail.weightOz != null ? ` · ~${detail.weightOz} oz` : ""}</p>
                     </div>
                     <button type="button" onClick={() => { setDetail(null); setSelectedColors(new Set()); }}
                         className="text-xs text-slate-500 hover:text-slate-700 underline shrink-0">
@@ -527,6 +528,7 @@ export default function ProductsPage() {
             sizes:p.sizesJson?JSON.parse(p.sizesJson):[], colors:p.colorsJson?JSON.parse(p.colorsJson):[],
             images:p.imagesJson?JSON.parse(p.imagesJson):[],
             upchargeEnabled: Boolean(p.upchargeEnabled), upchargeDollars: ((p.upchargeCents ?? 300)/100).toFixed(2),
+            weightOz: p.weightOz != null ? String(p.weightOz) : "",
         });
     }
 
@@ -553,6 +555,7 @@ export default function ProductsPage() {
             colors:           item.colors.length > 0 ? item.colors : p.colors,
             images:           item.images.length > 0 ? item.images : p.images,
             upchargeEnabled:  item.upchargeDetected ? true : p.upchargeEnabled,
+            weightOz:         item.weightOz != null ? String(item.weightOz) : p.weightOz,
         }));
         setImportedFrom(item.title);
     }
@@ -567,6 +570,7 @@ export default function ProductsPage() {
                 images:form.images, shopIds:form.shopIds,
                 upchargeEnabled:form.upchargeEnabled,
                 upchargeCents:Math.round(parseFloat(form.upchargeDollars || "0")*100) || 300,
+                weightOz: form.weightOz.trim() ? Math.round(parseFloat(form.weightOz)) : null,
             };
             if (editProduct) {
                 const u = await api(`/products/${editProduct.id}`, { method:"PUT", body:JSON.stringify(payload) });
@@ -842,6 +846,13 @@ export default function ProductsPage() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <Input label="Brand" placeholder="e.g. Port & Company" value={form.brand} onChange={e => setForm(p => ({ ...p, brand:e.target.value }))} />
                         <Input label="Price ($)" type="number" step="0.01" min="0" required value={form.priceDollars} onChange={e => setForm(p => ({ ...p, priceDollars:e.target.value }))} />
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <Input label="Weight (oz)" type="number" step="1" min="0" placeholder="e.g. 6"
+                                value={form.weightOz} onChange={e => setForm(p => ({ ...p, weightOz:e.target.value }))} />
+                            <p className="text-xs text-slate-400 mt-1">Used to estimate shipping cost at checkout. Leave blank to use a default estimate.</p>
+                        </div>
                     </div>
 
                     <DescriptionField value={form.description} onChange={v => setForm(p => ({ ...p, description:v }))} />

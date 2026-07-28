@@ -124,6 +124,10 @@ router.get('/styles/:styleId', async (req, res) => {
         const bigMax = bigPrices.length ? Math.max(...bigPrices) : 0;
         const upchargeDetected = baseMin > 0 && bigMax > baseMin;
 
+        // Average per-unit shipping weight across sizes/colors, in ounces
+        const weights = rows.map((r: any) => Number(r.unitWeight)).filter((w: number) => Number.isFinite(w) && w > 0);
+        const weightOz = weights.length ? Math.round((weights.reduce((a: number, w: number) => a + w, 0) / weights.length) * 16) : null;
+
         res.json({
             styleId,
             sku: styleMeta?.styleName ?? first.styleName,
@@ -133,7 +137,7 @@ router.get('/styles/:styleId', async (req, res) => {
             description: (styleMeta?.description ?? '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim(),
             colors, sizes,
             priceCents: Math.round(minPrice * 100),
-            images, colorImages, upchargeDetected,
+            images, colorImages, upchargeDetected, weightOz,
         });
     } catch (err: any) {
         if (isAxiosError(err) && err.code === 'ECONNABORTED') {

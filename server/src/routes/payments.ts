@@ -4,7 +4,8 @@ import { prisma } from '../prisma.js';
 import { config } from '../config.js';
 import { sendOrderConfirmation } from '../utils/email.js';
 import { triggerVendorFulfillment } from '../vendors/fulfill.js';
-import { buildShopGroups, applyDiscountAcrossGroups, newOrderGroupId } from '../utils/checkoutHelpers.js';
+import { buildShopGroups, applyDiscountAcrossGroups, allocateShippingAcrossGroups, newOrderGroupId } from '../utils/checkoutHelpers.js';
+import { quoteShipping } from '../utils/shippingCalc.js';
 
 export const router = Router();
 
@@ -31,13 +32,18 @@ async function resolveDiscount(discountCode?: string) {
 // Stripe Payment Element.
 router.post('/create-intent', async (req: Request, res: Response) => {
     const {
-        shopSlug, customerName, customerEmail,
+        shopSlug, customerName, customerEmail, shippingMethod,
         shipAddress1, shipAddress2, shipCity, shipState, shipZip,
         residential = true, items, discountCode
     } = req.body;
 
     if (!customerEmail || !Array.isArray(items) || items.length === 0) {
         return res.status(400).json({ error: 'customerEmail and items are required' });
+    }
+
+    const isShipping = shippingMethod === 'SHIP';
+    if (isShipping && (!shipAddress1 || !shipCity || !shipState || !shipZip)) {
+        return res.status(400).json({ error: 'A full shipping address is required to ship your order' });
     }
 
     let groups;
@@ -48,10 +54,19 @@ router.post('/create-intent', async (req: Request, res: Response) => {
     }
 
     const discount = await resolveDiscount(discountCode);
-    const { groups: finalGroups, discountedTotal } = applyDiscountAcrossGroups(groups, discount);
+    const { groups: discountedGroups, discountedTotal } = applyDiscountAcrossGroups(groups, discount);
+
+    // Shipping is calculated once for the whole checkout and re-derived
+    // server-side — never trust a client-supplied shipping cost.
+    const shippingQuote = isShipping
+        ? await quoteShipping(items.map((i: any) => ({ productId: i.productId, quantity: i.quantity })), { city: shipCity, state: shipState, zip: shipZip, residential })
+        : null;
+    const shippingCentsTotal = shippingQuote?.cents ?? 0;
+    const finalGroups = allocateShippingAcrossGroups(discountedGroups, shippingCentsTotal);
+    const grandTotal = discountedTotal + shippingCentsTotal;
 
     // Stripe requires a minimum of 50 cents
-    if (discountedTotal < 50) {
+    if (grandTotal < 50) {
         return res.status(400).json({ error: 'Order total is too low for card payment (minimum $0.50)' });
     }
 
@@ -66,7 +81,7 @@ router.post('/create-intent', async (req: Request, res: Response) => {
     // Create the Stripe PaymentIntent first so every order can be stamped with its id
     const stripe = getStripe();
     const pi = await stripe.paymentIntents.create({
-        amount: discountedTotal,
+        amount: grandTotal,
         currency: 'usd',
         metadata: { orderGroupId: orderGroupId ?? '' },
         automatic_payment_methods: { enabled: true }
@@ -80,9 +95,11 @@ router.post('/create-intent', async (req: Request, res: Response) => {
                 status: 'UNFULFILLED', paymentStatus: 'UNPAID', paymentMethod: 'stripe',
                 stripePaymentIntentId: pi.id,
                 customerId: customer.id, customerName, customerEmail,
-                shipAddress1, shipAddress2: shipAddress2 ?? null,
-                shipCity, shipState, shipZip, residential,
-                totalCents: g.subtotal,
+                shippingMethod: isShipping ? 'SHIP' : 'PICKUP', shippingCents: g.shippingCents,
+                shipAddress1: isShipping ? shipAddress1 : null, shipAddress2: isShipping ? (shipAddress2 ?? null) : null,
+                shipCity: isShipping ? shipCity : null, shipState: isShipping ? shipState : null, shipZip: isShipping ? shipZip : null,
+                residential,
+                totalCents: g.subtotal + g.shippingCents,
                 items: { createMany: { data: g.items } }
             }
         });
@@ -97,6 +114,8 @@ router.post('/create-intent', async (req: Request, res: Response) => {
         clientSecret: pi.client_secret,
         orderId: createdOrders[0].id,
         orderGroupId,
+        shippingCents: shippingCentsTotal,
+        shippingEstimated: shippingQuote?.estimated ?? null,
         orders: createdOrders.map(o => ({ id: o.id, shopId: o.shopId, totalCents: o.totalCents }))
     });
 });

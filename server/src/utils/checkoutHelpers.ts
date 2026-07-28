@@ -15,6 +15,7 @@ export type ShopGroup = {
     shopName: string | null;
     items: { productId: string; quantity: number; size: string | null; color: string | null; priceCents: number }[];
     subtotal: number;
+    shippingCents: number;
 };
 
 // Resolves products + per-item pricing (including size upcharges), then groups
@@ -46,7 +47,7 @@ export async function buildShopGroups(
         const priceCents = computeItemPriceCents(product, i.size);
         if (!groups.has(slug)) {
             const shop = slug ? shopBySlug.get(slug) : undefined;
-            groups.set(slug, { slug, shopId: shop?.id ?? null, shopName: shop?.name ?? null, items: [], subtotal: 0 });
+            groups.set(slug, { slug, shopId: shop?.id ?? null, shopName: shop?.name ?? null, items: [], subtotal: 0, shippingCents: 0 });
         }
         const g = groups.get(slug)!;
         g.items.push({ productId: product.id, quantity: i.quantity, size: i.size ?? null, color: i.color ?? null, priceCents });
@@ -82,6 +83,24 @@ export function applyDiscountAcrossGroups(
     });
 
     return { groups: adjusted, originalSubtotal, discountedTotal };
+}
+
+// Distributes one combined shipping charge (the whole cart ships together)
+// across shop groups proportionally to their share of the subtotal, so each
+// Order's totalCents stays accurate on its own (last group absorbs rounding).
+export function allocateShippingAcrossGroups(groups: ShopGroup[], totalShippingCents: number): ShopGroup[] {
+    if (totalShippingCents <= 0) return groups.map(g => ({ ...g, shippingCents: 0 }));
+
+    const subtotalSum = groups.reduce((a, g) => a + g.subtotal, 0);
+    let allocated = 0;
+    return groups.map((g, idx) => {
+        if (idx === groups.length - 1) {
+            return { ...g, shippingCents: totalShippingCents - allocated };
+        }
+        const share = subtotalSum > 0 ? Math.round((g.subtotal / subtotalSum) * totalShippingCents) : Math.round(totalShippingCents / groups.length);
+        allocated += share;
+        return { ...g, shippingCents: share };
+    });
 }
 
 export function newOrderGroupId(): string {

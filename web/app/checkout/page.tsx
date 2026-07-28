@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { motion } from "framer-motion";
@@ -11,6 +11,8 @@ import { getColorCss } from "@/lib/colors";
 import { StripePaymentForm } from "@/components/storefront/StripePaymentForm";
 
 type PaymentMethod = "stripe" | "pickup" | "";
+type ShippingMethod = "SHIP" | "PICKUP" | "";
+type ShippingQuote = { cents: number; estimated: boolean; service?: string; estimatedDays?: number | null };
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? "");
 
@@ -42,6 +44,8 @@ function groupByShop(cart: CartItem[]) {
     return [...groups.values()];
 }
 
+const ZIP_RE = /^\d{5}(-\d{4})?$/;
+
 export default function CheckoutPage() {
     const { cart, updateQty, removeItem, subtotalCents, itemCount, clearAll } = useCart();
     const [step, setStep] = useState<"review"|"payment"|"done">("review");
@@ -49,33 +53,80 @@ export default function CheckoutPage() {
         customerName:"", customerEmail:"",
         shipAddress1:"", shipAddress2:"", shipCity:"", shipState:"", shipZip:""
     });
+    const [shippingMethod, setShippingMethod] = useState<ShippingMethod>("");
+    const [shippingQuote, setShippingQuote] = useState<ShippingQuote | null>(null);
+    const [shippingLoading, setShippingLoading] = useState(false);
     const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("");
     const [discountCode, setDiscountCode] = useState("");
     const [placing, setPlacing] = useState(false);
     const [error, setError] = useState("");
     const [stripeClientSecret, setStripeClientSecret] = useState<string | null>(null);
     const [submittedGroups, setSubmittedGroups] = useState<ReturnType<typeof groupByShop>>([]);
+    const [submittedShipping, setSubmittedShipping] = useState<{ method: ShippingMethod; cents: number }>({ method: "", cents: 0 });
     const [reference, setReference] = useState("");
+    const quoteTimer = useRef<ReturnType<typeof setTimeout>>();
 
     const groups = useMemo(() => groupByShop(cart), [cart]);
+    const shopNames = useMemo(() => [...new Set(cart.map(c => c.shopName))], [cart]);
+
+    // If a customer switches to Ship, "pay at pickup" no longer makes sense — clear it.
+    useEffect(() => {
+        if (shippingMethod === "SHIP" && paymentMethod === "pickup") setPaymentMethod("");
+    }, [shippingMethod, paymentMethod]);
+
+    // Debounced live shipping quote once a full address is entered.
+    useEffect(() => {
+        clearTimeout(quoteTimer.current);
+        if (shippingMethod !== "SHIP" || !form.shipCity || form.shipState.length !== 2 || !ZIP_RE.test(form.shipZip)) {
+            setShippingQuote(null);
+            return;
+        }
+        quoteTimer.current = setTimeout(async () => {
+            setShippingLoading(true);
+            try {
+                const q = await publicFetch("/shipping/rate", {
+                    method: "POST",
+                    body: JSON.stringify({
+                        items: cart.map(c => ({ productId: c.productId, quantity: c.quantity })),
+                        shipCity: form.shipCity, shipState: form.shipState, shipZip: form.shipZip
+                    })
+                });
+                setShippingQuote(q);
+            } catch {
+                setShippingQuote(null);
+            } finally {
+                setShippingLoading(false);
+            }
+        }, 500);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [shippingMethod, form.shipCity, form.shipState, form.shipZip]);
+
+    const shippingCents = shippingMethod === "SHIP" ? (shippingQuote?.cents ?? 0) : 0;
+    const grandTotal = subtotalCents + shippingCents;
+    const shippingReady = shippingMethod === "PICKUP" || (shippingMethod === "SHIP" && shippingQuote !== null);
 
     const inputCls = "w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all";
 
     async function handleContinue(e: React.FormEvent) {
         e.preventDefault();
+        if (!shippingMethod) { setError("Please choose how you'd like to receive your order."); return; }
         if (!paymentMethod) { setError("Please select a payment method."); return; }
         setError("");
         const items = cart.map(c => ({ productId:c.productId, quantity:c.quantity, size:c.size, color:c.color, shopSlug:c.shopSlug }));
+        const addressFields = shippingMethod === "SHIP"
+            ? { shipAddress1: form.shipAddress1, shipAddress2: form.shipAddress2, shipCity: form.shipCity, shipState: form.shipState, shipZip: form.shipZip }
+            : {};
 
         if (paymentMethod === "stripe") {
             setPlacing(true);
             try {
                 const res = await publicFetch("/payments/create-intent", {
                     method: "POST",
-                    body: JSON.stringify({ ...form, items, discountCode: discountCode || undefined })
+                    body: JSON.stringify({ customerName: form.customerName, customerEmail: form.customerEmail, ...addressFields, shippingMethod, items, discountCode: discountCode || undefined })
                 });
                 setStripeClientSecret(res.clientSecret);
                 setSubmittedGroups(groups);
+                setSubmittedShipping({ method: shippingMethod, cents: res.shippingCents ?? 0 });
                 setReference(res.orderGroupId ?? res.orderId);
                 setStep("payment");
             } catch (err: any) { setError(err.message || "Could not initialize payment."); }
@@ -85,9 +136,10 @@ export default function CheckoutPage() {
             try {
                 const res = await publicFetch("/orders/checkout", {
                     method: "POST",
-                    body: JSON.stringify({ ...form, items, discountCode: discountCode || undefined, paymentMethod })
+                    body: JSON.stringify({ customerName: form.customerName, customerEmail: form.customerEmail, ...addressFields, shippingMethod, items, discountCode: discountCode || undefined, paymentMethod })
                 });
                 setSubmittedGroups(groups);
+                setSubmittedShipping({ method: shippingMethod, cents: res.shippingCents ?? 0 });
                 setReference(res.orderGroupId ?? res.orders?.[0]?.id ?? "");
                 clearAll();
                 setStep("done");
@@ -118,7 +170,9 @@ export default function CheckoutPage() {
     /* ── Done ── */
     if (step === "done") {
         const isOffline = paymentMethod === "pickup";
-        const grandTotal = submittedGroups.reduce((a, g) => a + g.subtotal, 0);
+        const isPickup = submittedShipping.method === "PICKUP";
+        const itemsTotal = submittedGroups.reduce((a, g) => a + g.subtotal, 0);
+        const finalTotal = itemsTotal + submittedShipping.cents;
         return (
             <div className="min-h-screen bg-[#f8f7ff] flex flex-col items-center justify-center p-4">
                 <motion.div initial={{ opacity:0, scale:0.93, y:16 }} animate={{ opacity:1, scale:1, y:0 }}
@@ -136,20 +190,35 @@ export default function CheckoutPage() {
                     <h1 className="text-2xl font-bold text-slate-900 mb-2">{isOffline ? "Order confirmed!" : "Payment received!"}</h1>
                     <p className="text-sm text-slate-500 mb-5">
                         Thanks, <strong className="text-slate-700">{form.customerName}</strong>!{" "}
-                        {isOffline ? `Please bring cash or a check for ${fmt(grandTotal)} when you pick it up.` : "Your payment was successful and your order is being processed."}
+                        {isPickup
+                            ? `Your order will be ready for pickup from ${shopNames.join(" and ")}. ${isOffline ? `Please bring cash or a check for ${fmt(finalTotal)} when you pick it up.` : "We'll let you know when it's ready."}`
+                            : isOffline
+                                ? `Please bring cash or a check for ${fmt(finalTotal)} when you pick it up.`
+                                : "Your payment was successful and your order is being processed and shipped to you."}
                     </p>
 
-                    {submittedGroups.length > 1 && (
-                        <div className="bg-slate-50 rounded-xl px-4 py-3 mb-5 text-left space-y-3">
-                            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Itemized by shop</p>
-                            {submittedGroups.map(g => (
-                                <div key={g.shopSlug} className="flex justify-between text-sm">
-                                    <span className="text-slate-700 font-medium">{g.shopName}</span>
-                                    <span className="text-slate-900 font-bold">{fmt(g.subtotal)}</span>
-                                </div>
-                            ))}
+                    <div className="bg-slate-50 rounded-xl px-4 py-3 mb-5 text-left space-y-2">
+                        {submittedGroups.length > 1 && (
+                            <>
+                                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Itemized by shop</p>
+                                {submittedGroups.map(g => (
+                                    <div key={g.shopSlug} className="flex justify-between text-sm">
+                                        <span className="text-slate-700 font-medium">{g.shopName}</span>
+                                        <span className="text-slate-900 font-bold">{fmt(g.subtotal)}</span>
+                                    </div>
+                                ))}
+                                <div className="border-t border-slate-200 my-1" />
+                            </>
+                        )}
+                        <div className="flex justify-between text-sm">
+                            <span className="text-slate-500">{isPickup ? "Pickup" : "Shipping"}</span>
+                            <span className="text-slate-900 font-semibold">{isPickup ? "Free" : fmt(submittedShipping.cents)}</span>
                         </div>
-                    )}
+                        <div className="flex justify-between text-sm font-bold pt-1 border-t border-slate-200">
+                            <span className="text-slate-700">Total</span>
+                            <span className="text-slate-900">{fmt(finalTotal)}</span>
+                        </div>
+                    </div>
 
                     <div className="bg-slate-50 rounded-xl px-4 py-3 text-sm text-slate-600 mb-5">
                         Confirmation: <code className="font-mono font-bold text-slate-800">#{reference.slice(-8).toUpperCase()}</code>
@@ -203,59 +272,107 @@ export default function CheckoutPage() {
                                 </div>
                             </div>
 
-                            <div className="bg-white rounded-2xl ring-1 ring-black/5 p-5 space-y-4">
-                                <h2 className="text-sm font-bold text-slate-900">Shipping address</h2>
-                                <div>
-                                    <label className="field-label" htmlFor="addr1">Street address</label>
-                                    <input id="addr1" required className={inputCls} placeholder="123 Main St"
-                                        value={form.shipAddress1} onChange={e => setForm(p => ({ ...p, shipAddress1:e.target.value }))} />
-                                </div>
-                                <div>
-                                    <label className="field-label" htmlFor="addr2">Apartment, suite, etc. (optional)</label>
-                                    <input id="addr2" className={inputCls} placeholder="Apt 4B"
-                                        value={form.shipAddress2} onChange={e => setForm(p => ({ ...p, shipAddress2:e.target.value }))} />
-                                </div>
-                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                                    <div className="col-span-2 sm:col-span-1">
-                                        <label className="field-label" htmlFor="city">City</label>
-                                        <input id="city" required className={inputCls} placeholder="Springfield"
-                                            value={form.shipCity} onChange={e => setForm(p => ({ ...p, shipCity:e.target.value }))} />
-                                    </div>
-                                    <div>
-                                        <label className="field-label" htmlFor="state">State</label>
-                                        <input id="state" required maxLength={2} className={inputCls} placeholder="IL"
-                                            value={form.shipState} onChange={e => setForm(p => ({ ...p, shipState:e.target.value.toUpperCase() }))} />
-                                    </div>
-                                    <div>
-                                        <label className="field-label" htmlFor="zip">ZIP</label>
-                                        <input id="zip" required className={inputCls} placeholder="62701"
-                                            value={form.shipZip} onChange={e => setForm(p => ({ ...p, shipZip:e.target.value }))} />
-                                    </div>
+                            <div className="bg-white rounded-2xl ring-1 ring-black/5 p-5">
+                                <h2 className="text-sm font-bold text-slate-900 mb-3">How do you want to get your order?</h2>
+                                <div className="space-y-2">
+                                    <label className={`flex items-center gap-3 p-3.5 rounded-xl border-2 cursor-pointer transition-all duration-150 ${shippingMethod === "SHIP" ? "border-violet-500 bg-violet-50" : "border-slate-200 hover:border-slate-300"}`}>
+                                        <input type="radio" name="shippingMethod" value="SHIP" className="accent-violet-600"
+                                            checked={shippingMethod === "SHIP"} onChange={() => setShippingMethod("SHIP")} />
+                                        <div className="flex-1">
+                                            <p className="text-sm font-semibold text-slate-900">Ship to you</p>
+                                            <p className="text-xs text-slate-400 mt-0.5">We'll calculate shipping based on your address</p>
+                                        </div>
+                                        <span className="text-lg">📦</span>
+                                    </label>
+                                    <label className={`flex items-center gap-3 p-3.5 rounded-xl border-2 cursor-pointer transition-all duration-150 ${shippingMethod === "PICKUP" ? "border-emerald-500 bg-emerald-50" : "border-slate-200 hover:border-slate-300"}`}>
+                                        <input type="radio" name="shippingMethod" value="PICKUP" className="accent-emerald-600"
+                                            checked={shippingMethod === "PICKUP"} onChange={() => setShippingMethod("PICKUP")} />
+                                        <div className="flex-1">
+                                            <p className="text-sm font-semibold text-slate-900">Pick up — Free</p>
+                                            <p className="text-xs text-slate-400 mt-0.5">Pick up from {shopNames.join(" / ")} once ready — no shipping cost</p>
+                                        </div>
+                                        <span className="text-lg">🤝</span>
+                                    </label>
                                 </div>
                             </div>
 
-                            <div className="bg-white rounded-2xl ring-1 ring-black/5 p-5">
-                                <h2 className="text-sm font-bold text-slate-900 mb-3">Payment method</h2>
-                                <div className="space-y-2">
-                                    <label className={`flex items-center gap-3 p-3.5 rounded-xl border-2 cursor-pointer transition-all duration-150 ${paymentMethod === "stripe" ? "border-violet-500 bg-violet-50" : "border-slate-200 hover:border-slate-300"}`}>
-                                        <input type="radio" name="paymentMethod" value="stripe" className="accent-violet-600"
-                                            checked={paymentMethod === "stripe"} onChange={() => setPaymentMethod("stripe")} />
-                                        <div className="flex-1">
-                                            <p className="text-sm font-semibold text-slate-900">Card / Apple Pay / Google Pay</p>
-                                            <p className="text-xs text-slate-400 mt-0.5">Pay securely online with card or digital wallet</p>
+                            {shippingMethod === "SHIP" && (
+                                <motion.div initial={{ opacity:0, height:0 }} animate={{ opacity:1, height:"auto" }}
+                                    className="bg-white rounded-2xl ring-1 ring-black/5 p-5 space-y-4">
+                                    <h2 className="text-sm font-bold text-slate-900">Shipping address</h2>
+                                    <div>
+                                        <label className="field-label" htmlFor="addr1">Street address</label>
+                                        <input id="addr1" required className={inputCls} placeholder="123 Main St"
+                                            value={form.shipAddress1} onChange={e => setForm(p => ({ ...p, shipAddress1:e.target.value }))} />
+                                    </div>
+                                    <div>
+                                        <label className="field-label" htmlFor="addr2">Apartment, suite, etc. (optional)</label>
+                                        <input id="addr2" className={inputCls} placeholder="Apt 4B"
+                                            value={form.shipAddress2} onChange={e => setForm(p => ({ ...p, shipAddress2:e.target.value }))} />
+                                    </div>
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                        <div className="col-span-2 sm:col-span-1">
+                                            <label className="field-label" htmlFor="city">City</label>
+                                            <input id="city" required className={inputCls} placeholder="Springfield"
+                                                value={form.shipCity} onChange={e => setForm(p => ({ ...p, shipCity:e.target.value }))} />
                                         </div>
-                                    </label>
-                                    <label className={`flex items-center gap-3 p-3.5 rounded-xl border-2 cursor-pointer transition-all duration-150 ${paymentMethod === "pickup" ? "border-emerald-500 bg-emerald-50" : "border-slate-200 hover:border-slate-300"}`}>
-                                        <input type="radio" name="paymentMethod" value="pickup" className="accent-emerald-600"
-                                            checked={paymentMethod === "pickup"} onChange={() => setPaymentMethod("pickup")} />
-                                        <div className="flex-1">
-                                            <p className="text-sm font-semibold text-slate-900">Pay at pickup</p>
-                                            <p className="text-xs text-slate-400 mt-0.5">Pay with cash or check when you collect your order</p>
+                                        <div>
+                                            <label className="field-label" htmlFor="state">State</label>
+                                            <input id="state" required maxLength={2} className={inputCls} placeholder="IL"
+                                                value={form.shipState} onChange={e => setForm(p => ({ ...p, shipState:e.target.value.toUpperCase() }))} />
                                         </div>
-                                        <span className="text-lg">💵</span>
-                                    </label>
+                                        <div>
+                                            <label className="field-label" htmlFor="zip">ZIP</label>
+                                            <input id="zip" required className={inputCls} placeholder="62701"
+                                                value={form.shipZip} onChange={e => setForm(p => ({ ...p, shipZip:e.target.value }))} />
+                                        </div>
+                                    </div>
+                                    {shippingLoading && (
+                                        <p className="text-xs text-slate-400 flex items-center gap-1.5">
+                                            <span className="w-3 h-3 border-2 border-slate-300 border-t-transparent rounded-full animate-spin inline-block" />
+                                            Calculating shipping…
+                                        </p>
+                                    )}
+                                    {!shippingLoading && shippingQuote && (
+                                        <p className="text-xs text-emerald-600 font-medium">
+                                            ✓ Shipping: {fmt(shippingQuote.cents)}{shippingQuote.service ? ` via ${shippingQuote.service}` : ""}{shippingQuote.estimated ? " (estimate)" : ""}
+                                        </p>
+                                    )}
+                                </motion.div>
+                            )}
+
+                            {shippingMethod === "PICKUP" && (
+                                <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
+                                    <p className="text-xs text-emerald-800">You'll pick up your order from <strong>{shopNames.join(", ")}</strong> — we'll email you when it's ready.</p>
                                 </div>
-                            </div>
+                            )}
+
+                            {shippingMethod && (
+                                <div className="bg-white rounded-2xl ring-1 ring-black/5 p-5">
+                                    <h2 className="text-sm font-bold text-slate-900 mb-3">Payment method</h2>
+                                    <div className="space-y-2">
+                                        <label className={`flex items-center gap-3 p-3.5 rounded-xl border-2 cursor-pointer transition-all duration-150 ${paymentMethod === "stripe" ? "border-violet-500 bg-violet-50" : "border-slate-200 hover:border-slate-300"}`}>
+                                            <input type="radio" name="paymentMethod" value="stripe" className="accent-violet-600"
+                                                checked={paymentMethod === "stripe"} onChange={() => setPaymentMethod("stripe")} />
+                                            <div className="flex-1">
+                                                <p className="text-sm font-semibold text-slate-900">Card / Apple Pay / Google Pay</p>
+                                                <p className="text-xs text-slate-400 mt-0.5">Pay securely online with card or digital wallet</p>
+                                            </div>
+                                        </label>
+                                        {shippingMethod === "PICKUP" && (
+                                            <label className={`flex items-center gap-3 p-3.5 rounded-xl border-2 cursor-pointer transition-all duration-150 ${paymentMethod === "pickup" ? "border-emerald-500 bg-emerald-50" : "border-slate-200 hover:border-slate-300"}`}>
+                                                <input type="radio" name="paymentMethod" value="pickup" className="accent-emerald-600"
+                                                    checked={paymentMethod === "pickup"} onChange={() => setPaymentMethod("pickup")} />
+                                                <div className="flex-1">
+                                                    <p className="text-sm font-semibold text-slate-900">Pay at pickup</p>
+                                                    <p className="text-xs text-slate-400 mt-0.5">Pay with cash or check when you collect your order</p>
+                                                </div>
+                                                <span className="text-lg">💵</span>
+                                            </label>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
 
                             <div className="bg-white rounded-2xl ring-1 ring-black/5 p-5">
                                 <h2 className="text-sm font-bold text-slate-900 mb-3">Discount code</h2>
@@ -270,15 +387,19 @@ export default function CheckoutPage() {
                                 </motion.div>
                             )}
 
-                            <motion.button type="submit" disabled={placing || !paymentMethod} whileHover={{ y:-1 }} whileTap={{ scale:0.98 }}
+                            <motion.button type="submit" disabled={placing || !paymentMethod || !shippingMethod || !shippingReady} whileHover={{ y:-1 }} whileTap={{ scale:0.98 }}
                                 className="btn-shine w-full text-white font-semibold py-3.5 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-60"
                                 style={{ background:"linear-gradient(135deg,#8b5cf6 0%,#7c3aed 100%)", boxShadow:"0 6px 24px rgba(124,58,237,0.4)" }}>
                                 {placing ? (
                                     <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"/>Working…</>
+                                ) : !shippingMethod ? (
+                                    <>Select how you'll get your order</>
+                                ) : !shippingReady ? (
+                                    <>Enter your address to calculate shipping</>
                                 ) : paymentMethod === "stripe" ? (
-                                    <>Continue to payment · {fmt(subtotalCents)}</>
+                                    <>Continue to payment · {fmt(grandTotal)}</>
                                 ) : paymentMethod ? (
-                                    <>Place order · {fmt(subtotalCents)}</>
+                                    <>Place order · {fmt(grandTotal)}</>
                                 ) : <>Select a payment method</>}
                             </motion.button>
                         </form>
@@ -332,10 +453,23 @@ export default function CheckoutPage() {
                                         <span>Subtotal</span><span className="font-medium text-slate-900">{fmt(subtotalCents)}</span>
                                     </div>
                                     <div className="flex justify-between text-sm text-slate-500">
-                                        <span>Shipping</span><span className="text-slate-400 text-xs">Calculated at next step</span>
+                                        <span>{shippingMethod === "PICKUP" ? "Pickup" : "Shipping"}</span>
+                                        {shippingMethod === "PICKUP" ? (
+                                            <span className="text-emerald-600 font-semibold">Free</span>
+                                        ) : shippingMethod === "SHIP" ? (
+                                            shippingLoading ? (
+                                                <span className="text-slate-400 text-xs">Calculating…</span>
+                                            ) : shippingQuote ? (
+                                                <span className="font-medium text-slate-900">{fmt(shippingQuote.cents)}</span>
+                                            ) : (
+                                                <span className="text-slate-400 text-xs">Enter address</span>
+                                            )
+                                        ) : (
+                                            <span className="text-slate-400 text-xs">Select an option</span>
+                                        )}
                                     </div>
                                     <div className="flex justify-between font-bold text-slate-900 pt-2 border-t border-slate-100 text-base">
-                                        <span>Total</span><span>{fmt(subtotalCents)}</span>
+                                        <span>Total</span><span>{fmt(grandTotal)}</span>
                                     </div>
                                 </div>
                             </div>
@@ -348,7 +482,7 @@ export default function CheckoutPage() {
                         className="max-w-lg mx-auto">
                         <h2 className="text-lg font-bold text-slate-900 mb-4">Complete your payment</h2>
                         <Elements stripe={stripePromise} options={{ clientSecret: stripeClientSecret, appearance: { theme:"stripe", variables: { colorPrimary:"#7c3aed" } } }}>
-                            <StripePaymentForm totalCents={subtotalCents}
+                            <StripePaymentForm totalCents={grandTotal}
                                 onSuccess={() => { clearAll(); setStep("done"); }}
                                 onBack={() => setStep("review")} />
                         </Elements>

@@ -260,10 +260,14 @@ router.get('/catalog/:style', async (req, res) => {
         const bigMax  = bigPrices.length ? Math.max(...bigPrices) : 0;
         const upchargeDetected = baseMin > 0 && bigMax > baseMin;
 
+        // Average per-unit shipping weight across sizes/colors, in ounces
+        const weights = rows.map(r => r.weightLbs).filter((w): w is number => typeof w === 'number' && w > 0);
+        const weightOz = weights.length ? Math.round((weights.reduce((a, w) => a + w, 0) / weights.length) * 16) : null;
+
         res.json({
             style: req.params.style, title: first.title, description: first.description, brand: first.brand,
             category: first.category, subcategory: first.subcategory, colors, sizes, priceCents: minPrice,
-            images, colorImages, upchargeDetected, variants: rows,
+            images, colorImages, upchargeDetected, weightOz, variants: rows,
         });
     } catch (err: any) {
         res.status(500).json({ error: err.message ?? 'Style lookup failed' });
@@ -354,6 +358,10 @@ router.post('/import', async (req, res) => {
     const bigMax  = bigPrices.length ? Math.max(...bigPrices) : 0;
     const upchargeEnabled = baseMin > 0 && bigMax > baseMin;
 
+    // Average per-unit shipping weight across sizes/colors, in ounces
+    const weights = rows.map(r => r.weightLbs).filter((w): w is number => typeof w === 'number' && w > 0);
+    const weightOz = weights.length ? Math.round((weights.reduce((a, w) => a + w, 0) / weights.length) * 16) : null;
+
     const shopConnect = Array.isArray(shopIds) && shopIds.length ? { connect: shopIds.map(id => ({ id })) } : undefined;
     const shopSet = Array.isArray(shopIds) ? { set: shopIds.map(id => ({ id })) } : undefined;
 
@@ -373,6 +381,7 @@ router.post('/import', async (req, res) => {
                     colorsJson:       colors.length ? JSON.stringify(colors) : null,
                     imagesJson:       images.length ? JSON.stringify(images) : existing.imagesJson,
                     upchargeEnabled:  upchargeEnabled || existing.upchargeEnabled,
+                    weightOz:         weightOz ?? existing.weightOz,
                     ...(shopSet ? { shops: shopSet } : {}),
                 },
                 include: { shops: { select: { id: true, name: true, slug: true } } },
@@ -393,6 +402,7 @@ router.post('/import', async (req, res) => {
                 colorsJson:       colors.length ? JSON.stringify(colors) : null,
                 imagesJson:       images.length ? JSON.stringify(images) : null,
                 upchargeEnabled,
+                weightOz,
                 ...(shopConnect ? { shops: shopConnect } : {}),
             },
             include: { shops: { select: { id: true, name: true, slug: true } } },

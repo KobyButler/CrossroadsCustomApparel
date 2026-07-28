@@ -36,6 +36,15 @@ export const config = {
         residential: bool(process.env.BUSINESS_RESIDENTIAL, false)
     },
 
+    // Customer checkout shipping: live rates via Shippo when configured, otherwise
+    // a flat-rate fallback so "Ship to You" still works before a Shippo key exists.
+    shipping: {
+        shippoApiKey: process.env.SHIPPO_API_KEY ?? '',
+        enable: Boolean(process.env.SHIPPO_API_KEY),
+        flatRateCents: Number(process.env.SHIPPING_FLAT_RATE_CENTS ?? 800),
+        defaultItemWeightOz: Number(process.env.SHIPPING_DEFAULT_ITEM_WEIGHT_OZ ?? 6),
+    },
+
     smtp: {
         host: process.env.SMTP_HOST ?? '',
         port: Number(process.env.SMTP_PORT ?? 587),
