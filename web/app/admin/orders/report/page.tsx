@@ -11,12 +11,23 @@ import { getColorCss } from "@/lib/colors";
 
 type Shop = { id: string; name: string };
 type ReportLine = {
-    productId: string; productName: string; sku: string; vendor: string; image: string | null;
+    vendor: string; vendorStyle: string; image: string | null;
+    productNames: string[]; skus: string[];
     color: string | null; size: string | null; quantity: number; sourceOrderIds: string[];
 };
 type Report = {
     shop: { id: string; name: string } | null; status: string; generatedAt: string; orderCount: number;
     lines: ReportLine[]; byVendor: Record<string, ReportLine[]>; alreadyOrdered: Record<string, string[]>;
+};
+type ShipTo = {
+    name: string; email: string; address1: string; address2: string | null;
+    city: string; state: string; zip: string; residential: boolean; configured: boolean;
+};
+type Receipt = {
+    success: boolean; poNumber: string; externalOrderNumber: string | null; vendor: string; placedAt: string;
+    shipTo: { name: string; address1: string; address2: string | null; city: string; state: string; zip: string };
+    totalUnits: number; ordersMarked: number;
+    lines: { vendorStyle: string; color: string | null; size: string | null; quantity: number; productNames: string[] }[];
 };
 
 const VENDOR_LABELS: Record<string, string> = { SANMAR: "SanMar", SSACTIVEWEAR: "S&S Activewear", OTHER: "Other" };
@@ -26,18 +37,26 @@ const STATUS_OPTIONS = [
     { value: "CANCELLED", label: "Cancelled" },
 ];
 
+function lineKey(l: { vendorStyle: string; color: string | null; size: string | null }) {
+    return `${l.vendorStyle}|${l.color ?? ""}|${l.size ?? ""}`;
+}
+
 export default function OrderReportPage() {
     const { toast } = useToast();
     const [shops, setShops] = useState<Shop[]>([]);
     const [shopId, setShopId] = useState("");
     const [status, setStatus] = useState("UNFULFILLED");
     const [report, setReport] = useState<Report | null>(null);
+    const [shipTo, setShipTo] = useState<ShipTo | null>(null);
     const [loading, setLoading] = useState(true);
-    const [placingVendor, setPlacingVendor] = useState<string | null>(null);
+    const [placing, setPlacing] = useState(false);
+    const [selected, setSelected] = useState<Set<string>>(new Set());
     const [confirmVendor, setConfirmVendor] = useState<string | null>(null);
+    const [receipt, setReceipt] = useState<Receipt | null>(null);
 
     useEffect(() => {
         api("/shops").then(d => setShops(Array.isArray(d) ? d : d?.data ?? [])).catch(() => {});
+        api("/order-report/ship-to").then(setShipTo).catch(() => {});
     }, []);
 
     useEffect(() => { fetchReport(); }, [shopId, status]);
@@ -49,25 +68,61 @@ export default function OrderReportPage() {
             if (shopId) params.set("shopId", shopId);
             const r = await api(`/order-report?${params}`);
             setReport(r);
+            setSelected(new Set());
         } catch (err: any) { toast(err.message || "Failed to load report", "error"); }
         finally { setLoading(false); }
     }
 
+    function toggleLine(key: string) {
+        setSelected(prev => {
+            const next = new Set(prev);
+            next.has(key) ? next.delete(key) : next.add(key);
+            return next;
+        });
+    }
+
+    function toggleVendorAll(lines: ReportLine[]) {
+        const keys = lines.map(lineKey);
+        const allSelected = keys.every(k => selected.has(k));
+        setSelected(prev => {
+            const next = new Set(prev);
+            if (allSelected) keys.forEach(k => next.delete(k));
+            else keys.forEach(k => next.add(k));
+            return next;
+        });
+    }
+
+    // Which lines will actually be submitted if "Place Order" is clicked for this vendor:
+    // the ones checked (if any), otherwise everything currently shown for that vendor.
+    function linesToSubmit(vendor: string): ReportLine[] {
+        if (!report) return [];
+        const all = report.byVendor[vendor] ?? [];
+        const chosen = all.filter(l => selected.has(lineKey(l)));
+        return chosen.length > 0 ? chosen : all;
+    }
+
     async function placeOrder(vendor: string) {
-        setPlacingVendor(vendor);
+        const lines = linesToSubmit(vendor);
+        setPlacing(true);
         try {
-            const res = await api("/order-report/place-order", {
+            const res: Receipt = await api("/order-report/place-order", {
                 method: "POST",
-                body: JSON.stringify({ shopId: shopId || undefined, status, vendor })
+                body: JSON.stringify({
+                    shopId: shopId || undefined, status, vendor,
+                    lines: lines.map(l => ({ vendorStyle: l.vendorStyle, color: l.color, size: l.size }))
+                })
             });
-            toast(`Order placed with ${VENDOR_LABELS[vendor] ?? vendor} — ${res.ordersMarked} order(s) marked.`);
             setConfirmVendor(null);
+            setReceipt(res);
             fetchReport();
         } catch (err: any) { toast(err.message || "Failed to place order", "error"); }
-        finally { setPlacingVendor(null); }
+        finally { setPlacing(false); }
     }
 
     const vendors = report ? Object.keys(report.byVendor) : [];
+    const confirmLines = confirmVendor ? linesToSubmit(confirmVendor) : [];
+    const confirmSelectedCount = confirmVendor ? (report?.byVendor[confirmVendor] ?? []).filter(l => selected.has(lineKey(l))).length : 0;
+    const confirmTotalUnits = confirmLines.reduce((a, l) => a + l.quantity, 0);
 
     return (
         <div className="space-y-6">
@@ -90,6 +145,13 @@ export default function OrderReportPage() {
                     {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </Select>
             </div>
+
+            {shipTo && !shipTo.configured && (
+                <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 no-print">
+                    <svg className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                    <p className="text-xs text-amber-800">Ship-to address isn&apos;t set yet — placing a real vendor order is disabled until <code className="font-mono">BUSINESS_ADDRESS1/CITY/STATE/ZIP</code> are set in the server environment.</p>
+                </div>
+            )}
 
             {/* Print header */}
             <div className="hidden print:block">
@@ -120,6 +182,8 @@ export default function OrderReportPage() {
                         const totalQty = lines.reduce((a, l) => a + l.quantity, 0);
                         const alreadyOrderedCount = report.alreadyOrdered[vendor]?.length ?? 0;
                         const isRealVendor = vendor === "SANMAR" || vendor === "SSACTIVEWEAR";
+                        const vendorSelectedCount = lines.filter(l => selected.has(lineKey(l))).length;
+                        const allChecked = lines.length > 0 && vendorSelectedCount === lines.length;
 
                         return (
                             <motion.div key={vendor} initial={{ opacity:0, y:8 }} animate={{ opacity:1, y:0 }}
@@ -134,39 +198,69 @@ export default function OrderReportPage() {
                                             {alreadyOrderedCount > 0 && (
                                                 <Badge variant="warning" size="sm">{alreadyOrderedCount} order{alreadyOrderedCount !== 1 ? "s" : ""} already ordered</Badge>
                                             )}
-                                            <Button size="sm" loading={placingVendor === vendor} onClick={() => setConfirmVendor(vendor)}>
-                                                Place Order with {VENDOR_LABELS[vendor]}
+                                            <Button size="sm" disabled={shipTo ? !shipTo.configured : false} onClick={() => setConfirmVendor(vendor)}>
+                                                {vendorSelectedCount > 0
+                                                    ? `Place Order — ${vendorSelectedCount} Selected`
+                                                    : `Place Order — All ${lines.length} Items`}
                                             </Button>
                                         </div>
                                     )}
                                 </div>
                                 <div className="overflow-x-auto">
                                     <div className="table-wrap"><table className="data-table">
-                                        <thead><tr><th>Product</th><th>SKU</th><th>Color</th><th>Size</th><th className="text-right pr-5">Qty Needed</th></tr></thead>
+                                        <thead><tr>
+                                            {isRealVendor && (
+                                                <th className="w-10 pl-5 no-print">
+                                                    <input type="checkbox" title="Select all" aria-label={`Select all ${VENDOR_LABELS[vendor]} lines`}
+                                                        checked={allChecked} onChange={() => toggleVendorAll(lines)}
+                                                        className="rounded border-slate-300 accent-brand-600" />
+                                                </th>
+                                            )}
+                                            <th>Vendor Style</th><th>Your Product(s)</th><th>Color</th><th>Size</th><th className="text-right pr-5">Qty Needed</th>
+                                        </tr></thead>
                                         <tbody>
-                                            {lines.map((l, idx) => (
-                                                <tr key={`${l.productId}-${l.color}-${l.size}`}>
-                                                    <td>
-                                                        <div className="flex items-center gap-3">
-                                                            {l.image ? (
-                                                                <img src={imgUrl(l.image)} alt={l.productName} className="w-8 h-8 rounded-lg object-cover ring-1 ring-black/5 no-print" />
-                                                            ) : null}
-                                                            <span className="font-semibold text-slate-800 text-sm">{l.productName}</span>
-                                                        </div>
-                                                    </td>
-                                                    <td><code className="text-xs font-mono bg-slate-100 px-1.5 py-0.5 rounded-md text-slate-600">{l.sku}</code></td>
-                                                    <td>
-                                                        {l.color ? (
-                                                            <span className="flex items-center gap-1.5 text-sm text-slate-600">
-                                                                <span className="w-3 h-3 rounded-full border border-black/10 inline-block no-print" style={{ backgroundColor: getColorCss(l.color) }} />
-                                                                {l.color}
-                                                            </span>
-                                                        ) : <span className="text-slate-300">—</span>}
-                                                    </td>
-                                                    <td><span className="text-sm text-slate-600">{l.size ?? "—"}</span></td>
-                                                    <td className="text-right pr-5"><span className="text-sm font-bold text-slate-900 tabular-nums">{l.quantity}</span></td>
-                                                </tr>
-                                            ))}
+                                            {lines.map((l) => {
+                                                const key = lineKey(l);
+                                                const checked = selected.has(key);
+                                                return (
+                                                    <tr key={key} className={checked ? "bg-brand-50/40" : undefined}>
+                                                        {isRealVendor && (
+                                                            <td className="pl-5 no-print">
+                                                                <input type="checkbox" checked={checked} onChange={() => toggleLine(key)}
+                                                                    title={`Select ${l.vendorStyle}`} aria-label={`Select ${l.vendorStyle} ${l.color ?? ""} ${l.size ?? ""}`}
+                                                                    className="rounded border-slate-300 accent-brand-600" />
+                                                            </td>
+                                                        )}
+                                                        <td>
+                                                            <div className="flex items-center gap-3">
+                                                                {l.image ? (
+                                                                    <img src={imgUrl(l.image)} alt={l.vendorStyle} className="w-8 h-8 rounded-lg object-cover ring-1 ring-black/5 no-print" />
+                                                                ) : null}
+                                                                <code className="text-sm font-mono font-bold text-slate-800">{l.vendorStyle}</code>
+                                                            </div>
+                                                        </td>
+                                                        <td>
+                                                            <div className="flex flex-col gap-0.5">
+                                                                {l.productNames.map((name, i) => (
+                                                                    <span key={name} className="text-xs text-slate-600">
+                                                                        {name} <code className="text-slate-400">({l.skus[i]})</code>
+                                                                    </span>
+                                                                ))}
+                                                            </div>
+                                                        </td>
+                                                        <td>
+                                                            {l.color ? (
+                                                                <span className="flex items-center gap-1.5 text-sm text-slate-600">
+                                                                    <span className="w-3 h-3 rounded-full border border-black/10 inline-block no-print" style={{ backgroundColor: getColorCss(l.color) }} />
+                                                                    {l.color}
+                                                                </span>
+                                                            ) : <span className="text-slate-300">—</span>}
+                                                        </td>
+                                                        <td><span className="text-sm text-slate-600">{l.size ?? "—"}</span></td>
+                                                        <td className="text-right pr-5"><span className="text-sm font-bold text-slate-900 tabular-nums">{l.quantity}</span></td>
+                                                    </tr>
+                                                );
+                                            })}
                                         </tbody>
                                     </table></div>
                                 </div>
@@ -176,16 +270,124 @@ export default function OrderReportPage() {
                 </div>
             )}
 
-            {/* Confirm place-order modal */}
-            <Modal open={!!confirmVendor} onClose={() => setConfirmVendor(null)} title={`Place order with ${confirmVendor ? VENDOR_LABELS[confirmVendor] : ""}`} size="sm">
-                <p className="text-sm text-slate-600 mb-1">
-                    This submits a real purchase order to {confirmVendor ? VENDOR_LABELS[confirmVendor] : "the vendor"} for the {status.toLowerCase()} quantities shown{report?.shop ? ` for ${report.shop.name}` : " across all shops"}.
-                </p>
-                <p className="text-xs text-slate-400 mb-4">Make sure BUSINESS_ADDRESS1/CITY/STATE/ZIP are set in the server .env — that&apos;s where the vendor will ship the blanks.</p>
-                <ModalFooter>
-                    <Button variant="outline" onClick={() => setConfirmVendor(null)}>Cancel</Button>
-                    <Button loading={!!placingVendor} onClick={() => confirmVendor && placeOrder(confirmVendor)}>Confirm &amp; Place Order</Button>
-                </ModalFooter>
+            {/* ── Confirm modal: exact itemized review before anything is submitted ── */}
+            <Modal open={!!confirmVendor} onClose={() => setConfirmVendor(null)}
+                title={`Review order — ${confirmVendor ? VENDOR_LABELS[confirmVendor] : ""}`} size="lg">
+                {confirmVendor && (
+                    <div className="space-y-4">
+                        <p className="text-sm text-slate-600">
+                            You&apos;re about to submit a real purchase order to <strong>{VENDOR_LABELS[confirmVendor]}</strong> for
+                            {confirmSelectedCount > 0 ? ` the ${confirmSelectedCount} item${confirmSelectedCount !== 1 ? "s" : ""} you selected` : ` everything currently shown (${confirmLines.length} item${confirmLines.length !== 1 ? "s" : ""})`}.
+                            This cannot be undone from here — review carefully.
+                        </p>
+
+                        <div className="border border-slate-200 rounded-xl overflow-hidden max-h-64 overflow-y-auto">
+                            <table className="w-full text-sm">
+                                <thead className="bg-slate-50 sticky top-0"><tr>
+                                    <th className="text-left px-3 py-2 font-semibold text-slate-500 text-xs">Style</th>
+                                    <th className="text-left px-3 py-2 font-semibold text-slate-500 text-xs">Color</th>
+                                    <th className="text-left px-3 py-2 font-semibold text-slate-500 text-xs">Size</th>
+                                    <th className="text-right px-3 py-2 font-semibold text-slate-500 text-xs">Qty</th>
+                                </tr></thead>
+                                <tbody className="divide-y divide-slate-100">
+                                    {confirmLines.map(l => (
+                                        <tr key={lineKey(l)}>
+                                            <td className="px-3 py-2 font-mono text-xs font-bold text-slate-800">{l.vendorStyle}</td>
+                                            <td className="px-3 py-2 text-slate-600">{l.color ?? "—"}</td>
+                                            <td className="px-3 py-2 text-slate-600">{l.size ?? "—"}</td>
+                                            <td className="px-3 py-2 text-right font-bold text-slate-900">{l.quantity}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                                <tfoot><tr className="border-t border-slate-200">
+                                    <td colSpan={3} className="px-3 py-2 text-xs font-semibold text-slate-500">Total units</td>
+                                    <td className="px-3 py-2 text-right font-black text-slate-900">{confirmTotalUnits}</td>
+                                </tr></tfoot>
+                            </table>
+                        </div>
+
+                        {shipTo && (
+                            <div className="bg-slate-50 rounded-xl p-4">
+                                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Ships to</p>
+                                <p className="text-sm font-semibold text-slate-800">{shipTo.name}</p>
+                                <p className="text-sm text-slate-600">{shipTo.address1}{shipTo.address2 ? `, ${shipTo.address2}` : ""}</p>
+                                <p className="text-sm text-slate-600">{shipTo.city}, {shipTo.state} {shipTo.zip}</p>
+                            </div>
+                        )}
+
+                        <ModalFooter>
+                            <Button type="button" variant="outline" onClick={() => setConfirmVendor(null)}>Cancel</Button>
+                            <Button loading={placing} onClick={() => placeOrder(confirmVendor)}>Submit Purchase Order</Button>
+                        </ModalFooter>
+                    </div>
+                )}
+            </Modal>
+
+            {/* ── Receipt: stays open until dismissed, shows full confirmation details ── */}
+            <Modal open={!!receipt} onClose={() => setReceipt(null)} title="Purchase order submitted" size="lg">
+                {receipt && (
+                    <div className="space-y-4">
+                        <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
+                            <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
+                                <svg className="w-4 h-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>
+                            </div>
+                            <div>
+                                <p className="text-sm font-bold text-emerald-900">Submitted to {VENDOR_LABELS[receipt.vendor] ?? receipt.vendor}</p>
+                                <p className="text-xs text-emerald-700">{new Date(receipt.placedAt).toLocaleString()}</p>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="bg-slate-50 rounded-xl p-3">
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Our PO Reference</p>
+                                <code className="text-sm font-bold text-slate-800">{receipt.poNumber}</code>
+                            </div>
+                            <div className="bg-slate-50 rounded-xl p-3">
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Vendor Confirmation #</p>
+                                <code className="text-sm font-bold text-slate-800">{receipt.externalOrderNumber ?? "Pending"}</code>
+                            </div>
+                        </div>
+
+                        <div className="border border-slate-200 rounded-xl overflow-hidden max-h-56 overflow-y-auto">
+                            <table className="w-full text-sm">
+                                <thead className="bg-slate-50 sticky top-0"><tr>
+                                    <th className="text-left px-3 py-2 font-semibold text-slate-500 text-xs">Style</th>
+                                    <th className="text-left px-3 py-2 font-semibold text-slate-500 text-xs">Color</th>
+                                    <th className="text-left px-3 py-2 font-semibold text-slate-500 text-xs">Size</th>
+                                    <th className="text-right px-3 py-2 font-semibold text-slate-500 text-xs">Qty</th>
+                                </tr></thead>
+                                <tbody className="divide-y divide-slate-100">
+                                    {receipt.lines.map(l => (
+                                        <tr key={lineKey(l)}>
+                                            <td className="px-3 py-2 font-mono text-xs font-bold text-slate-800">{l.vendorStyle}</td>
+                                            <td className="px-3 py-2 text-slate-600">{l.color ?? "—"}</td>
+                                            <td className="px-3 py-2 text-slate-600">{l.size ?? "—"}</td>
+                                            <td className="px-3 py-2 text-right font-bold text-slate-900">{l.quantity}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                                <tfoot><tr className="border-t border-slate-200">
+                                    <td colSpan={3} className="px-3 py-2 text-xs font-semibold text-slate-500">Total units · orders marked</td>
+                                    <td className="px-3 py-2 text-right font-black text-slate-900">{receipt.totalUnits} · {receipt.ordersMarked}</td>
+                                </tr></tfoot>
+                            </table>
+                        </div>
+
+                        <div className="bg-slate-50 rounded-xl p-4">
+                            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Shipped to</p>
+                            <p className="text-sm font-semibold text-slate-800">{receipt.shipTo.name}</p>
+                            <p className="text-sm text-slate-600">{receipt.shipTo.address1}{receipt.shipTo.address2 ? `, ${receipt.shipTo.address2}` : ""}</p>
+                            <p className="text-sm text-slate-600">{receipt.shipTo.city}, {receipt.shipTo.state} {receipt.shipTo.zip}</p>
+                        </div>
+
+                        <p className="text-xs text-slate-400">The {receipt.ordersMarked} contributing order{receipt.ordersMarked !== 1 ? "s" : ""} now show this vendor order under their details. Track shipment status from the vendor directly using the confirmation number above.</p>
+
+                        <ModalFooter>
+                            <Button variant="outline" onClick={() => window.print()}>Print Receipt</Button>
+                            <Button onClick={() => setReceipt(null)}>Done</Button>
+                        </ModalFooter>
+                    </div>
+                )}
             </Modal>
         </div>
     );

@@ -181,3 +181,29 @@ router.post('/:id/images', upload.single('image'), async (req, res) => {
     });
     res.json({ url, images, product: updated });
 });
+
+// Remove an image from a product. Body: { url }. If the image was one of ours
+// (under /uploads/), also deletes the file from disk.
+router.delete('/:id/images', async (req, res) => {
+    const { url } = req.body as { url?: string };
+    if (!url) return res.status(400).json({ error: 'url is required' });
+
+    const product = await prisma.product.findUnique({ where: { id: String(req.params.id) } });
+    if (!product) return res.status(404).json({ error: 'not found' });
+
+    const images: string[] = product.imagesJson ? JSON.parse(product.imagesJson) : [];
+    const nextImages = images.filter(u => u !== url);
+
+    const updated = await prisma.product.update({
+        where: { id: String(req.params.id) },
+        data: { imagesJson: JSON.stringify(nextImages) }
+    });
+
+    if (url.startsWith('/uploads/')) {
+        const fs = await import('fs/promises');
+        const filePath = path.join(uploadsDir, path.basename(url));
+        await fs.unlink(filePath).catch(() => { /* file may already be gone */ });
+    }
+
+    res.json({ images: nextImages, product: updated });
+});

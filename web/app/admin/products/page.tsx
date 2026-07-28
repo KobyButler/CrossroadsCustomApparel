@@ -162,9 +162,12 @@ function ShopMultiSelect({ shops, selected, onChange }: { shops:Shop[]; selected
 }
 
 // ── ImageUploader ─────────────────────────────────────────────────────────────
-function ImageUploader({ productId, existingImages, onUploaded }: { productId:string; existingImages:string[]; onUploaded:(url:string)=>void }) {
+function ImageUploader({ productId, existingImages, onUploaded, onRemoved }: {
+    productId:string; existingImages:string[]; onUploaded:(url:string)=>void; onRemoved:(url:string)=>void;
+}) {
     const { toast } = useToast();
     const [uploading, setUploading] = useState(false);
+    const [removingUrl, setRemovingUrl] = useState<string | null>(null);
     const base = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:4000/api";
 
     async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -185,14 +188,39 @@ function ImageUploader({ productId, existingImages, onUploaded }: { productId:st
         finally { setUploading(false); e.target.value = ""; }
     }
 
+    async function handleRemove(url: string) {
+        setRemovingUrl(url);
+        try {
+            const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
+            const res = await fetch(`${base}/products/${productId}/images`, {
+                method: "DELETE",
+                headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                body: JSON.stringify({ url })
+            });
+            if (!res.ok) throw new Error(`Remove failed: ${res.status}`);
+            onRemoved(url);
+            toast("Image removed");
+        } catch (err: any) { toast(err.message || "Failed to remove image", "error"); }
+        finally { setRemovingUrl(null); }
+    }
+
     return (
         <div>
             <label className="field-label">Product Images</label>
             <div className="flex flex-wrap gap-2 mb-3">
                 {existingImages.map((url, i) => (
-                    <div key={i} className="relative group">
+                    <div key={url} className="relative group">
                         <img src={imgUrl(url)} alt={`Product ${i+1}`}
                             className="w-16 h-16 object-cover rounded-xl border border-slate-200 ring-2 ring-transparent group-hover:ring-brand-300 transition-all" />
+                        <button type="button" title="Remove image" aria-label="Remove image"
+                            disabled={removingUrl===url} onClick={() => handleRemove(url)}
+                            className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-white border border-slate-200 shadow-sm flex items-center justify-center text-slate-400 opacity-0 group-hover:opacity-100 hover:text-red-500 hover:border-red-300 transition-all disabled:opacity-50">
+                            {removingUrl===url ? (
+                                <div className="w-2.5 h-2.5 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
+                            ) : (
+                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                            )}
+                        </button>
                     </div>
                 ))}
                 {existingImages.length === 0 && (
@@ -781,7 +809,14 @@ export default function ProductsPage() {
                             <label className="field-label">Imported Images</label>
                             <div className="flex flex-wrap gap-2">
                                 {form.images.map((url, i) => (
-                                    <img key={i} src={url} alt="" className="w-16 h-16 object-cover rounded-xl border border-slate-200" />
+                                    <div key={url} className="relative group">
+                                        <img src={url} alt="" className="w-16 h-16 object-cover rounded-xl border border-slate-200" />
+                                        <button type="button" title="Remove image" aria-label="Remove image"
+                                            onClick={() => setForm(p => ({ ...p, images: p.images.filter((_, idx) => idx !== i) }))}
+                                            className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-white border border-slate-200 shadow-sm flex items-center justify-center text-slate-400 opacity-0 group-hover:opacity-100 hover:text-red-500 hover:border-red-300 transition-all">
+                                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                                        </button>
+                                    </div>
                                 ))}
                             </div>
                         </div>
@@ -858,6 +893,18 @@ export default function ProductsPage() {
                                     if (!prev) return null;
                                     const imgs = prev.imagesJson ? JSON.parse(prev.imagesJson) : [];
                                     return { ...prev, imagesJson: JSON.stringify([...imgs, url]) };
+                                });
+                            }}
+                            onRemoved={url => {
+                                setProducts(prev => prev.map(p => {
+                                    if (p.id !== editProduct.id) return p;
+                                    const imgs: string[] = p.imagesJson ? JSON.parse(p.imagesJson) : [];
+                                    return { ...p, imagesJson: JSON.stringify(imgs.filter(u => u !== url)) };
+                                }));
+                                setEditProduct(prev => {
+                                    if (!prev) return null;
+                                    const imgs: string[] = prev.imagesJson ? JSON.parse(prev.imagesJson) : [];
+                                    return { ...prev, imagesJson: JSON.stringify(imgs.filter(u => u !== url)) };
                                 });
                             }}
                         />

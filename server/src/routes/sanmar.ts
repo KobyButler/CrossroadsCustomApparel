@@ -365,7 +365,7 @@ router.post('/import', async (req, res) => {
                 data: {
                     name:             first.title ?? style,
                     vendor:           'SANMAR',
-                    vendorIdentifier: first.inventoryKey ?? style,
+                    vendorIdentifier: style, // the true, immutable SanMar style code
                     brand:            first.brand ?? null,
                     description:      first.description ?? null,
                     priceCents:       price,
@@ -385,7 +385,7 @@ router.post('/import', async (req, res) => {
                 name:             first.title ?? style,
                 sku:              style,
                 vendor:           'SANMAR',
-                vendorIdentifier: first.inventoryKey ?? style,
+                vendorIdentifier: style, // the true, immutable SanMar style code
                 brand:            first.brand ?? null,
                 description:      first.description ?? null,
                 priceCents:       price,

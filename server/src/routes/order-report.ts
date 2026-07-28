@@ -3,17 +3,25 @@ import { prisma } from '../prisma.js';
 import { config } from '../config.js';
 import { submitOrderToSanMar } from '../vendors/sanmar.js';
 import { submitOrderToSS } from '../vendors/ssactivewear.js';
+import { vendorGroupKey, vendorStyleCode } from '../utils/vendorGrouping.js';
 
 export const router = Router();
 
 type ReportLine = {
-    productId: string; productName: string; sku: string; vendor: string; image: string | null;
+    vendor: string; vendorStyle: string; image: string | null;
+    productNames: string[]; skus: string[];
     color: string | null; size: string | null; quantity: number; sourceOrderIds: string[];
 };
+
+type LineSelector = { vendorStyle: string; color: string | null; size: string | null };
 
 function firstImage(imagesJson: string | null): string | null {
     if (!imagesJson) return null;
     try { return JSON.parse(imagesJson)[0] ?? null; } catch { return null; }
+}
+
+function lineKey(vendorStyle: string, color: string | null, size: string | null) {
+    return `${vendorStyle}|${color ?? ''}|${size ?? ''}`;
 }
 
 async function aggregate(shopId: string | undefined, status: string) {
@@ -25,26 +33,41 @@ async function aggregate(shopId: string | undefined, status: string) {
         include: { items: { include: { product: true } }, vendorOrders: true }
     });
 
-    const lineMap = new Map<string, ReportLine & { _orderIds: Set<string> }>();
+    // Group by the underlying VENDOR product (style), not by our internal Product
+    // row — the same vendor item can exist as multiple Crossroads products
+    // (duplicates, or independently re-imported), and what matters for ordering
+    // is the real vendor style/color/size combination.
+    const lineMap = new Map<string, {
+        vendor: string; vendorStyle: string; image: string | null;
+        color: string | null; size: string | null; quantity: number;
+        orderIds: Set<string>; products: Map<string, string>; // sku -> name
+    }>();
     for (const o of orders) {
         for (const it of o.items) {
-            const key = `${it.productId}|${it.color ?? ''}|${it.size ?? ''}`;
+            const vStyle = vendorStyleCode(it.product);
+            const key = `${vendorGroupKey(it.product)}|${it.color ?? ''}|${it.size ?? ''}`;
             if (!lineMap.has(key)) {
                 lineMap.set(key, {
-                    productId: it.productId, productName: it.product.name, sku: it.product.sku,
-                    vendor: it.product.vendor, image: firstImage(it.product.imagesJson),
-                    color: it.color, size: it.size, quantity: 0, sourceOrderIds: [], _orderIds: new Set()
+                    vendor: it.product.vendor, vendorStyle: vStyle, image: firstImage(it.product.imagesJson),
+                    color: it.color, size: it.size, quantity: 0,
+                    orderIds: new Set(), products: new Map()
                 });
             }
             const l = lineMap.get(key)!;
             l.quantity += it.quantity;
-            l._orderIds.add(o.id);
+            l.orderIds.add(o.id);
+            l.products.set(it.product.sku, it.product.name);
+            if (!l.image) l.image = firstImage(it.product.imagesJson);
         }
     }
 
     const lines: ReportLine[] = [...lineMap.values()]
-        .map(({ _orderIds, ...rest }) => ({ ...rest, sourceOrderIds: [..._orderIds] }))
-        .sort((a, b) => a.productName.localeCompare(b.productName) || (a.color ?? '').localeCompare(b.color ?? '') || (a.size ?? '').localeCompare(b.size ?? ''));
+        .map(l => ({
+            vendor: l.vendor, vendorStyle: l.vendorStyle, image: l.image, color: l.color, size: l.size, quantity: l.quantity,
+            sourceOrderIds: [...l.orderIds],
+            skus: [...l.products.keys()], productNames: [...l.products.values()]
+        }))
+        .sort((a, b) => a.vendorStyle.localeCompare(b.vendorStyle) || (a.color ?? '').localeCompare(b.color ?? '') || (a.size ?? '').localeCompare(b.size ?? ''));
 
     const byVendor: Record<string, ReportLine[]> = {};
     for (const l of lines) (byVendor[l.vendor] ??= []).push(l);
@@ -72,10 +95,29 @@ router.get('/', async (req, res) => {
     });
 });
 
-// POST /api/order-report/place-order — submits a real PO to the vendor for the
-// aggregated quantities (re-computed server-side, never trusting client totals).
+// GET /api/order-report/ship-to — the address vendor POs will ship to, so the
+// UI can show it during confirmation before anything is actually submitted.
+router.get('/ship-to', async (_req, res) => {
+    const b = config.business;
+    res.json({
+        name: b.name, email: b.email,
+        address1: b.address1, address2: b.address2 || null,
+        city: b.city, state: b.state, zip: b.zip,
+        residential: b.residential,
+        configured: Boolean(b.address1 && b.city && b.state && b.zip)
+    });
+});
+
+// POST /api/order-report/place-order — submits a real PO to the vendor.
+// Body: { shopId?, status, vendor, lines?: [{vendorStyle,color,size}] }
+// If `lines` is omitted, every line currently shown for that vendor is ordered
+// (the "current view"); if provided, only the selected lines are ordered.
+// Quantities are always re-computed server-side from the DB — the client only
+// gets to say *which* lines to include, never how much of each.
 router.post('/place-order', async (req, res) => {
-    const { shopId, status = 'UNFULFILLED', vendor } = req.body as { shopId?: string; status?: string; vendor?: string };
+    const { shopId, status = 'UNFULFILLED', vendor, lines: selector } = req.body as {
+        shopId?: string; status?: string; vendor?: string; lines?: LineSelector[];
+    };
     if (vendor !== 'SANMAR' && vendor !== 'SSACTIVEWEAR') {
         return res.status(400).json({ error: 'vendor must be SANMAR or SSACTIVEWEAR' });
     }
@@ -88,20 +130,36 @@ router.post('/place-order', async (req, res) => {
     }
 
     const { orders } = await aggregate(shopId, status);
+    const wantedKeys = selector && selector.length
+        ? new Set(selector.map(s => lineKey(s.vendorStyle, s.color ?? null, s.size ?? null)))
+        : null; // null = include everything for this vendor
 
-    const lineMap = new Map<string, { item: { color: string | null; size: string | null; quantity: number }; product: { vendorIdentifier: string | null; sku: string } }>();
+    const lineMap = new Map<string, {
+        item: { color: string | null; size: string | null; quantity: number };
+        product: { vendorIdentifier: string | null; sku: string };
+        productNames: Set<string>;
+    }>();
     const contributingOrderIds = new Set<string>();
     for (const o of orders) {
         for (const it of o.items) {
             if (it.product.vendor !== vendor) continue;
-            const key = `${it.productId}|${it.color ?? ''}|${it.size ?? ''}`;
+            const vStyle = vendorStyleCode(it.product);
+            const key = lineKey(vStyle, it.color, it.size);
+            if (wantedKeys && !wantedKeys.has(key)) continue;
+
             if (!lineMap.has(key)) {
                 lineMap.set(key, {
                     item: { color: it.color, size: it.size, quantity: 0 },
-                    product: { vendorIdentifier: it.product.vendorIdentifier, sku: it.product.sku }
+                    // Pass the resolved vendor style through as `sku` so the vendor
+                    // clients (which look products up by product.sku) get the real
+                    // vendor code even if the contributing Crossroads SKU was mangled.
+                    product: { vendorIdentifier: it.product.vendorIdentifier, sku: vStyle },
+                    productNames: new Set()
                 });
             }
-            lineMap.get(key)!.item.quantity += it.quantity;
+            const l = lineMap.get(key)!;
+            l.item.quantity += it.quantity;
+            l.productNames.add(it.product.name);
             contributingOrderIds.add(o.id);
         }
     }
@@ -111,7 +169,12 @@ router.post('/place-order', async (req, res) => {
     }
 
     const lines = [...lineMap.values()];
+    const totalUnits = lines.reduce((a, l) => a + l.item.quantity, 0);
     const poNumber = `restock-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+    const shipTo = {
+        name: b.name, address1: b.address1, address2: b.address2 || null,
+        city: b.city, state: b.state, zip: b.zip, residential: b.residential
+    };
     const syntheticOrder = {
         id: poNumber,
         customerName: b.name,
@@ -137,7 +200,15 @@ router.post('/place-order', async (req, res) => {
             data: { orderId, vendor, externalOrderNumber, status: 'Submitted', rawResponse: JSON.stringify(result).slice(0, 65000) }
         })));
 
-        res.json({ success: true, poNumber, result, ordersMarked: contributingOrderIds.size });
+        res.json({
+            success: true, poNumber, externalOrderNumber, vendor, placedAt: new Date().toISOString(),
+            shipTo, totalUnits, ordersMarked: contributingOrderIds.size,
+            lines: lines.map(l => ({
+                vendorStyle: l.product.sku, color: l.item.color, size: l.item.size,
+                quantity: l.item.quantity, productNames: [...l.productNames]
+            })),
+            result
+        });
     } catch (err: any) {
         const rawResponse = String(err?.response?.data ? JSON.stringify(err.response.data) : err?.message ?? err).slice(0, 65000);
         await Promise.all([...contributingOrderIds].map(orderId => prisma.vendorOrder.create({
