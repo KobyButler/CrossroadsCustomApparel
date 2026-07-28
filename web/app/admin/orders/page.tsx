@@ -18,7 +18,8 @@ type Order = {
     status: string; totalCents: number; createdAt: string;
     paymentStatus?: string; paymentMethod?: string;
     items: any[]; shop?: { name: string };
-    shipAddress1?: string; shipCity?: string; shipState?: string; shipZip?: string;
+    shippingMethod?: string; shippingCents?: number;
+    shipAddress1?: string; shipAddress2?: string; shipCity?: string; shipState?: string; shipZip?: string;
     vendorOrders?: VendorOrder[];
 };
 type Product = { id: string; name: string; priceCents: number; sku: string };
@@ -367,9 +368,21 @@ export default function OrdersPage() {
                                 <p className="text-sm text-slate-500 mt-0.5">{detailOrder.customerEmail}</p>
                             </div>
                             <div className="bg-slate-50 rounded-xl p-4">
-                                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Ship To</p>
-                                <p className="text-sm text-slate-700">{detailOrder.shipAddress1 || "—"}</p>
-                                {detailOrder.shipCity && <p className="text-sm text-slate-500">{detailOrder.shipCity}, {detailOrder.shipState} {detailOrder.shipZip}</p>}
+                                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                                    {detailOrder.shippingMethod === "SHIP" ? "Ship To" : "Fulfillment"}
+                                </p>
+                                {detailOrder.shippingMethod === "SHIP" ? (
+                                    <>
+                                        <p className="text-sm text-slate-700">{detailOrder.shipAddress1 || "—"}{detailOrder.shipAddress2 ? `, ${detailOrder.shipAddress2}` : ""}</p>
+                                        {detailOrder.shipCity && <p className="text-sm text-slate-500">{detailOrder.shipCity}, {detailOrder.shipState} {detailOrder.shipZip}</p>}
+                                        <p className="text-xs text-slate-400 mt-1.5">Shipping: {fmt(detailOrder.shippingCents ?? 0)}</p>
+                                    </>
+                                ) : (
+                                    <>
+                                        <p className="text-sm font-semibold text-emerald-700">🤝 Customer pickup</p>
+                                        <p className="text-xs text-slate-400 mt-1">No shipping — collected from {detailOrder.shop?.name ?? "the group shop"}</p>
+                                    </>
+                                )}
                             </div>
                         </div>
                         <div>

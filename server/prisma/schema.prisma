@@ -29,6 +29,7 @@ model Product {
   colorsJson       String?   // JSON array of strings, e.g. ["Black","White","Navy"]
   upchargeEnabled  Boolean     @default(false) // charge extra for larger sizes (XL and up)
   upchargeCents    Int         @default(300)
+  weightOz         Int?        // shipping weight in ounces; falls back to a default estimate when unset
   orderItems       OrderItem[]
   shops            Shop[]      @relation("ShopProducts")
   createdAt        DateTime    @default(now())
@@ -68,11 +69,13 @@ model Order {
   stripePaymentIntentId String?
   customerName          String
   customerEmail         String
-  shipAddress1          String
+  shippingMethod        String               @default("PICKUP") // SHIP|PICKUP
+  shippingCents         Int                  @default(0)
+  shipAddress1          String?
   shipAddress2          String?
-  shipCity              String
-  shipState             String
-  shipZip               String
+  shipCity              String?
+  shipState             String?
+  shipZip               String?
   residential           Boolean              @default(true)
   totalCents            Int                  @default(0)
   createdAt             DateTime             @default(now())

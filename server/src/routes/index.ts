@@ -14,6 +14,7 @@ import { router as analytics } from './analytics.js';
 import { router as payments } from './payments.js';
 import { router as sanmar } from './sanmar.js';
 import { router as ssactivewear } from './ssactivewear.js';
+import { router as shipping } from './shipping.js';
 
 export const router = Router();
 
@@ -43,3 +44,6 @@ router.use('/sanmar', requireAuth, sanmar);
 
 // S&S Activewear — product search (admin-protected)
 router.use('/ss', requireAuth, ssactivewear);
+
+// Shipping rate quotes — public (used by storefront checkout)
+router.use('/shipping', shipping);

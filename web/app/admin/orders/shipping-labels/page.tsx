@@ -26,7 +26,9 @@ export default function ShippingLabelsPage() {
         api("/orders?status=UNFULFILLED&limit=500")
             .then((d: any) => {
                 const orders = Array.isArray(d) ? d : d?.data ?? [];
-                setRows(orders.map((o: any) => ({ id:o.id, orderId:o.id, customerName:o.customerName, customerEmail:o.customerEmail,
+                // Pickup orders don't ship — nothing to label here
+                const shipping = orders.filter((o: any) => o.shippingMethod === "SHIP");
+                setRows(shipping.map((o: any) => ({ id:o.id, orderId:o.id, customerName:o.customerName, customerEmail:o.customerEmail,
                     shipAddress1:o.shipAddress1, shipCity:o.shipCity, shipState:o.shipState, shipZip:o.shipZip, status:"pending" as const })));
             }).catch(console.error).finally(() => setLoading(false));
     }, []);

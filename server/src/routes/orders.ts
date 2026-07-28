@@ -4,7 +4,8 @@ import { triggerVendorFulfillment } from '../vendors/fulfill.js';
 import { requireAuth } from '../middleware/auth.js';
 import { sendOrderConfirmation, sendOfflinePaymentNotification } from '../utils/email.js';
 import { computeItemPriceCents } from '../utils/pricing.js';
-import { buildShopGroups, applyDiscountAcrossGroups, newOrderGroupId } from '../utils/checkoutHelpers.js';
+import { buildShopGroups, applyDiscountAcrossGroups, allocateShippingAcrossGroups, newOrderGroupId } from '../utils/checkoutHelpers.js';
+import { quoteShipping } from '../utils/shippingCalc.js';
 
 export const router = Router();
 
@@ -160,7 +161,7 @@ router.post('/', async (req, res) => {
 // methods only (card payments go through POST /payments/create-intent).
 router.post('/checkout', async (req, res) => {
     const {
-        customerName, customerEmail,
+        customerName, customerEmail, shippingMethod,
         shipAddress1, shipAddress2, shipCity, shipState, shipZip, residential = true,
         items, discountCode, paymentMethod
     } = req.body;
@@ -171,6 +172,11 @@ router.post('/checkout', async (req, res) => {
     const isOffline = paymentMethod === 'pickup' || paymentMethod === 'cash' || paymentMethod === 'check';
     if (!isOffline) return res.status(400).json({ error: 'paymentMethod must be pickup, cash, or check' });
 
+    const isShipping = shippingMethod === 'SHIP';
+    if (isShipping && (!shipAddress1 || !shipCity || !shipState || !shipZip)) {
+        return res.status(400).json({ error: 'A full shipping address is required to ship your order' });
+    }
+
     let groups;
     try {
         groups = await buildShopGroups(items);
@@ -179,7 +185,15 @@ router.post('/checkout', async (req, res) => {
     }
 
     const discount = await resolveDiscount(discountCode);
-    const { groups: finalGroups, discountedTotal } = applyDiscountAcrossGroups(groups, discount);
+    const { groups: discountedGroups, discountedTotal } = applyDiscountAcrossGroups(groups, discount);
+
+    // Shipping is calculated once for the whole checkout (it all ships together)
+    // and re-derived server-side — never trust a client-supplied shipping cost.
+    const shippingQuote = isShipping
+        ? await quoteShipping(items.map((i: any) => ({ productId: i.productId, quantity: i.quantity })), { city: shipCity, state: shipState, zip: shipZip, residential })
+        : null;
+    const shippingCentsTotal = shippingQuote?.cents ?? 0;
+    const finalGroups = allocateShippingAcrossGroups(discountedGroups, shippingCentsTotal);
 
     const customer = await prisma.customer.upsert({
         where: { email: customerEmail },
@@ -191,13 +205,17 @@ router.post('/checkout', async (req, res) => {
     const createdOrders = [];
 
     for (const g of finalGroups) {
+        const orderTotal = g.subtotal + g.shippingCents;
         const order = await prisma.order.create({
             data: {
                 shopId: g.shopId, orderGroupId,
                 status: 'UNFULFILLED', paymentStatus: 'OFFLINE_PENDING', paymentMethod: 'pickup',
                 customerId: customer.id, customerName, customerEmail,
-                shipAddress1, shipAddress2: shipAddress2 ?? null, shipCity, shipState, shipZip, residential,
-                totalCents: g.subtotal,
+                shippingMethod: isShipping ? 'SHIP' : 'PICKUP', shippingCents: g.shippingCents,
+                shipAddress1: isShipping ? shipAddress1 : null, shipAddress2: isShipping ? (shipAddress2 ?? null) : null,
+                shipCity: isShipping ? shipCity : null, shipState: isShipping ? shipState : null, shipZip: isShipping ? shipZip : null,
+                residential,
+                totalCents: orderTotal,
                 items: { createMany: { data: g.items } }
             },
             include: { items: { include: { product: true } } }
@@ -228,7 +246,9 @@ router.post('/checkout', async (req, res) => {
 
     res.json({
         orderGroupId,
-        totalCents: discountedTotal,
+        totalCents: discountedTotal + shippingCentsTotal,
+        shippingCents: shippingCentsTotal,
+        shippingEstimated: shippingQuote?.estimated ?? null,
         orders: createdOrders.map(o => ({ id: o.id, shopId: o.shopId, totalCents: o.totalCents }))
     });
 });
@@ -257,9 +277,9 @@ router.get('/shipping/export', requireAuth, async (req, res) => {
     const orders = await prisma.order.findMany({ where: { status } });
     const rows = [
         ['OrderId', 'Name', 'Address1', 'Address2', 'City', 'State', 'Zip', 'Residential', 'Email'].join(','),
-        ...orders.map(o => [
-            o.id, q(o.customerName), q(o.shipAddress1), q(o.shipAddress2 ?? ''), q(o.shipCity),
-            q(o.shipState), q(o.shipZip), o.residential ? 'Y' : 'N', q(o.customerEmail)
+        ...orders.filter(o => o.shippingMethod === 'SHIP').map(o => [
+            o.id, q(o.customerName), q(o.shipAddress1 ?? ''), q(o.shipAddress2 ?? ''), q(o.shipCity ?? ''),
+            q(o.shipState ?? ''), q(o.shipZip ?? ''), o.residential ? 'Y' : 'N', q(o.customerEmail)
         ].join(','))
     ];
     res.setHeader('Content-Type', 'text/csv');

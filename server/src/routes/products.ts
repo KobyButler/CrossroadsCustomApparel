@@ -46,7 +46,7 @@ router.get('/', async (req, res) => {
 router.post('/', async (req, res) => {
     const {
         name, sku, vendor, vendorIdentifier, brand, description, priceCents, images, sizes, colors,
-        shopIds, upchargeEnabled, upchargeCents
+        shopIds, upchargeEnabled, upchargeCents, weightOz
     } = req.body;
     try {
         const p = await prisma.product.create({
@@ -58,6 +58,7 @@ router.post('/', async (req, res) => {
                 colorsJson: colors?.length ? JSON.stringify(colors) : null,
                 upchargeEnabled: Boolean(upchargeEnabled),
                 ...(upchargeCents !== undefined ? { upchargeCents } : {}),
+                ...(weightOz !== undefined ? { weightOz: weightOz === null ? null : Number(weightOz) } : {}),
                 ...(Array.isArray(shopIds) && shopIds.length
                     ? { shops: { connect: shopIds.map((id: string) => ({ id })) } }
                     : {})
@@ -85,7 +86,7 @@ router.get('/:id', async (req, res) => {
 router.put('/:id', async (req, res) => {
     const {
         name, sku, vendor, vendorIdentifier, brand, description, priceCents, sizes, colors,
-        shopIds, upchargeEnabled, upchargeCents
+        shopIds, upchargeEnabled, upchargeCents, weightOz
     } = req.body;
     try {
         const p = await prisma.product.update({
@@ -100,6 +101,7 @@ router.put('/:id', async (req, res) => {
                 colorsJson: colors?.length ? JSON.stringify(colors) : null,
                 ...(upchargeEnabled !== undefined ? { upchargeEnabled: Boolean(upchargeEnabled) } : {}),
                 ...(upchargeCents !== undefined ? { upchargeCents } : {}),
+                ...(weightOz !== undefined ? { weightOz: weightOz === null ? null : Number(weightOz) } : {}),
                 ...(Array.isArray(shopIds)
                     ? { shops: { set: shopIds.map((id: string) => ({ id })) } }
                     : {})
@@ -152,6 +154,7 @@ router.post('/:id/duplicate', async (req, res) => {
             imagesJson: source.imagesJson,
             sizesJson: source.sizesJson,
             colorsJson: source.colorsJson,
+            weightOz: source.weightOz,
             upchargeEnabled: source.upchargeEnabled,
             upchargeCents: source.upchargeCents,
             shops: source.shops.length ? { connect: source.shops.map(s => ({ id: s.id })) } : undefined
