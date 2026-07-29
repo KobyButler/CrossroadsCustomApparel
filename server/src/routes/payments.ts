@@ -3,7 +3,6 @@ import Stripe from 'stripe';
 import { prisma } from '../prisma.js';
 import { config } from '../config.js';
 import { sendOrderConfirmation } from '../utils/email.js';
-import { triggerVendorFulfillment } from '../vendors/fulfill.js';
 import { buildShopGroups, applyDiscountAcrossGroups, allocateShippingAcrossGroups, newOrderGroupId } from '../utils/checkoutHelpers.js';
 import { quoteShipping } from '../utils/shippingCalc.js';
 
@@ -161,10 +160,9 @@ export async function stripeWebhookHandler(req: Request, res: Response) {
                 data: { paymentStatus: 'PAID' }
             });
 
-            // Submit to vendor(s) now that payment is confirmed
-            triggerVendorFulfillment(order).catch(err =>
-                console.error('[stripe-webhook] fulfillment error:', err)
-            );
+            // Vendor blanks are ordered manually and in bulk via Order Report →
+            // Place Order (which ships to the business, not the customer) — no
+            // automatic per-order vendor submission here by design.
 
             // Recover abandoned checkout if any
             if (order.shopId) {
