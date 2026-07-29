@@ -65,7 +65,7 @@ function TagInput({ label, tags, onChange, placeholder }: { label:string; tags:s
 }
 
 // ── ColorTagInput ─────────────────────────────────────────────────────────────
-function ColorTagInput({ label, tags, onChange, placeholder }: { label:string; tags:string[]; onChange:(t:string[])=>void; placeholder?:string }) {
+function ColorTagInput({ label, tags, onChange, placeholder, required }: { label:string; tags:string[]; onChange:(t:string[])=>void; placeholder?:string; required?:boolean }) {
     const [input, setInput] = useState("");
     function add() {
         const v = input.trim();
@@ -74,7 +74,13 @@ function ColorTagInput({ label, tags, onChange, placeholder }: { label:string; t
     }
     return (
         <div>
-            <label className="field-label">{label}</label>
+            <label className="field-label">
+                {label}
+                {required && <span className="text-brand-500 ml-0.5">*</span>}
+            </label>
+            {required && tags.length === 0 && (
+                <p className="text-xs text-amber-600 -mt-0.5 mb-1.5">At least one color is required</p>
+            )}
             <div className="flex flex-wrap gap-1.5 mb-2 min-h-[28px]">
                 {tags.map(t => (
                     <span key={t} className="inline-flex items-center gap-1.5 text-xs bg-brand-50 text-brand-700 border border-brand-200 px-2 py-0.5 rounded-full">
@@ -561,7 +567,12 @@ export default function ProductsPage() {
     }
 
     async function saveProduct(e: React.FormEvent) {
-        e.preventDefault(); setSaving(true);
+        e.preventDefault();
+        if (form.colors.length === 0) {
+            toast("Add at least one color before saving", "error");
+            return;
+        }
+        setSaving(true);
         try {
             const payload = {
                 name:form.name, sku:form.sku, vendor:form.vendor, vendorIdentifier:form.vendorIdentifier||undefined,
@@ -859,7 +870,7 @@ export default function ProductsPage() {
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <TagInput label="Available Sizes" tags={form.sizes} onChange={sizes => setForm(p => ({ ...p, sizes }))} placeholder="S, M, L, XL…" />
-                        <ColorTagInput label="Available Colors" tags={form.colors} onChange={colors => setForm(p => ({ ...p, colors }))} />
+                        <ColorTagInput label="Available Colors" required tags={form.colors} onChange={colors => setForm(p => ({ ...p, colors }))} />
                     </div>
 
                     <ShopMultiSelect shops={shops} selected={form.shopIds} onChange={shopIds => setForm(p => ({ ...p, shopIds }))} />
@@ -922,7 +933,10 @@ export default function ProductsPage() {
                     )}
                     <ModalFooter>
                         <Button type="button" variant="outline" onClick={() => { setShowAdd(false); setEditProduct(null); }}>Cancel</Button>
-                        <Button type="submit" loading={saving}>{editProduct ? "Save Changes" : "Create Product"}</Button>
+                        <Button type="submit" loading={saving} disabled={form.colors.length === 0}
+                            title={form.colors.length === 0 ? "Add at least one color first" : undefined}>
+                            {editProduct ? "Save Changes" : "Create Product"}
+                        </Button>
                     </ModalFooter>
                 </form>
             </Modal>

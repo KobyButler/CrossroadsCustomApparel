@@ -344,6 +344,9 @@ router.post('/import', async (req, res) => {
     const allColors = [...new Set(rows.map(r => r.colorName).filter(Boolean))];
     // Only the colors the shop owner explicitly picked (falls back to all if none specified)
     const colors    = Array.isArray(colorSelection) && colorSelection.length ? colorSelection.filter(c => allColors.includes(c)) : allColors;
+    if (colors.length === 0) {
+        return res.status(400).json({ error: 'At least one color is required. Pick a color to offer, or add this product manually from the Products page.' });
+    }
     const sizeRows  = colors.length ? rows.filter(r => colors.includes(r.colorName)) : rows;
     const sizes     = [...new Set(sizeRows.map(r => r.sizeName).filter(Boolean))];
     const price     = priceCents ?? Math.min(...rows.map(r => r.priceCents).filter(p => p > 0)) ?? 0;

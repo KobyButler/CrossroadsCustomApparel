@@ -48,6 +48,9 @@ router.post('/', async (req, res) => {
         name, sku, vendor, vendorIdentifier, brand, description, priceCents, images, sizes, colors,
         shopIds, upchargeEnabled, upchargeCents, weightOz
     } = req.body;
+    if (!Array.isArray(colors) || colors.length === 0) {
+        return res.status(400).json({ error: 'At least one color is required.' });
+    }
     try {
         const p = await prisma.product.create({
             data: {
@@ -88,6 +91,9 @@ router.put('/:id', async (req, res) => {
         name, sku, vendor, vendorIdentifier, brand, description, priceCents, sizes, colors,
         shopIds, upchargeEnabled, upchargeCents, weightOz
     } = req.body;
+    if (!Array.isArray(colors) || colors.length === 0) {
+        return res.status(400).json({ error: 'At least one color is required.' });
+    }
     try {
         const p = await prisma.product.update({
             where: { id: req.params.id },
