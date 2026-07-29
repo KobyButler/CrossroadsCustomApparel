@@ -1,6 +1,5 @@
 import { Router } from 'express';
 import { prisma } from '../prisma.js';
-import { triggerVendorFulfillment } from '../vendors/fulfill.js';
 import { requireAuth } from '../middleware/auth.js';
 import { sendOrderConfirmation, sendOfflinePaymentNotification } from '../utils/email.js';
 import { computeItemPriceCents } from '../utils/pricing.js';
@@ -254,12 +253,14 @@ router.post('/checkout', async (req, res) => {
 });
 
 router.post('/:id/fulfill', requireAuth, async (req, res) => {
+    // Vendor blanks are ordered manually and in bulk via Order Report → Place
+    // Order (which ships to the business, not the customer) — marking an order
+    // fulfilled here does not trigger any automatic vendor submission.
     const o = await prisma.order.update({
         where: { id: String(req.params.id) },
         data: { status: 'FULFILLED' },
         include: { items: { include: { product: true } } },
     });
-    triggerVendorFulfillment(o).catch(err => console.error('[fulfill] vendor error:', err));
     res.json(o);
 });
 
