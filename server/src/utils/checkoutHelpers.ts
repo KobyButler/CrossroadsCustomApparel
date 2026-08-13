@@ -13,6 +13,7 @@ export type ShopGroup = {
     slug: string | null;
     shopId: string | null;
     shopName: string | null;
+    shopShippingEnabled: boolean;
     items: { productId: string; quantity: number; size: string | null; color: string | null; priceCents: number }[];
     subtotal: number;
     shippingCents: number;
@@ -47,7 +48,11 @@ export async function buildShopGroups(
         const priceCents = computeItemPriceCents(product, i.size);
         if (!groups.has(slug)) {
             const shop = slug ? shopBySlug.get(slug) : undefined;
-            groups.set(slug, { slug, shopId: shop?.id ?? null, shopName: shop?.name ?? null, items: [], subtotal: 0, shippingCents: 0 });
+            groups.set(slug, {
+                slug, shopId: shop?.id ?? null, shopName: shop?.name ?? null,
+                shopShippingEnabled: shop?.shippingEnabled ?? true,
+                items: [], subtotal: 0, shippingCents: 0
+            });
         }
         const g = groups.get(slug)!;
         g.items.push({ productId: product.id, quantity: i.quantity, size: i.size ?? null, color: i.color ?? null, priceCents });
@@ -105,4 +110,19 @@ export function allocateShippingAcrossGroups(groups: ShopGroup[], totalShippingC
 
 export function newOrderGroupId(): string {
     return `og_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+}
+
+// Throws if the customer chose "Ship" but any shop represented in the cart has
+// shipping disabled — the whole cart ships together, so one shop opting out
+// means the combined order can't ship at all. Re-checked server-side since the
+// UI restriction alone could be bypassed by a direct API call.
+export function assertShippingAllowed(groups: ShopGroup[]): void {
+    const blocked = groups.find(g => !g.shopShippingEnabled);
+    if (blocked) {
+        throw new Error(
+            blocked.shopName
+                ? `"${blocked.shopName}" does not offer shipping — please choose pickup instead.`
+                : 'One of the shops in your cart does not offer shipping — please choose pickup instead.'
+        );
+    }
 }

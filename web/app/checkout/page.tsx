@@ -51,7 +51,8 @@ export default function CheckoutPage() {
     const [step, setStep] = useState<"review"|"payment"|"done">("review");
     const [form, setForm] = useState({
         customerName:"", customerEmail:"",
-        shipAddress1:"", shipAddress2:"", shipCity:"", shipState:"", shipZip:""
+        shipAddress1:"", shipAddress2:"", shipCity:"", shipState:"", shipZip:"",
+        specialInstructions:""
     });
     const [shippingMethod, setShippingMethod] = useState<ShippingMethod>("");
     const [shippingQuote, setShippingQuote] = useState<ShippingQuote | null>(null);
@@ -68,11 +69,24 @@ export default function CheckoutPage() {
 
     const groups = useMemo(() => groupByShop(cart), [cart]);
     const shopNames = useMemo(() => [...new Set(cart.map(c => c.shopName))], [cart]);
+    // The whole cart ships together, so if even one shop in it doesn't offer
+    // shipping, "Ship to you" isn't available for this checkout at all.
+    const shippingAllowed = useMemo(() => cart.every(c => c.shopShippingEnabled !== false), [cart]);
+    const shopsWithoutShipping = useMemo(
+        () => [...new Set(cart.filter(c => c.shopShippingEnabled === false).map(c => c.shopName))],
+        [cart]
+    );
 
     // If a customer switches to Ship, "pay at pickup" no longer makes sense — clear it.
     useEffect(() => {
         if (shippingMethod === "SHIP" && paymentMethod === "pickup") setPaymentMethod("");
     }, [shippingMethod, paymentMethod]);
+
+    // Cart contents can change (e.g. another tab) — if shipping becomes unavailable
+    // while "Ship" is selected, fall back so checkout doesn't stay in a dead state.
+    useEffect(() => {
+        if (!shippingAllowed && shippingMethod === "SHIP") setShippingMethod("");
+    }, [shippingAllowed, shippingMethod]);
 
     // Debounced live shipping quote once a full address is entered.
     useEffect(() => {
@@ -122,7 +136,7 @@ export default function CheckoutPage() {
             try {
                 const res = await publicFetch("/payments/create-intent", {
                     method: "POST",
-                    body: JSON.stringify({ customerName: form.customerName, customerEmail: form.customerEmail, ...addressFields, shippingMethod, items, discountCode: discountCode || undefined })
+                    body: JSON.stringify({ customerName: form.customerName, customerEmail: form.customerEmail, ...addressFields, shippingMethod, items, discountCode: discountCode || undefined, specialInstructions: form.specialInstructions || undefined })
                 });
                 setStripeClientSecret(res.clientSecret);
                 setSubmittedGroups(groups);
@@ -136,7 +150,7 @@ export default function CheckoutPage() {
             try {
                 const res = await publicFetch("/orders/checkout", {
                     method: "POST",
-                    body: JSON.stringify({ customerName: form.customerName, customerEmail: form.customerEmail, ...addressFields, shippingMethod, items, discountCode: discountCode || undefined, paymentMethod })
+                    body: JSON.stringify({ customerName: form.customerName, customerEmail: form.customerEmail, ...addressFields, shippingMethod, items, discountCode: discountCode || undefined, paymentMethod, specialInstructions: form.specialInstructions || undefined })
                 });
                 setSubmittedGroups(groups);
                 setSubmittedShipping({ method: shippingMethod, cents: res.shippingCents ?? 0 });
@@ -275,12 +289,14 @@ export default function CheckoutPage() {
                             <div className="bg-white rounded-2xl ring-1 ring-black/5 p-5">
                                 <h2 className="text-sm font-bold text-slate-900 mb-3">How do you want to get your order?</h2>
                                 <div className="space-y-2">
-                                    <label className={`flex items-center gap-3 p-3.5 rounded-xl border-2 cursor-pointer transition-all duration-150 ${shippingMethod === "SHIP" ? "border-violet-500 bg-violet-50" : "border-slate-200 hover:border-slate-300"}`}>
-                                        <input type="radio" name="shippingMethod" value="SHIP" className="accent-violet-600"
+                                    <label className={`flex items-center gap-3 p-3.5 rounded-xl border-2 transition-all duration-150 ${!shippingAllowed ? "opacity-50 cursor-not-allowed border-slate-200" : shippingMethod === "SHIP" ? "border-violet-500 bg-violet-50 cursor-pointer" : "border-slate-200 hover:border-slate-300 cursor-pointer"}`}>
+                                        <input type="radio" name="shippingMethod" value="SHIP" className="accent-violet-600" disabled={!shippingAllowed}
                                             checked={shippingMethod === "SHIP"} onChange={() => setShippingMethod("SHIP")} />
                                         <div className="flex-1">
                                             <p className="text-sm font-semibold text-slate-900">Ship to you</p>
-                                            <p className="text-xs text-slate-400 mt-0.5">We'll calculate shipping based on your address</p>
+                                            <p className="text-xs text-slate-400 mt-0.5">
+                                                {shippingAllowed ? "We'll calculate shipping based on your address" : `Not available — ${shopsWithoutShipping.join(", ")} ${shopsWithoutShipping.length === 1 ? "offers" : "offer"} pickup only`}
+                                            </p>
                                         </div>
                                         <span className="text-lg">📦</span>
                                     </label>
@@ -373,6 +389,15 @@ export default function CheckoutPage() {
                                     </div>
                                 </div>
                             )}
+
+                            <div className="bg-white rounded-2xl ring-1 ring-black/5 p-5">
+                                <h2 className="text-sm font-bold text-slate-900 mb-3">Special Instructions / Comments</h2>
+                                <textarea aria-label="Special instructions or comments" rows={3}
+                                    placeholder="Anything we should know? e.g. delivery notes, group leader name, design requests…"
+                                    value={form.specialInstructions}
+                                    onChange={e => setForm(p => ({ ...p, specialInstructions:e.target.value }))}
+                                    className={`${inputCls} resize-none`} />
+                            </div>
 
                             <div className="bg-white rounded-2xl ring-1 ring-black/5 p-5">
                                 <h2 className="text-sm font-bold text-slate-900 mb-3">Discount code</h2>

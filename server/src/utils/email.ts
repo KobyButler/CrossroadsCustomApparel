@@ -18,7 +18,18 @@ type OrderEmailData = {
     totalCents: number;
     items: Array<{ name: string; quantity: number; size?: string | null; color?: string | null; priceCents: number }>;
     shopName?: string;
+    specialInstructions?: string | null;
 };
+
+function instructionsBlock(specialInstructions?: string | null): string {
+    if (!specialInstructions) return '';
+    const escaped = specialInstructions
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return `<div style="margin-top:16px;padding:12px 16px;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;">
+        <p style="margin:0 0 4px;font-size:11px;font-weight:700;color:#6d28d9;text-transform:uppercase;letter-spacing:0.03em;">Special Instructions</p>
+        <p style="margin:0;font-size:13px;color:#4c1d95;white-space:pre-wrap;">${escaped}</p>
+      </div>`;
+}
 
 function fmt(cents: number) {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100);
@@ -58,6 +69,7 @@ function buildOrderHtml(data: OrderEmailData): string {
       <div style="text-align:right;padding-top:8px;border-top:2px solid #f1f5f9;">
         <span style="font-size:15px;font-weight:700;color:#0f172a;">Total: ${fmt(data.totalCents)}</span>
       </div>
+      ${instructionsBlock(data.specialInstructions)}
       <div style="margin-top:20px;padding:12px;background:#f8fafc;border-radius:8px;font-size:12px;color:#64748b;">
         Order ID: <code style="font-family:monospace;font-weight:600;color:#334155;">#${data.orderId.slice(-8).toUpperCase()}</code>
       </div>
@@ -124,6 +136,7 @@ export async function sendOfflinePaymentNotification(data: OfflinePaymentData): 
       <div style="text-align:right;padding-top:8px;border-top:2px solid #f1f5f9;">
         <span style="font-size:15px;font-weight:700;color:#0f172a;">Total: ${fmt(data.totalCents)}</span>
       </div>
+      ${instructionsBlock(data.specialInstructions)}
       <div style="margin-top:20px;padding:12px;background:#f8fafc;border-radius:8px;font-size:12px;color:#64748b;">
         Order ID: <code style="font-family:monospace;font-weight:600;color:#334155;">#${shortId}</code>
       </div>
@@ -152,7 +165,8 @@ export async function sendOfflinePaymentNotification(data: OfflinePaymentData): 
   <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:12px;border:1px solid #e2e8f0;padding:24px;">
     <h2 style="color:#0f172a;">Hi ${data.customerName}, your order is confirmed!</h2>
     <p style="color:#334155;">Your order has been received. Please bring <strong>${method} payment of ${fmt(data.totalCents)}</strong> when you pick up your order.</p>
-    <p style="color:#64748b;font-size:13px;">Order ID: <code>#${shortId}</code></p>
+    ${instructionsBlock(data.specialInstructions)}
+    <p style="color:#64748b;font-size:13px;margin-top:16px;">Order ID: <code>#${shortId}</code></p>
   </div>
 </body></html>`
     });

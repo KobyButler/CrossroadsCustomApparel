@@ -24,10 +24,11 @@ model Product {
   brand            String?
   description      String?
   priceCents       Int
-  imagesJson       String?
+  imagesJson       String?   // JSON array of image URLs, in display order
   sizesJson        String?   // JSON array of strings, e.g. ["S","M","L","XL","2XL"]
   colorsJson       String?   // JSON array of strings, e.g. ["Black","White","Navy"]
-  upchargeEnabled  Boolean     @default(false) // charge extra for larger sizes (XL and up)
+  sizeChartUrl     String?   // link to a PDF (or image) sizing chart for this product
+  upchargeEnabled  Boolean     @default(false) // charge extra for larger sizes (2XL and up)
   upchargeCents    Int         @default(300)
   weightOz         Int?        // shipping weight in ounces; falls back to a default estimate when unset
   orderItems       OrderItem[]
@@ -36,16 +37,17 @@ model Product {
 }
 
 model Shop {
-  id           String     @id @default(cuid())
-  name         String
-  slug         String     @unique
-  active       Boolean    @default(true)
-  expiresAt    DateTime?
-  notes        String?
-  createdAt    DateTime   @default(now())
-  orders       Order[]
-  checkouts    Checkout[]
-  products     Product[]  @relation("ShopProducts")
+  id               String     @id @default(cuid())
+  name             String
+  slug             String     @unique
+  active           Boolean    @default(true)
+  shippingEnabled  Boolean    @default(true) // whether customers may choose "Ship to you" for this shop
+  expiresAt        DateTime?
+  notes            String?
+  createdAt        DateTime   @default(now())
+  orders           Order[]
+  checkouts        Checkout[]
+  products         Product[]  @relation("ShopProducts")
 }
 
 model Customer {
@@ -77,6 +79,7 @@ model Order {
   shipState             String?
   shipZip               String?
   residential           Boolean              @default(true)
+  specialInstructions   String?              // customer-provided notes/comments at checkout
   totalCents            Int                  @default(0)
   createdAt             DateTime             @default(now())
   items                 OrderItem[]

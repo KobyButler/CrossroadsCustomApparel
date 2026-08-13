@@ -4,7 +4,7 @@ import path from 'path';
 import { prisma } from '../prisma.js';
 
 const uploadsDir = process.env.UPLOADS_DIR ?? path.join(__dirname, '../../../public/uploads');
-const upload = multer({
+const uploadImages = multer({
     dest: uploadsDir,
     limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
     fileFilter(_req, file, cb) {
@@ -12,10 +12,36 @@ const upload = multer({
         else cb(new Error('Only jpeg/png/webp/gif images are allowed'));
     }
 });
+const uploadPdf = multer({
+    dest: uploadsDir,
+    limits: { fileSize: 15 * 1024 * 1024 }, // 15 MB
+    fileFilter(_req, file, cb) {
+        if (file.mimetype === 'application/pdf') cb(null, true);
+        else cb(new Error('Only PDF files are allowed'));
+    }
+});
 
 export const router = Router();
 
 const shopSelect = { select: { id: true, name: true, slug: true } };
+
+// Renames a multer temp file to include its original extension and returns the public URL.
+async function finalizeUpload(file: Express.Multer.File, fallbackExt: string): Promise<string> {
+    const ext = path.extname(file.originalname).toLowerCase() || fallbackExt;
+    const filename = `${file.filename}${ext}`;
+    const fs = await import('fs/promises');
+    await fs.rename(file.path, path.join(path.dirname(file.path), filename));
+    return `/uploads/${filename}`;
+}
+
+// Deletes any of our own /uploads/ files that are no longer referenced after an
+// update (e.g. images removed from the array, or a size chart replaced). Best-effort.
+async function cleanupRemovedFiles(oldUrls: (string | null | undefined)[], newUrls: (string | null | undefined)[]) {
+    const fs = await import('fs/promises');
+    const stillUsed = new Set(newUrls.filter(Boolean));
+    const removed = [...new Set(oldUrls.filter((u): u is string => !!u && u.startsWith('/uploads/') && !stillUsed.has(u)))];
+    await Promise.all(removed.map(u => fs.unlink(path.join(uploadsDir, path.basename(u))).catch(() => { /* already gone */ })));
+}
 
 router.get('/', async (req, res) => {
     const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 100;
@@ -43,10 +69,35 @@ router.get('/', async (req, res) => {
     res.json({ data, total, page, limit, pages: Math.ceil(total / limit) });
 });
 
+// Upload one or more product images before a product exists (e.g. while filling
+// out the "Add Product" form). Not tied to any product — returns the URLs so the
+// caller can stage them in the images array and submit them with the product.
+router.post('/images/upload', uploadImages.array('images', 20), async (req, res) => {
+    const files = (req.files as Express.Multer.File[] | undefined) ?? [];
+    if (files.length === 0) return res.status(400).json({ error: 'no files uploaded' });
+    try {
+        const urls = await Promise.all(files.map(f => finalizeUpload(f, '.jpg')));
+        res.json({ urls });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message ?? 'upload failed' });
+    }
+});
+
+// Upload a size chart PDF before a product exists — same pattern as the images upload above.
+router.post('/sizechart/upload', uploadPdf.single('sizechart'), async (req, res) => {
+    if (!req.file) return res.status(400).json({ error: 'no file uploaded' });
+    try {
+        const url = await finalizeUpload(req.file, '.pdf');
+        res.json({ url });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message ?? 'upload failed' });
+    }
+});
+
 router.post('/', async (req, res) => {
     const {
         name, sku, vendor, vendorIdentifier, brand, description, priceCents, images, sizes, colors,
-        shopIds, upchargeEnabled, upchargeCents, weightOz
+        shopIds, upchargeEnabled, upchargeCents, weightOz, sizeChartUrl
     } = req.body;
     if (!Array.isArray(colors) || colors.length === 0) {
         return res.status(400).json({ error: 'At least one color is required.' });
@@ -59,6 +110,7 @@ router.post('/', async (req, res) => {
                 imagesJson: JSON.stringify(images ?? []),
                 sizesJson: sizes?.length ? JSON.stringify(sizes) : null,
                 colorsJson: colors?.length ? JSON.stringify(colors) : null,
+                sizeChartUrl: sizeChartUrl || null,
                 upchargeEnabled: Boolean(upchargeEnabled),
                 ...(upchargeCents !== undefined ? { upchargeCents } : {}),
                 ...(weightOz !== undefined ? { weightOz: weightOz === null ? null : Number(weightOz) } : {}),
@@ -88,12 +140,15 @@ router.get('/:id', async (req, res) => {
 
 router.put('/:id', async (req, res) => {
     const {
-        name, sku, vendor, vendorIdentifier, brand, description, priceCents, sizes, colors,
-        shopIds, upchargeEnabled, upchargeCents, weightOz
+        name, sku, vendor, vendorIdentifier, brand, description, priceCents, images, sizes, colors,
+        shopIds, upchargeEnabled, upchargeCents, weightOz, sizeChartUrl
     } = req.body;
     if (!Array.isArray(colors) || colors.length === 0) {
         return res.status(400).json({ error: 'At least one color is required.' });
     }
+    const existing = await prisma.product.findUnique({ where: { id: req.params.id } });
+    if (!existing) return res.status(404).json({ error: 'not found' });
+
     try {
         const p = await prisma.product.update({
             where: { id: req.params.id },
@@ -103,8 +158,10 @@ router.put('/:id', async (req, res) => {
                 brand: brand ?? null,
                 description: description ?? null,
                 priceCents,
+                ...(Array.isArray(images) ? { imagesJson: JSON.stringify(images) } : {}),
                 sizesJson: sizes?.length ? JSON.stringify(sizes) : null,
                 colorsJson: colors?.length ? JSON.stringify(colors) : null,
+                ...(sizeChartUrl !== undefined ? { sizeChartUrl: sizeChartUrl || null } : {}),
                 ...(upchargeEnabled !== undefined ? { upchargeEnabled: Boolean(upchargeEnabled) } : {}),
                 ...(upchargeCents !== undefined ? { upchargeCents } : {}),
                 ...(weightOz !== undefined ? { weightOz: weightOz === null ? null : Number(weightOz) } : {}),
@@ -114,6 +171,16 @@ router.put('/:id', async (req, res) => {
             },
             include: { shops: shopSelect }
         });
+
+        // Clean up any of our own uploaded files that are no longer referenced.
+        if (Array.isArray(images)) {
+            const oldImages: string[] = existing.imagesJson ? JSON.parse(existing.imagesJson) : [];
+            await cleanupRemovedFiles(oldImages, images);
+        }
+        if (sizeChartUrl !== undefined && existing.sizeChartUrl && existing.sizeChartUrl !== sizeChartUrl) {
+            await cleanupRemovedFiles([existing.sizeChartUrl], [sizeChartUrl]);
+        }
+
         res.json(p);
     } catch (err: any) {
         if (err?.code === 'P2002') {
@@ -160,6 +227,7 @@ router.post('/:id/duplicate', async (req, res) => {
             imagesJson: source.imagesJson,
             sizesJson: source.sizesJson,
             colorsJson: source.colorsJson,
+            sizeChartUrl: source.sizeChartUrl,
             weightOz: source.weightOz,
             upchargeEnabled: source.upchargeEnabled,
             upchargeCents: source.upchargeCents,
@@ -168,51 +236,4 @@ router.post('/:id/duplicate', async (req, res) => {
         include: { shops: shopSelect }
     });
     res.json(copy);
-});
-
-// Upload an image for a product — returns the public URL
-router.post('/:id/images', upload.single('image'), async (req, res) => {
-    if (!req.file) return res.status(400).json({ error: 'no file uploaded' });
-    const ext = path.extname(req.file.originalname).toLowerCase() || '.jpg';
-    const filename = `${req.file.filename}${ext}`;
-    const fs = await import('fs/promises');
-    await fs.rename(req.file.path, path.join(path.dirname(req.file.path), filename));
-    const url = `/uploads/${filename}`;
-
-    // Append the URL to the product's imagesJson
-    const product = await prisma.product.findUnique({ where: { id: String(req.params.id) } });
-    if (!product) return res.status(404).json({ error: 'not found' });
-    const images: string[] = product.imagesJson ? JSON.parse(product.imagesJson) : [];
-    images.push(url);
-    const updated = await prisma.product.update({
-        where: { id: String(req.params.id) },
-        data: { imagesJson: JSON.stringify(images) }
-    });
-    res.json({ url, images, product: updated });
-});
-
-// Remove an image from a product. Body: { url }. If the image was one of ours
-// (under /uploads/), also deletes the file from disk.
-router.delete('/:id/images', async (req, res) => {
-    const { url } = req.body as { url?: string };
-    if (!url) return res.status(400).json({ error: 'url is required' });
-
-    const product = await prisma.product.findUnique({ where: { id: String(req.params.id) } });
-    if (!product) return res.status(404).json({ error: 'not found' });
-
-    const images: string[] = product.imagesJson ? JSON.parse(product.imagesJson) : [];
-    const nextImages = images.filter(u => u !== url);
-
-    const updated = await prisma.product.update({
-        where: { id: String(req.params.id) },
-        data: { imagesJson: JSON.stringify(nextImages) }
-    });
-
-    if (url.startsWith('/uploads/')) {
-        const fs = await import('fs/promises');
-        const filePath = path.join(uploadsDir, path.basename(url));
-        await fs.unlink(filePath).catch(() => { /* file may already be gone */ });
-    }
-
-    res.json({ images: nextImages, product: updated });
 });

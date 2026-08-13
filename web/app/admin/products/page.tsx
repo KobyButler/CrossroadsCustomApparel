@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Modal, ModalFooter } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
-import { motion } from "framer-motion";
+import { motion, Reorder } from "framer-motion";
 import { getColorCss } from "@/lib/colors";
 
 type Shop = { id: string; name: string; slug: string };
@@ -15,7 +15,7 @@ type Product = {
     id: string; name: string; sku: string; vendor: string;
     vendorIdentifier?: string; brand?: string; description?: string;
     priceCents: number; shops?: Shop[];
-    sizesJson?: string; colorsJson?: string; imagesJson?: string;
+    sizesJson?: string; colorsJson?: string; imagesJson?: string; sizeChartUrl?: string | null;
     upchargeEnabled?: boolean; upchargeCents?: number; weightOz?: number | null;
 };
 
@@ -24,6 +24,7 @@ const VENDOR_COLORS: Record<string, string> = { SANMAR:"info", SSACTIVEWEAR:"suc
 const EMPTY = {
     name:"", sku:"", vendor:"OTHER", vendorIdentifier:"", brand:"", description:"", priceDollars:"",
     shopIds:[] as string[], sizes:[] as string[], colors:[] as string[], images:[] as string[],
+    sizeChartUrl:"",
     upchargeEnabled:false, upchargeDollars:"3.00", weightOz:""
 };
 
@@ -167,13 +168,80 @@ function ShopMultiSelect({ shops, selected, onChange }: { shops:Shop[]; selected
     );
 }
 
-// ── ImageUploader ─────────────────────────────────────────────────────────────
-function ImageUploader({ productId, existingImages, onUploaded, onRemoved }: {
-    productId:string; existingImages:string[]; onUploaded:(url:string)=>void; onRemoved:(url:string)=>void;
-}) {
+// ── ImageManager ───────────────────────────────────────────────────────────────
+// Handles adding (single or multiple at once), removing, and drag-to-reorder of a
+// product's images. Works before a product exists too (create flow) since uploads
+// go through a generic, product-agnostic endpoint — the resulting URLs are staged
+// in local form state and persisted whenever the product is saved.
+function ImageManager({ images, onChange }: { images:string[]; onChange:(images:string[])=>void }) {
     const { toast } = useToast();
     const [uploading, setUploading] = useState(false);
-    const [removingUrl, setRemovingUrl] = useState<string | null>(null);
+    const base = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:4000/api";
+
+    async function handleFiles(e: React.ChangeEvent<HTMLInputElement>) {
+        const files = e.target.files;
+        if (!files || files.length === 0) return;
+        setUploading(true);
+        try {
+            const formData = new FormData();
+            Array.from(files).forEach(f => formData.append("images", f));
+            const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
+            const res = await fetch(`${base}/products/images/upload`, {
+                method: "POST", headers: token ? { Authorization: `Bearer ${token}` } : {}, body: formData
+            });
+            if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+            const { urls } = await res.json() as { urls: string[] };
+            onChange([...images, ...urls]);
+            toast(urls.length > 1 ? `${urls.length} images uploaded` : "Image uploaded");
+        } catch (err: any) { toast(err.message || "Upload failed", "error"); }
+        finally { setUploading(false); e.target.value = ""; }
+    }
+
+    function handleRemove(url: string) {
+        onChange(images.filter(u => u !== url));
+    }
+
+    return (
+        <div>
+            <label className="field-label">Product Images</label>
+            {images.length === 0 ? (
+                <div className="w-16 h-16 rounded-xl border-2 border-dashed border-slate-200 flex items-center justify-center mb-3">
+                    <svg className="w-5 h-5 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                </div>
+            ) : (
+                <Reorder.Group as="div" axis="x" values={images} onReorder={onChange}
+                    className="flex gap-2 mb-1 overflow-x-auto pb-2">
+                    {images.map((url, i) => (
+                        <Reorder.Item key={url} value={url} as="div"
+                            className="relative group shrink-0 cursor-grab active:cursor-grabbing">
+                            <img src={imgUrl(url)} alt={`Product ${i+1}`} draggable={false}
+                                className="w-16 h-16 object-cover rounded-xl border border-slate-200 ring-2 ring-transparent group-hover:ring-brand-300 transition-all pointer-events-none" />
+                            {i === 0 && (
+                                <span className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 text-[9px] font-bold bg-brand-600 text-white px-1.5 py-0.5 rounded-full shadow-sm">Main</span>
+                            )}
+                            <button type="button" title="Remove image" aria-label="Remove image"
+                                onClick={() => handleRemove(url)}
+                                className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-white border border-slate-200 shadow-sm flex items-center justify-center text-slate-400 opacity-0 group-hover:opacity-100 hover:text-red-500 hover:border-red-300 transition-all">
+                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                            </button>
+                        </Reorder.Item>
+                    ))}
+                </Reorder.Group>
+            )}
+            {images.length > 1 && <p className="text-xs text-slate-300 mb-2">Drag to reorder — the first photo is used as the main image.</p>}
+            <label className={`inline-flex items-center gap-2 text-sm cursor-pointer px-3 py-2 border border-dashed rounded-xl transition-all ${uploading ? "opacity-50 pointer-events-none border-slate-200 text-slate-400" : "border-brand-300 text-brand-600 hover:bg-brand-50"}`}>
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                {uploading ? "Uploading…" : "Upload image(s)"}
+                <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple className="sr-only" onChange={handleFiles} />
+            </label>
+        </div>
+    );
+}
+
+// ── SizeChartUploader ────────────────────────────────────────────────────────
+function SizeChartUploader({ url, onChange }: { url:string; onChange:(url:string)=>void }) {
+    const { toast } = useToast();
+    const [uploading, setUploading] = useState(false);
     const base = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:4000/api";
 
     async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -182,64 +250,39 @@ function ImageUploader({ productId, existingImages, onUploaded, onRemoved }: {
         setUploading(true);
         try {
             const formData = new FormData();
-            formData.append("image", file);
+            formData.append("sizechart", file);
             const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
-            const res = await fetch(`${base}/products/${productId}/images`, {
+            const res = await fetch(`${base}/products/sizechart/upload`, {
                 method: "POST", headers: token ? { Authorization: `Bearer ${token}` } : {}, body: formData
             });
             if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
-            onUploaded((await res.json()).url);
-            toast("Image uploaded");
+            onChange((await res.json()).url);
+            toast("Size chart uploaded");
         } catch (err: any) { toast(err.message || "Upload failed", "error"); }
         finally { setUploading(false); e.target.value = ""; }
     }
 
-    async function handleRemove(url: string) {
-        setRemovingUrl(url);
-        try {
-            const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
-            const res = await fetch(`${base}/products/${productId}/images`, {
-                method: "DELETE",
-                headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-                body: JSON.stringify({ url })
-            });
-            if (!res.ok) throw new Error(`Remove failed: ${res.status}`);
-            onRemoved(url);
-            toast("Image removed");
-        } catch (err: any) { toast(err.message || "Failed to remove image", "error"); }
-        finally { setRemovingUrl(null); }
-    }
-
     return (
         <div>
-            <label className="field-label">Product Images</label>
-            <div className="flex flex-wrap gap-2 mb-3">
-                {existingImages.map((url, i) => (
-                    <div key={url} className="relative group">
-                        <img src={imgUrl(url)} alt={`Product ${i+1}`}
-                            className="w-16 h-16 object-cover rounded-xl border border-slate-200 ring-2 ring-transparent group-hover:ring-brand-300 transition-all" />
-                        <button type="button" title="Remove image" aria-label="Remove image"
-                            disabled={removingUrl===url} onClick={() => handleRemove(url)}
-                            className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-white border border-slate-200 shadow-sm flex items-center justify-center text-slate-400 opacity-0 group-hover:opacity-100 hover:text-red-500 hover:border-red-300 transition-all disabled:opacity-50">
-                            {removingUrl===url ? (
-                                <div className="w-2.5 h-2.5 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
-                            ) : (
-                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
-                            )}
-                        </button>
-                    </div>
-                ))}
-                {existingImages.length === 0 && (
-                    <div className="w-16 h-16 rounded-xl border-2 border-dashed border-slate-200 flex items-center justify-center">
-                        <svg className="w-5 h-5 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-                    </div>
-                )}
-            </div>
+            <label className="field-label">Size Chart (PDF)</label>
+            {url ? (
+                <div className="flex items-center gap-2 mb-2">
+                    <a href={imgUrl(url)} target="_blank" rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 text-sm text-brand-600 hover:text-brand-700 hover:underline">
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                        View current size chart
+                    </a>
+                    <button type="button" onClick={() => onChange("")} className="text-xs text-slate-400 hover:text-red-500 transition-colors">Remove</button>
+                </div>
+            ) : (
+                <p className="text-xs text-slate-300 italic mb-2">No size chart uploaded yet</p>
+            )}
             <label className={`inline-flex items-center gap-2 text-sm cursor-pointer px-3 py-2 border border-dashed rounded-xl transition-all ${uploading ? "opacity-50 pointer-events-none border-slate-200 text-slate-400" : "border-brand-300 text-brand-600 hover:bg-brand-50"}`}>
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
-                {uploading ? "Uploading…" : "Upload image"}
-                <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="sr-only" onChange={handleFile} />
+                {uploading ? "Uploading…" : url ? "Replace PDF" : "Upload PDF"}
+                <input type="file" accept="application/pdf" className="sr-only" onChange={handleFile} />
             </label>
+            <p className="text-xs text-slate-400 mt-1">Customers can view this from the product page — handy for sizing guides from the vendor.</p>
         </div>
     );
 }
@@ -533,6 +576,7 @@ export default function ProductsPage() {
             priceDollars:(p.priceCents/100).toFixed(2), shopIds:(p.shops ?? []).map(s => s.id),
             sizes:p.sizesJson?JSON.parse(p.sizesJson):[], colors:p.colorsJson?JSON.parse(p.colorsJson):[],
             images:p.imagesJson?JSON.parse(p.imagesJson):[],
+            sizeChartUrl: p.sizeChartUrl ?? "",
             upchargeEnabled: Boolean(p.upchargeEnabled), upchargeDollars: ((p.upchargeCents ?? 300)/100).toFixed(2),
             weightOz: p.weightOz != null ? String(p.weightOz) : "",
         });
@@ -579,6 +623,7 @@ export default function ProductsPage() {
                 brand:form.brand||undefined, description:form.description||undefined,
                 priceCents:Math.round(parseFloat(form.priceDollars)*100), sizes:form.sizes, colors:form.colors,
                 images:form.images, shopIds:form.shopIds,
+                sizeChartUrl: form.sizeChartUrl || null,
                 upchargeEnabled:form.upchargeEnabled,
                 upchargeCents:Math.round(parseFloat(form.upchargeDollars || "0")*100) || 300,
                 weightOz: form.weightOz.trim() ? Math.round(parseFloat(form.weightOz)) : null,
@@ -744,7 +789,7 @@ export default function ProductsPage() {
                                         <td>
                                             <span className="text-sm font-bold text-slate-900 tabular-nums">${(p.priceCents/100).toFixed(2)}</span>
                                             {p.upchargeEnabled && (
-                                                <span title={`+$${((p.upchargeCents??0)/100).toFixed(2)} for XL and up`} className="ml-1 text-[10px] text-amber-600 font-semibold align-middle">+XL</span>
+                                                <span title={`+$${((p.upchargeCents??0)/100).toFixed(2)} for 2XL and up`} className="ml-1 text-[10px] text-amber-600 font-semibold align-middle">+2XL</span>
                                             )}
                                         </td>
                                         <td className="text-right pr-5">
@@ -818,25 +863,6 @@ export default function ProductsPage() {
                         </div>
                     )}
 
-                    {/* Imported image preview (create flow only, before a productId exists to upload against) */}
-                    {!editProduct && form.images.length > 0 && (
-                        <div>
-                            <label className="field-label">Imported Images</label>
-                            <div className="flex flex-wrap gap-2">
-                                {form.images.map((url, i) => (
-                                    <div key={url} className="relative group">
-                                        <img src={url} alt="" className="w-16 h-16 object-cover rounded-xl border border-slate-200" />
-                                        <button type="button" title="Remove image" aria-label="Remove image"
-                                            onClick={() => setForm(p => ({ ...p, images: p.images.filter((_, idx) => idx !== i) }))}
-                                            className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-white border border-slate-200 shadow-sm flex items-center justify-center text-slate-400 opacity-0 group-hover:opacity-100 hover:text-red-500 hover:border-red-300 transition-all">
-                                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
-                                        </button>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
                     {/* Fields */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <Input label="Product Name" required value={form.name} onChange={e => setForm(p => ({ ...p, name:e.target.value }))} />
@@ -880,7 +906,7 @@ export default function ProductsPage() {
                         <div className="flex items-center justify-between">
                             <div>
                                 <p className="text-sm font-semibold text-slate-800">Upcharge for bigger sizes</p>
-                                <p className="text-xs text-slate-400 mt-0.5">Adds extra cost automatically for XL and larger sizes at checkout</p>
+                                <p className="text-xs text-slate-400 mt-0.5">Adds extra cost automatically for 2XL and larger sizes at checkout</p>
                             </div>
                             <button type="button" role="switch" aria-checked={form.upchargeEnabled}
                                 onClick={() => setForm(p => ({ ...p, upchargeEnabled: !p.upchargeEnabled }))}
@@ -897,40 +923,15 @@ export default function ProductsPage() {
                                         onChange={e => setForm(p => ({ ...p, upchargeDollars:e.target.value }))}
                                         className="w-full pl-6 pr-2 py-1.5 text-sm border border-slate-200 rounded-lg outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" />
                                 </div>
-                                <span className="text-xs text-slate-400">for XL and up</span>
+                                <span className="text-xs text-slate-400">for 2XL and up</span>
                             </div>
                         )}
                     </div>
 
-                    {editProduct && (
-                        <ImageUploader productId={editProduct.id}
-                            existingImages={editProduct.imagesJson ? JSON.parse(editProduct.imagesJson) : []}
-                            onUploaded={url => {
-                                setProducts(prev => prev.map(p => {
-                                    if (p.id !== editProduct.id) return p;
-                                    const imgs = p.imagesJson ? JSON.parse(p.imagesJson) : [];
-                                    return { ...p, imagesJson: JSON.stringify([...imgs, url]) };
-                                }));
-                                setEditProduct(prev => {
-                                    if (!prev) return null;
-                                    const imgs = prev.imagesJson ? JSON.parse(prev.imagesJson) : [];
-                                    return { ...prev, imagesJson: JSON.stringify([...imgs, url]) };
-                                });
-                            }}
-                            onRemoved={url => {
-                                setProducts(prev => prev.map(p => {
-                                    if (p.id !== editProduct.id) return p;
-                                    const imgs: string[] = p.imagesJson ? JSON.parse(p.imagesJson) : [];
-                                    return { ...p, imagesJson: JSON.stringify(imgs.filter(u => u !== url)) };
-                                }));
-                                setEditProduct(prev => {
-                                    if (!prev) return null;
-                                    const imgs: string[] = prev.imagesJson ? JSON.parse(prev.imagesJson) : [];
-                                    return { ...prev, imagesJson: JSON.stringify(imgs.filter(u => u !== url)) };
-                                });
-                            }}
-                        />
-                    )}
+                    <ImageManager images={form.images} onChange={images => setForm(p => ({ ...p, images }))} />
+
+                    <SizeChartUploader url={form.sizeChartUrl} onChange={sizeChartUrl => setForm(p => ({ ...p, sizeChartUrl }))} />
+
                     <ModalFooter>
                         <Button type="button" variant="outline" onClick={() => { setShowAdd(false); setEditProduct(null); }}>Cancel</Button>
                         <Button type="submit" loading={saving} disabled={form.colors.length === 0}
