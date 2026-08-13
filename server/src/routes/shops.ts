@@ -25,13 +25,14 @@ router.get('/directory', async (_req, res) => {
     });
     res.json(shops.map(s => ({
         id: s.id, name: s.name, slug: s.slug, notes: s.notes, expiresAt: s.expiresAt,
+        shippingEnabled: s.shippingEnabled,
         productCount: s._count.products
     })));
 });
 
 // Create shop (admin only)
 router.post('/', requireAuth, async (req, res) => {
-    const { name, expiresAt, notes, productIds } = req.body;
+    const { name, expiresAt, notes, productIds, shippingEnabled } = req.body;
     if (!name) {
         return res.status(400).json({ error: 'name is required' });
     }
@@ -42,6 +43,7 @@ router.post('/', requireAuth, async (req, res) => {
             slug,
             notes: notes ?? null,
             expiresAt: expiresAt ? new Date(expiresAt) : null,
+            ...(shippingEnabled !== undefined ? { shippingEnabled: Boolean(shippingEnabled) } : {}),
             ...(Array.isArray(productIds) && productIds.length
                 ? { products: { connect: productIds.map((id: string) => ({ id })) } }
                 : {})
@@ -69,7 +71,7 @@ router.get('/:slug', async (req, res) => {
 // Update shop (toggle active, update name/notes/expiry/products) — admin only
 router.patch('/:id', requireAuth, async (req, res) => {
     const id = String(req.params.id);
-    const { name, expiresAt, notes, active, productIds } = req.body;
+    const { name, expiresAt, notes, active, productIds, shippingEnabled } = req.body;
 
     const existing = await prisma.shop.findUnique({ where: { id } });
     if (!existing) return res.status(404).json({ error: 'shop not found' });
@@ -81,6 +83,7 @@ router.patch('/:id', requireAuth, async (req, res) => {
             ...(expiresAt !== undefined && { expiresAt: expiresAt ? new Date(expiresAt) : null }),
             ...(notes !== undefined && { notes: notes ?? null }),
             ...(active !== undefined && { active }),
+            ...(shippingEnabled !== undefined && { shippingEnabled: Boolean(shippingEnabled) }),
             ...(Array.isArray(productIds) && { products: { set: productIds.map((pid: string) => ({ id: pid })) } })
         },
         include: { _count: { select: { products: true } } }

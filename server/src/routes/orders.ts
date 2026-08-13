@@ -3,7 +3,7 @@ import { prisma } from '../prisma.js';
 import { requireAuth } from '../middleware/auth.js';
 import { sendOrderConfirmation, sendOfflinePaymentNotification } from '../utils/email.js';
 import { computeItemPriceCents } from '../utils/pricing.js';
-import { buildShopGroups, applyDiscountAcrossGroups, allocateShippingAcrossGroups, newOrderGroupId } from '../utils/checkoutHelpers.js';
+import { buildShopGroups, applyDiscountAcrossGroups, allocateShippingAcrossGroups, newOrderGroupId, assertShippingAllowed } from '../utils/checkoutHelpers.js';
 import { quoteShipping } from '../utils/shippingCalc.js';
 
 export const router = Router();
@@ -60,7 +60,7 @@ router.post('/', async (req, res) => {
     const {
         shopSlug, customerName, customerEmail,
         shipAddress1, shipAddress2, shipCity, shipState, shipZip, residential = true,
-        items, discountCode,
+        items, discountCode, specialInstructions,
         paymentMethod   // 'pickup' | 'cash' | 'check'  (card goes through /payments/create-intent)
     } = req.body;
 
@@ -106,6 +106,7 @@ router.post('/', async (req, res) => {
             paymentMethod: isOffline ? 'pickup' : null,
             customerId: customer?.id,
             customerName, customerEmail, shipAddress1, shipAddress2, shipCity, shipState, shipZip, residential,
+            specialInstructions: specialInstructions || null,
             totalCents: subtotal, items: { createMany: { data: orderItems } }, discountCodeId: discountId
         },
         include: { items: { include: { product: true } } }
@@ -136,6 +137,7 @@ router.post('/', async (req, res) => {
                 customerEmail: order.customerEmail,
                 totalCents: order.totalCents,
                 shopName: shop?.name,
+                specialInstructions: order.specialInstructions,
                 paymentMethod: 'cash',
                 items: emailItems
             }).catch(err => console.error('offline payment email error', err));
@@ -146,6 +148,7 @@ router.post('/', async (req, res) => {
                 customerEmail: order.customerEmail,
                 totalCents: order.totalCents,
                 shopName: shop?.name,
+                specialInstructions: order.specialInstructions,
                 items: emailItems
             }).catch(err => console.error('email error', err));
         }
@@ -162,7 +165,7 @@ router.post('/checkout', async (req, res) => {
     const {
         customerName, customerEmail, shippingMethod,
         shipAddress1, shipAddress2, shipCity, shipState, shipZip, residential = true,
-        items, discountCode, paymentMethod
+        items, discountCode, paymentMethod, specialInstructions
     } = req.body;
 
     if (!customerEmail || !Array.isArray(items) || items.length === 0) {
@@ -179,6 +182,7 @@ router.post('/checkout', async (req, res) => {
     let groups;
     try {
         groups = await buildShopGroups(items);
+        if (isShipping) assertShippingAllowed(groups);
     } catch (err: any) {
         return res.status(400).json({ error: err.message });
     }
@@ -214,6 +218,7 @@ router.post('/checkout', async (req, res) => {
                 shipAddress1: isShipping ? shipAddress1 : null, shipAddress2: isShipping ? (shipAddress2 ?? null) : null,
                 shipCity: isShipping ? shipCity : null, shipState: isShipping ? shipState : null, shipZip: isShipping ? shipZip : null,
                 residential,
+                specialInstructions: specialInstructions || null,
                 totalCents: orderTotal,
                 items: { createMany: { data: g.items } }
             },
@@ -234,6 +239,7 @@ router.post('/checkout', async (req, res) => {
             customerEmail: order.customerEmail,
             totalCents: order.totalCents,
             shopName: g.shopName ?? undefined,
+            specialInstructions: order.specialInstructions,
             paymentMethod: 'cash',
             items: order.items.map(i => ({ name: i.product.name, quantity: i.quantity, size: i.size, color: i.color, priceCents: i.priceCents }))
         }).catch(err => console.error('offline payment email error', err));

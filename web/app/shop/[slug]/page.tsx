@@ -12,10 +12,10 @@ import { computeItemPriceCents } from "@/lib/pricing";
 type Product = {
     id:string; name:string; sku:string; brand?:string;
     priceCents:number; description?:string; imagesJson?:string;
-    sizesJson?:string; colorsJson?:string;
+    sizesJson?:string; colorsJson?:string; sizeChartUrl?:string | null;
     upchargeEnabled?:boolean; upchargeCents?:number;
 };
-type Shop = { id:string; name:string; notes?:string; expiresAt?:string; products:Product[] };
+type Shop = { id:string; name:string; notes?:string; expiresAt?:string; shippingEnabled:boolean; products:Product[] };
 
 const stripHtml = (s?: string) => (s ?? "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
 
@@ -197,7 +197,16 @@ function ProductDetailDrawer({
 
                         {sizes.length > 0 && (
                             <div>
-                                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Size</h3>
+                                <div className="flex items-center justify-between mb-2">
+                                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Size</h3>
+                                    {product.sizeChartUrl && (
+                                        <a href={imgUrl(product.sizeChartUrl)} target="_blank" rel="noopener noreferrer"
+                                            className="inline-flex items-center gap-1 text-xs font-semibold text-violet-600 hover:text-violet-800 transition-colors">
+                                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h4"/></svg>
+                                            Size chart
+                                        </a>
+                                    )}
+                                </div>
                                 <div className="flex flex-wrap gap-2">
                                     {sizes.map(s => (
                                         <button key={s} type="button"
@@ -208,7 +217,7 @@ function ProductDetailDrawer({
                                     ))}
                                 </div>
                                 {product.upchargeEnabled && (
-                                    <p className="text-xs text-slate-400 mt-2">+{fmt(product.upchargeCents ?? 0)} for XL and up</p>
+                                    <p className="text-xs text-slate-400 mt-2">+{fmt(product.upchargeCents ?? 0)} for 2XL and up</p>
                                 )}
                             </div>
                         )}
@@ -277,7 +286,7 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
     function addToCart(product: Product, size?: string, color?: string, qty = 1) {
         if (!shop) return;
         addItem({
-            productId: product.id, shopSlug: slug, shopName: shop.name, name: product.name,
+            productId: product.id, shopSlug: slug, shopName: shop.name, shopShippingEnabled: shop.shippingEnabled, name: product.name,
             priceCents: product.priceCents, upchargeEnabled: product.upchargeEnabled, upchargeCents: product.upchargeCents,
             size, color,
         }, qty);

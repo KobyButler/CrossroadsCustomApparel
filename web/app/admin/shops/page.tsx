@@ -10,11 +10,11 @@ import { motion } from "framer-motion";
 
 type Shop = {
     id: string; name: string; slug: string;
-    active: boolean; expiresAt?: string; notes?: string; createdAt: string;
+    active: boolean; shippingEnabled: boolean; expiresAt?: string; notes?: string; createdAt: string;
     _count?: { products: number };
 };
 
-const EMPTY = { name:"", expiresAt:"", notes:"" };
+const EMPTY = { name:"", expiresAt:"", notes:"", shippingEnabled:true };
 
 export default function ShopsPage() {
     const { toast } = useToast();
@@ -42,7 +42,8 @@ export default function ShopsPage() {
             const shop = await api("/shops", { method:"POST", body:JSON.stringify({
                 name:form.name,
                 expiresAt:form.expiresAt ? new Date(form.expiresAt).toISOString() : undefined,
-                notes:form.notes || undefined
+                notes:form.notes || undefined,
+                shippingEnabled:form.shippingEnabled
             })});
             setShops(p => [shop, ...p]);
             setShowCreate(false); setForm({ ...EMPTY }); toast("Shop created! Link is ready to share.");
@@ -55,7 +56,8 @@ export default function ShopsPage() {
         try {
             const u = await api(`/shops/${editShop.id}`, { method:"PATCH", body:JSON.stringify({
                 name:form.name,
-                expiresAt:form.expiresAt ? new Date(form.expiresAt).toISOString() : null, notes:form.notes||null
+                expiresAt:form.expiresAt ? new Date(form.expiresAt).toISOString() : null, notes:form.notes||null,
+                shippingEnabled:form.shippingEnabled
             })});
             setShops(p => p.map(s => s.id===editShop.id ? { ...s, ...u } : s));
             setEditShop(null); toast("Shop updated");
@@ -71,6 +73,14 @@ export default function ShopsPage() {
         } catch (err: any) { toast(err.message || "Failed", "error"); }
     }
 
+    async function toggleShipping(shop: Shop) {
+        try {
+            const u = await api(`/shops/${shop.id}`, { method:"PATCH", body:JSON.stringify({ shippingEnabled:!shop.shippingEnabled }) });
+            setShops(p => p.map(s => s.id===shop.id ? { ...s, shippingEnabled:u.shippingEnabled } : s));
+            toast(`Shipping ${u.shippingEnabled ? "enabled" : "disabled"} for ${shop.name}`);
+        } catch (err: any) { toast(err.message || "Failed", "error"); }
+    }
+
     function copyLink(slug: string) {
         navigator.clipboard.writeText(`${window.location.origin}/shop/${slug}`).then(() => toast("Link copied!"));
     }
@@ -79,7 +89,7 @@ export default function ShopsPage() {
         setEditShop(shop);
         setForm({ name:shop.name,
             expiresAt:shop.expiresAt ? new Date(shop.expiresAt).toISOString().split("T")[0] : "",
-            notes:shop.notes ?? "" });
+            notes:shop.notes ?? "", shippingEnabled: shop.shippingEnabled });
     }
 
     return (
@@ -143,7 +153,7 @@ export default function ShopsPage() {
                 ) : (
                     <div className="overflow-x-auto">
                         <div className="table-wrap"><table className="data-table">
-                            <thead><tr><th>Shop Name</th><th>Products</th><th>Link</th><th>Status</th><th>Expires</th><th className="text-right pr-5">Actions</th></tr></thead>
+                            <thead><tr><th>Shop Name</th><th>Products</th><th>Link</th><th>Status</th><th>Shipping</th><th>Expires</th><th className="text-right pr-5">Actions</th></tr></thead>
                             <tbody>
                                 {filtered.map((shop, idx) => {
                                     const expired = shop.expiresAt && new Date(shop.expiresAt) < new Date();
@@ -177,6 +187,13 @@ export default function ShopsPage() {
                                                 <Badge variant={shop.active && !expired ? "success" : "danger"} size="sm">
                                                     {expired ? "Expired" : shop.active ? "Active" : "Inactive"}
                                                 </Badge>
+                                            </td>
+                                            <td>
+                                                <button type="button" onClick={() => toggleShipping(shop)}
+                                                    title="Click to toggle"
+                                                    className={`text-xs font-medium px-2 py-0.5 rounded-full border transition-colors ${shop.shippingEnabled ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100" : "bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100"}`}>
+                                                    {shop.shippingEnabled ? "📦 Ship + Pickup" : "🤝 Pickup only"}
+                                                </button>
                                             </td>
                                             <td>
                                                 {shop.expiresAt ? (
@@ -220,6 +237,17 @@ export default function ShopsPage() {
                         <textarea rows={2} placeholder="Internal notes about this shop…" value={form.notes}
                             onChange={e => setForm(p => ({ ...p, notes:e.target.value }))}
                             className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 resize-none transition-all" />
+                    </div>
+                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex items-center justify-between">
+                        <div>
+                            <p className="text-sm font-semibold text-slate-800">Offer shipping</p>
+                            <p className="text-xs text-slate-400 mt-0.5">When off, customers can only choose pickup for this shop</p>
+                        </div>
+                        <button type="button" role="switch" aria-checked={form.shippingEnabled}
+                            onClick={() => setForm(p => ({ ...p, shippingEnabled: !p.shippingEnabled }))}
+                            className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${form.shippingEnabled ? "bg-brand-600" : "bg-slate-300"}`}>
+                            <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${form.shippingEnabled ? "translate-x-5" : ""}`} />
+                        </button>
                     </div>
                     <ModalFooter>
                         <Button type="button" variant="outline" onClick={() => { setShowCreate(false); setEditShop(null); }}>Cancel</Button>

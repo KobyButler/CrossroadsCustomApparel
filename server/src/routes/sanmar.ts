@@ -253,7 +253,7 @@ router.get('/catalog/:style', async (req, res) => {
         }
         const images = [...new Set(rows.map(r => r.productImage).filter(Boolean))] as string[];
 
-        // Detect a "bigger sizes cost more" pricing pattern (XL and up priced higher than the base sizes)
+        // Detect a "bigger sizes cost more" pricing pattern (2XL and up priced higher than the base sizes)
         const basePrices = rows.filter(r => !isUpchargeSize(r.sizeName) && r.priceCents > 0).map(r => r.priceCents);
         const bigPrices  = rows.filter(r => isUpchargeSize(r.sizeName) && r.priceCents > 0).map(r => r.priceCents);
         const baseMin = basePrices.length ? Math.min(...basePrices) : 0;

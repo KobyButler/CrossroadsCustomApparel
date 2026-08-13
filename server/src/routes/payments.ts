@@ -3,7 +3,7 @@ import Stripe from 'stripe';
 import { prisma } from '../prisma.js';
 import { config } from '../config.js';
 import { sendOrderConfirmation } from '../utils/email.js';
-import { buildShopGroups, applyDiscountAcrossGroups, allocateShippingAcrossGroups, newOrderGroupId } from '../utils/checkoutHelpers.js';
+import { buildShopGroups, applyDiscountAcrossGroups, allocateShippingAcrossGroups, newOrderGroupId, assertShippingAllowed } from '../utils/checkoutHelpers.js';
 import { quoteShipping } from '../utils/shippingCalc.js';
 
 export const router = Router();
@@ -33,7 +33,7 @@ router.post('/create-intent', async (req: Request, res: Response) => {
     const {
         shopSlug, customerName, customerEmail, shippingMethod,
         shipAddress1, shipAddress2, shipCity, shipState, shipZip,
-        residential = true, items, discountCode
+        residential = true, items, discountCode, specialInstructions
     } = req.body;
 
     if (!customerEmail || !Array.isArray(items) || items.length === 0) {
@@ -48,6 +48,7 @@ router.post('/create-intent', async (req: Request, res: Response) => {
     let groups;
     try {
         groups = await buildShopGroups(items, shopSlug ?? null);
+        if (isShipping) assertShippingAllowed(groups);
     } catch (err: any) {
         return res.status(400).json({ error: err.message });
     }
@@ -98,6 +99,7 @@ router.post('/create-intent', async (req: Request, res: Response) => {
                 shipAddress1: isShipping ? shipAddress1 : null, shipAddress2: isShipping ? (shipAddress2 ?? null) : null,
                 shipCity: isShipping ? shipCity : null, shipState: isShipping ? shipState : null, shipZip: isShipping ? shipZip : null,
                 residential,
+                specialInstructions: specialInstructions || null,
                 totalCents: g.subtotal + g.shippingCents,
                 items: { createMany: { data: g.items } }
             }
@@ -179,6 +181,7 @@ export async function stripeWebhookHandler(req: Request, res: Response) {
                 customerEmail: order.customerEmail,
                 totalCents: order.totalCents,
                 shopName: order.shop?.name,
+                specialInstructions: order.specialInstructions,
                 items: order.items.map(i => ({
                     name: i.product.name,
                     quantity: i.quantity,

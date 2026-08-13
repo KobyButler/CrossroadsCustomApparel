@@ -1462,7 +1462,7 @@ export default function SanMarPage() {
                                                             </p>
                                                         )}
                                                         {detail.upchargeDetected && (
-                                                            <p className="text-xs text-amber-600 mt-1.5 font-medium">⚠ SanMar charges more for larger sizes on this style — a +$3 upcharge for XL and up will be turned on automatically.</p>
+                                                            <p className="text-xs text-amber-600 mt-1.5 font-medium">⚠ SanMar charges more for larger sizes on this style — a +$3 upcharge for 2XL and up will be turned on automatically.</p>
                                                         )}
                                                     </div>
                                                     <button type="button"
