@@ -25,7 +25,7 @@ console.log('Config loaded, port:', config.port);
 
 import { router as api } from './routes/index';
 import { stripeWebhookHandler } from './routes/payments.js';
-import { syncInventoryDip } from './vendors/sanmar-sftp.js';
+import { syncInventoryDip, syncCatalogSDL } from './vendors/sanmar-sftp.js';
 
 console.log('Routes loaded');
 
@@ -50,6 +50,7 @@ app.get('/health', (_req, res) => res.json({ ok: true }));
 app.listen(config.port, '0.0.0.0', () => {
     console.log(`server listening on port ${config.port}`);
     scheduleInventorySync();
+    scheduleCatalogSync();
 });
 
 /* ─── SanMar hourly inventory DIP sync ───────────────────────────────────── */
@@ -77,5 +78,40 @@ async function runInventorySync() {
         }
     } catch (err) {
         console.error('[SanMar] Inventory sync threw:', err);
+    }
+}
+
+/* ─── SanMar weekly product catalog sync ─────────────────────────────────── */
+// Names/prices/colors used to require someone to remember to click "Sync
+// Catalog" in the admin — this had gone 115+ days stale before. PO submission
+// no longer depends on this being fresh (buildPOEnvelope in vendors/sanmar.ts
+// self-heals any single missing variant via a live per-style lookup), but the
+// bulk cache still needs to stay reasonably current for browsing/search/pricing
+// and to minimize how often that live-lookup fallback has to fire at all.
+// Staggered well clear of the inventory sync's post-boot window, and run at
+// most weekly since this is a ~185MB streamed file with a lot of DB upserts —
+// running it too often just adds load for no benefit on a 512MB instance.
+
+function scheduleCatalogSync() {
+    if (!config.sanmar.sftp.enable) return;
+
+    const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+    setTimeout(() => {
+        runCatalogSync();
+        setInterval(runCatalogSync, ONE_WEEK_MS);
+    }, 20 * 60 * 1000); // 20 minutes after boot — after the first inventory sync has settled
+}
+
+async function runCatalogSync() {
+    try {
+        console.log('[SanMar] Starting weekly product catalog sync…');
+        const result = await syncCatalogSDL();
+        if (result.status === 'SUCCESS') {
+            console.log(`[SanMar] Catalog sync complete — ${result.rowsProcessed} rows in ${result.durationMs}ms`);
+        } else {
+            console.error('[SanMar] Catalog sync failed:', result.error);
+        }
+    } catch (err) {
+        console.error('[SanMar] Catalog sync threw:', err);
     }
 }
