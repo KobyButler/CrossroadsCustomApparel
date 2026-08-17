@@ -133,17 +133,24 @@ router.get('/history', async (req, res) => {
     });
 
     const groups = new Map<string, {
-        poNumber: string; vendor: string; status: string; createdAt: Date;
+        id: string; poNumber: string; vendor: string; status: string; createdAt: Date;
         shopName: string | null; totalUnits: number | null;
         lines: any[] | null; rawResponse: string | null; contributingOrderCount: number;
     }>();
     for (const vo of rows) {
-        const key = vo.externalOrderNumber ?? vo.id;
+        // Older rows predating this feature never got a real reference number
+        // (especially failed/"Error" submissions — fixed going forward, see the
+        // catch block above). Group those by a short time bucket instead of the
+        // row's own id, so one legacy fan-out batch still collapses into a single
+        // history entry instead of one row per contributing order. Multiple such
+        // legacy groups can still display the same "(no reference)" text, so `key`
+        // (unlike `poNumber`) is always unique and is what the UI keys/expands on.
+        const key = vo.externalOrderNumber ?? `noref|${vo.vendor}|${vo.status}|${Math.floor(vo.createdAt.getTime() / 5000)}`;
         if (!groups.has(key)) {
             let lines: any[] | null = null;
             try { lines = vo.linesJson ? JSON.parse(vo.linesJson) : null; } catch { lines = null; }
             groups.set(key, {
-                poNumber: vo.externalOrderNumber ?? '(no reference)', vendor: vo.vendor, status: vo.status,
+                id: key, poNumber: vo.externalOrderNumber ?? '(no reference)', vendor: vo.vendor, status: vo.status,
                 createdAt: vo.createdAt, shopName: vo.shop?.name ?? null, totalUnits: vo.totalUnits,
                 lines, rawResponse: vo.rawResponse, contributingOrderCount: 0
             });
@@ -235,6 +242,13 @@ router.post('/place-order', async (req, res) => {
     const lines = [...lineMap.values()];
     const totalUnits = lines.reduce((a, l) => a + l.item.quantity, 0);
     const poNumber = buildPoNumber(shop?.name ?? null);
+    // Captured up front so a failed submission still records exactly what it was
+    // trying to send — a PO that errors out is still worth being able to look up
+    // and see the reference number and itemized contents for, not just "Error".
+    const linesJson = JSON.stringify(lines.map(l => ({
+        vendorStyle: l.product.sku, color: l.item.color, size: l.item.size,
+        quantity: l.item.quantity, productNames: [...l.productNames]
+    })));
     const shipTo = {
         name: b.name, address1: b.address1, address2: b.address2 || null,
         city: b.city, state: b.state, zip: b.zip, residential: b.residential
@@ -270,11 +284,6 @@ router.post('/place-order', async (req, res) => {
         // S&S, whose client returns an array of per-order results instead.
         const vendorMessage = vendor === 'SANMAR' && !Array.isArray(result) ? ((result as any)?.message ?? null) : null;
 
-        const linesJson = JSON.stringify(lines.map(l => ({
-            vendorStyle: l.product.sku, color: l.item.color, size: l.item.size,
-            quantity: l.item.quantity, productNames: [...l.productNames]
-        })));
-
         await Promise.all([...contributingOrderIds].map(orderId => prisma.vendorOrder.create({
             data: {
                 orderId, vendor, externalOrderNumber,
@@ -298,7 +307,12 @@ router.post('/place-order', async (req, res) => {
     } catch (err: any) {
         const rawResponse = String(err?.response?.data ? JSON.stringify(err.response.data) : err?.message ?? err).slice(0, 65000);
         await Promise.all([...contributingOrderIds].map(orderId => prisma.vendorOrder.create({
-            data: { orderId, vendor, status: 'Error', rawResponse }
+            data: {
+                orderId, vendor, status: 'Error', rawResponse,
+                // Same reference/shop/lines the attempt would have used had it
+                // succeeded — a failed PO is still worth being able to look up.
+                externalOrderNumber: poNumber, shopId: shop?.id ?? null, linesJson, totalUnits
+            }
         })));
         res.status(502).json({ error: err?.response?.data?.message ?? err.message ?? 'Vendor order submission failed' });
     }
