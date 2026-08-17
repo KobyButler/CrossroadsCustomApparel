@@ -79,16 +79,29 @@ async function buildPOEnvelope(order: any, lines: LineGroup) {
                 colorName: item.color ?? '',
                 sizeName:  item.size  ?? '',
             },
-            select: { inventoryKey: true, sizeIndex: true },
+            select: { inventoryKey: true, sizeIndex: true, mainframeColor: true },
         });
+
+        // SanMar's PO API validates the `color` field against its internal mainframe
+        // color code (e.g. "LtHtGry"), not the display name shown to customers
+        // ("Light Heather Grey") — sending the display name gets rejected as
+        // "Invalid color" even when it's a perfectly valid catalog color. If we
+        // matched a catalog row but it predates the mainframeColor column being
+        // populated, fail clearly instead of submitting a PO we know will bounce.
+        if (variant && !variant.mainframeColor) {
+            throw new Error(
+                `SanMar catalog data for ${style} "${item.color}" ${item.size} is out of date (missing mainframe color code) — run "Sync Catalog" in the SanMar tab, then try again.`
+            );
+        }
 
         const inventoryKey = variant?.inventoryKey ? Number(variant.inventoryKey) : null;
         const sizeIndex    = variant?.sizeIndex    ? Number(variant.sizeIndex)    : null;
+        const color        = variant?.mainframeColor || item.color || '';
 
         return {
             ...(inventoryKey && sizeIndex ? { inventoryKey, sizeIndex } : {}),
             style,
-            color:    item.color    ?? '',
+            color,
             size:     item.size     ?? '',
             quantity: Number(item.quantity),
             whseNo:   '',

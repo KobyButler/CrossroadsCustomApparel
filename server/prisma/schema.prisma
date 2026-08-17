@@ -187,6 +187,7 @@ model SanmarCatalogProduct {
   weightLbs        Float?
   inventoryKey     String?
   sizeIndex        String?
+  mainframeColor   String?  // SanMar's internal color code (e.g. "LtHtGry") — required by the PO/inventory SOAP APIs, distinct from the display colorName
   rawData          String?
   updatedAt        DateTime @updatedAt
   createdAt        DateTime @default(now())

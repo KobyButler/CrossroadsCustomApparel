@@ -165,6 +165,9 @@ function mapSDLRow(row: Record<string, string>) {
         priceCents:       toCents(col(row, 'PIECE_PRICE', 'Price1', 'Price')),
         inventoryKey:     col(row, 'INVENTORY_KEY', 'InventoryKey')                    || null,
         sizeIndex:        col(row, 'SIZE_INDEX', 'SizeIndex')                          || null,
+        // SanMar's PO/inventory SOAP APIs validate against this internal code
+        // (e.g. "LtHtGry"), NOT the human-readable colorName ("Light Heather Grey").
+        mainframeColor:   col(row, 'SANMAR_MAINFRAME_COLOR', 'MainframeColor', 'MAINFRAME_COLOR', 'CATALOG_COLOR') || null,
         colorSwatchImage: col(row, 'COLOR_SWATCH_IMAGE', 'ColorSwatch')                || null,
         productImage:     col(row, 'FRONT_MODEL_IMAGE_URL', 'BACK_MODEL_IMAGE_URL', 'PRODUCT_IMAGE', 'FrontModel') || null,
         weightLbs:        col(row, 'PIECE_WEIGHT', 'Weight')
