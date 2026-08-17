@@ -1,10 +1,11 @@
 import { Router } from 'express';
 import { prisma } from '../prisma.js';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, AuthUser } from '../middleware/auth.js';
 import { sendOrderConfirmation, sendOfflinePaymentNotification } from '../utils/email.js';
 import { computeItemPriceCents } from '../utils/pricing.js';
 import { buildShopGroups, applyDiscountAcrossGroups, allocateShippingAcrossGroups, newOrderGroupId, assertShippingAllowed } from '../utils/checkoutHelpers.js';
 import { quoteShipping } from '../utils/shippingCalc.js';
+import { diffScalarFields, diffItems, recordOrderHistory } from '../utils/orderHistory.js';
 
 export const router = Router();
 
@@ -262,20 +263,190 @@ router.post('/:id/fulfill', requireAuth, async (req, res) => {
     // Vendor blanks are ordered manually and in bulk via Order Report → Place
     // Order (which ships to the business, not the customer) — marking an order
     // fulfilled here does not trigger any automatic vendor submission.
+    const id = String(req.params.id);
+    const existing = await prisma.order.findUnique({ where: { id } });
+    if (!existing) return res.status(404).json({ error: 'order not found' });
+
     const o = await prisma.order.update({
-        where: { id: String(req.params.id) },
+        where: { id },
         data: { status: 'FULFILLED' },
         include: { items: { include: { product: true } } },
     });
+
+    if (existing.status !== 'FULFILLED') {
+        const user = (req as any).user as AuthUser | undefined;
+        await recordOrderHistory(id, user?.email, [{ field: 'status', label: 'Status', oldValue: existing.status, newValue: 'FULFILLED' }]);
+    }
     res.json(o);
 });
 
 router.post('/:id/cancel', requireAuth, async (req, res) => {
-    const existing = await prisma.order.findUnique({ where: { id: String(req.params.id) } });
+    const id = String(req.params.id);
+    const existing = await prisma.order.findUnique({ where: { id } });
     if (!existing) return res.status(404).json({ error: 'order not found' });
     if (existing.status === 'FULFILLED') return res.status(400).json({ error: 'cannot cancel a fulfilled order' });
-    const o = await prisma.order.update({ where: { id: String(req.params.id) }, data: { status: 'CANCELLED' } });
+    const o = await prisma.order.update({ where: { id }, data: { status: 'CANCELLED' } });
+
+    const user = (req as any).user as AuthUser | undefined;
+    await recordOrderHistory(id, user?.email, [{ field: 'status', label: 'Status', oldValue: existing.status, newValue: 'CANCELLED' }]);
     res.json(o);
+});
+
+// Full order edit (admin only) — customer/shipping/payment/status fields plus
+// line items (add/remove/modify). totalCents is always recomputed server-side
+// from the submitted items + shippingCents, never trusted from the client.
+// Every field-level and item-level change is recorded to OrderHistoryEntry.
+router.put('/:id', requireAuth, async (req, res) => {
+    const id = String(req.params.id);
+    const existing = await prisma.order.findUnique({
+        where: { id },
+        include: { items: { include: { product: true } }, shop: true }
+    });
+    if (!existing) return res.status(404).json({ error: 'order not found' });
+
+    const {
+        customerName, customerEmail, shopId,
+        status, paymentStatus, paymentMethod,
+        shippingMethod, shippingCents,
+        shipAddress1, shipAddress2, shipCity, shipState, shipZip, residential,
+        specialInstructions, items
+    } = req.body;
+
+    if (!Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({ error: 'At least one item is required' });
+    }
+
+    const uniqueProductIds = [...new Set<string>(items.map((i: any) => i.productId))];
+    const products = await prisma.product.findMany({ where: { id: { in: uniqueProductIds } } });
+    if (products.length !== uniqueProductIds.length) return res.status(400).json({ error: 'invalid product(s)' });
+    const productMap = new Map(products.map(p => [p.id, p]));
+
+    const newItemsData = items.map((i: any) => {
+        const p = productMap.get(i.productId)!;
+        const priceCents = i.priceCents !== undefined && i.priceCents !== null && i.priceCents !== ''
+            ? Math.round(Number(i.priceCents))
+            : computeItemPriceCents(p, i.size);
+        return {
+            id: i.id ? String(i.id) : undefined,
+            productId: p.id, productName: p.name,
+            size: i.size || null, color: i.color || null,
+            quantity: Math.max(1, Math.round(Number(i.quantity) || 1)),
+            priceCents
+        };
+    });
+    const subtotal = newItemsData.reduce((a: number, i: { quantity: number; priceCents: number }) => a + i.quantity * i.priceCents, 0);
+
+    const nextShippingCents = shippingCents !== undefined && shippingCents !== null && shippingCents !== ''
+        ? Math.round(Number(shippingCents))
+        : existing.shippingCents;
+    const nextTotalCents = subtotal + nextShippingCents;
+
+    // Resolve/validate shop reassignment
+    const nextShopId = shopId !== undefined ? (shopId || null) : existing.shopId;
+    let nextShop = existing.shop;
+    if (nextShopId !== existing.shopId) {
+        nextShop = nextShopId ? await prisma.shop.findUnique({ where: { id: nextShopId } }) : null;
+        if (nextShopId && !nextShop) return res.status(400).json({ error: 'invalid shop' });
+    }
+
+    // Re-upsert the customer record if the email changed, so Customer stays in sync
+    const nextCustomerEmail = customerEmail !== undefined ? customerEmail : existing.customerEmail;
+    const nextCustomerName = customerName !== undefined ? customerName : existing.customerName;
+    let nextCustomerId = existing.customerId;
+    if (nextCustomerEmail && nextCustomerEmail !== existing.customerEmail) {
+        const customer = await prisma.customer.upsert({
+            where: { email: nextCustomerEmail },
+            update: { name: nextCustomerName },
+            create: { email: nextCustomerEmail, name: nextCustomerName }
+        });
+        nextCustomerId = customer.id;
+    }
+
+    const beforeScalar = {
+        customerName: existing.customerName, customerEmail: existing.customerEmail,
+        status: existing.status, paymentStatus: existing.paymentStatus, paymentMethod: existing.paymentMethod,
+        shippingMethod: existing.shippingMethod, shippingCents: existing.shippingCents,
+        shipAddress1: existing.shipAddress1, shipAddress2: existing.shipAddress2,
+        shipCity: existing.shipCity, shipState: existing.shipState, shipZip: existing.shipZip,
+        residential: existing.residential, specialInstructions: existing.specialInstructions,
+        totalCents: existing.totalCents,
+    };
+    const afterScalar = {
+        customerName: nextCustomerName, customerEmail: nextCustomerEmail,
+        status: status ?? existing.status,
+        paymentStatus: paymentStatus ?? existing.paymentStatus,
+        paymentMethod: paymentMethod !== undefined ? (paymentMethod || null) : existing.paymentMethod,
+        shippingMethod: shippingMethod ?? existing.shippingMethod,
+        shippingCents: nextShippingCents,
+        shipAddress1: shipAddress1 !== undefined ? (shipAddress1 || null) : existing.shipAddress1,
+        shipAddress2: shipAddress2 !== undefined ? (shipAddress2 || null) : existing.shipAddress2,
+        shipCity: shipCity !== undefined ? (shipCity || null) : existing.shipCity,
+        shipState: shipState !== undefined ? (shipState || null) : existing.shipState,
+        shipZip: shipZip !== undefined ? (shipZip || null) : existing.shipZip,
+        residential: residential !== undefined ? Boolean(residential) : existing.residential,
+        specialInstructions: specialInstructions !== undefined ? (specialInstructions || null) : existing.specialInstructions,
+        totalCents: nextTotalCents,
+    };
+
+    const changes = diffScalarFields(beforeScalar, afterScalar);
+    if (nextShopId !== existing.shopId) {
+        changes.push({ field: 'shopId', label: 'Shop', oldValue: existing.shop?.name ?? null, newValue: nextShop?.name ?? null });
+    }
+    const oldItemsForDiff = existing.items.map(i => ({
+        id: i.id, productId: i.productId, productName: i.product.name,
+        size: i.size, color: i.color, quantity: i.quantity, priceCents: i.priceCents
+    }));
+    changes.push(...diffItems(oldItemsForDiff, newItemsData));
+
+    const keepIds = new Set(newItemsData.filter((i: { id?: string }) => i.id).map((i: { id?: string }) => i.id));
+    const toDeleteIds = existing.items.filter(i => !keepIds.has(i.id)).map(i => i.id);
+
+    const updated = await prisma.$transaction(async (tx) => {
+        if (toDeleteIds.length) await tx.orderItem.deleteMany({ where: { id: { in: toDeleteIds } } });
+        for (const i of newItemsData) {
+            if (i.id) {
+                await tx.orderItem.update({
+                    where: { id: i.id },
+                    data: { productId: i.productId, size: i.size, color: i.color, quantity: i.quantity, priceCents: i.priceCents }
+                });
+            } else {
+                await tx.orderItem.create({
+                    data: { orderId: id, productId: i.productId, size: i.size, color: i.color, quantity: i.quantity, priceCents: i.priceCents }
+                });
+            }
+        }
+        return tx.order.update({
+            where: { id },
+            data: {
+                customerName: afterScalar.customerName, customerEmail: afterScalar.customerEmail, customerId: nextCustomerId,
+                shopId: nextShopId,
+                status: afterScalar.status, paymentStatus: afterScalar.paymentStatus, paymentMethod: afterScalar.paymentMethod,
+                shippingMethod: afterScalar.shippingMethod, shippingCents: afterScalar.shippingCents,
+                shipAddress1: afterScalar.shipAddress1, shipAddress2: afterScalar.shipAddress2,
+                shipCity: afterScalar.shipCity, shipState: afterScalar.shipState, shipZip: afterScalar.shipZip,
+                residential: afterScalar.residential, specialInstructions: afterScalar.specialInstructions,
+                totalCents: afterScalar.totalCents,
+            },
+            include: { items: { include: { product: true } }, shop: true, vendorOrders: true }
+        });
+    });
+
+    const user = (req as any).user as AuthUser | undefined;
+    await recordOrderHistory(id, user?.email, changes);
+
+    res.json(updated);
+});
+
+// Change history for an order — most recent first (admin only)
+router.get('/:id/history', requireAuth, async (req, res) => {
+    const entries = await prisma.orderHistoryEntry.findMany({
+        where: { orderId: String(req.params.id) },
+        orderBy: { createdAt: 'desc' }
+    });
+    res.json(entries.map(e => ({
+        id: e.id, userEmail: e.userEmail, createdAt: e.createdAt,
+        changes: JSON.parse(e.changesJson)
+    })));
 });
 
 // CSV of shipping addresses for label tools (admin only)

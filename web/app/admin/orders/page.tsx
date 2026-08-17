@@ -13,18 +13,43 @@ type VendorOrder = {
     id: string; vendor: string; status: string;
     externalOrderNumber?: string; createdAt: string; rawResponse?: string;
 };
+type OrderItemRow = {
+    id: string; productId: string; product?: { id: string; name: string; sku: string };
+    size?: string | null; color?: string | null; quantity: number; priceCents: number;
+};
 type Order = {
     id: string; customerName: string; customerEmail: string;
     status: string; totalCents: number; createdAt: string;
     paymentStatus?: string; paymentMethod?: string;
-    items: any[]; shop?: { name: string };
+    items: OrderItemRow[]; shop?: { id: string; name: string } | null; shopId?: string | null;
     shippingMethod?: string; shippingCents?: number;
     shipAddress1?: string; shipAddress2?: string; shipCity?: string; shipState?: string; shipZip?: string;
+    residential?: boolean;
     specialInstructions?: string | null;
     vendorOrders?: VendorOrder[];
 };
 type Product = { id: string; name: string; priceCents: number; sku: string };
 type Shop = { id: string; name: string };
+type HistoryChange = { field: string; label: string; oldValue: string | null; newValue: string | null };
+type HistoryEntry = { id: string; userEmail: string | null; createdAt: string; changes: HistoryChange[] };
+type EditItem = { id?: string; productId: string; size: string; color: string; quantity: number; priceDollars: string };
+
+const STATUS_OPTIONS = ["UNFULFILLED", "FULFILLED", "CANCELLED", "DRAFT"];
+const PAYMENT_STATUS_OPTIONS = ["UNPAID", "PAID", "OFFLINE_PENDING"];
+const PAYMENT_METHOD_OPTIONS = [
+    { value: "", label: "— None —" },
+    { value: "stripe", label: "Card (Stripe)" },
+    { value: "cash", label: "Cash" },
+    { value: "check", label: "Check" },
+    { value: "pickup", label: "Pay at pickup" },
+];
+const EMPTY_EDIT_FORM = {
+    customerName: "", customerEmail: "", shopId: "",
+    status: "UNFULFILLED", paymentStatus: "UNPAID", paymentMethod: "",
+    shippingMethod: "PICKUP", shippingDollars: "0.00",
+    shipAddress1: "", shipAddress2: "", shipCity: "", shipState: "", shipZip: "", residential: true,
+    specialInstructions: "",
+};
 
 const TABS = [
     { key: "UNFULFILLED", label: "Unfulfilled"  },
@@ -64,10 +89,28 @@ export default function OrdersPage() {
     });
     const [cartItems, setCartItems] = useState<{ productId: string; quantity: number }[]>([]);
 
+    const [editOrder, setEditOrder]   = useState<Order | null>(null);
+    const [editForm, setEditForm]     = useState({ ...EMPTY_EDIT_FORM });
+    const [editItems, setEditItems]   = useState<EditItem[]>([]);
+    const [savingEdit, setSavingEdit] = useState(false);
+
+    const [historyEntries, setHistoryEntries] = useState<HistoryEntry[]>([]);
+    const [loadingHistory, setLoadingHistory]  = useState(false);
+
     useEffect(() => { setPage(1); }, [tab, filterShop]);
     useEffect(() => { fetchOrders(); }, [tab, page, filterShop]);
     useEffect(() => { api("/products").then(d => setProducts(Array.isArray(d) ? d : d?.data ?? [])).catch(() => {}); }, []);
     useEffect(() => { api("/shops").then(d => setShops(Array.isArray(d) ? d : d?.data ?? [])).catch(() => {}); }, []);
+
+    useEffect(() => {
+        if (!detailOrder) { setHistoryEntries([]); return; }
+        setLoadingHistory(true);
+        api(`/orders/${detailOrder.id}/history`)
+            .then(d => setHistoryEntries(Array.isArray(d) ? d : []))
+            .catch(() => setHistoryEntries([]))
+            .finally(() => setLoadingHistory(false));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [detailOrder?.id]);
 
     async function fetchOrders() {
         setLoading(true);
@@ -134,6 +177,77 @@ export default function OrdersPage() {
             setCartItems([]); fetchOrders();
         } catch (err: any) { toast(err.message || "Failed to create order", "error"); }
         finally { setCreating(false); }
+    }
+
+    function openEditOrder(order: Order) {
+        setEditOrder(order);
+        setEditForm({
+            customerName: order.customerName, customerEmail: order.customerEmail,
+            shopId: order.shopId ?? order.shop?.id ?? "",
+            status: order.status, paymentStatus: order.paymentStatus ?? "UNPAID", paymentMethod: order.paymentMethod ?? "",
+            shippingMethod: order.shippingMethod ?? "PICKUP", shippingDollars: (((order.shippingCents ?? 0)) / 100).toFixed(2),
+            shipAddress1: order.shipAddress1 ?? "", shipAddress2: order.shipAddress2 ?? "",
+            shipCity: order.shipCity ?? "", shipState: order.shipState ?? "", shipZip: order.shipZip ?? "",
+            residential: order.residential ?? true,
+            specialInstructions: order.specialInstructions ?? "",
+        });
+        setEditItems((order.items ?? []).map(i => ({
+            id: i.id, productId: i.productId, size: i.size ?? "", color: i.color ?? "",
+            quantity: i.quantity, priceDollars: (i.priceCents / 100).toFixed(2)
+        })));
+    }
+
+    function addEditItem() {
+        setEditItems(prev => [...prev, { productId: "", size: "", color: "", quantity: 1, priceDollars: "0.00" }]);
+    }
+    function updateEditItem(idx: number, patch: Partial<EditItem>) {
+        setEditItems(prev => prev.map((it, i) => {
+            if (i !== idx) return it;
+            const next = { ...it, ...patch };
+            if (patch.productId !== undefined) {
+                const p = products.find(x => x.id === patch.productId);
+                if (p) next.priceDollars = (p.priceCents / 100).toFixed(2);
+            }
+            return next;
+        }));
+    }
+    function removeEditItem(idx: number) {
+        setEditItems(prev => prev.filter((_, i) => i !== idx));
+    }
+
+    const editSubtotalCents = editItems.reduce((a, i) => a + Math.round((parseFloat(i.priceDollars) || 0) * 100) * (Number(i.quantity) || 0), 0);
+    const editShippingCents = Math.round((parseFloat(editForm.shippingDollars) || 0) * 100);
+    const editTotalCents = editSubtotalCents + editShippingCents;
+
+    async function saveOrderEdit(e: React.FormEvent) {
+        e.preventDefault();
+        if (editItems.length === 0) { toast("Add at least one item", "error"); return; }
+        if (editItems.some(i => !i.productId)) { toast("Select a product for every item", "error"); return; }
+        if (!editOrder) return;
+        setSavingEdit(true);
+        try {
+            const payload = {
+                customerName: editForm.customerName, customerEmail: editForm.customerEmail,
+                shopId: editForm.shopId || null,
+                status: editForm.status, paymentStatus: editForm.paymentStatus, paymentMethod: editForm.paymentMethod || null,
+                shippingMethod: editForm.shippingMethod,
+                shippingCents: editShippingCents,
+                shipAddress1: editForm.shipAddress1 || null, shipAddress2: editForm.shipAddress2 || null,
+                shipCity: editForm.shipCity || null, shipState: editForm.shipState || null, shipZip: editForm.shipZip || null,
+                residential: editForm.residential,
+                specialInstructions: editForm.specialInstructions || null,
+                items: editItems.map(i => ({
+                    id: i.id, productId: i.productId, size: i.size || null, color: i.color || null,
+                    quantity: Math.max(1, Math.round(Number(i.quantity) || 1)),
+                    priceCents: Math.round((parseFloat(i.priceDollars) || 0) * 100)
+                }))
+            };
+            const updated = await api(`/orders/${editOrder.id}`, { method: "PUT", body: JSON.stringify(payload) });
+            setOrders(prev => prev.map(o => o.id === updated.id ? updated : o));
+            toast("Order updated");
+            setEditOrder(null);
+        } catch (err: any) { toast(err.message || "Failed to update order", "error"); }
+        finally { setSavingEdit(false); }
     }
 
     return (
@@ -321,6 +435,10 @@ export default function OrdersPage() {
                                                     className="px-2.5 py-1 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors">
                                                     View
                                                 </button>
+                                                <button type="button" onClick={() => openEditOrder(order)}
+                                                    className="px-2.5 py-1 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors">
+                                                    Edit
+                                                </button>
                                                 {order.status === "UNFULFILLED" && (
                                                     <>
                                                         <button type="button" onClick={() => markFulfilled(order.id)}
@@ -454,6 +572,43 @@ export default function OrdersPage() {
                                 </div>
                             </div>
                         )}
+                        <div>
+                            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">History</p>
+                            {loadingHistory ? (
+                                <p className="text-xs text-slate-300 italic">Loading…</p>
+                            ) : historyEntries.length === 0 ? (
+                                <p className="text-xs text-slate-300 italic">No edits recorded yet.</p>
+                            ) : (
+                                <div className="rounded-xl border border-slate-100 divide-y divide-slate-50 max-h-56 overflow-y-auto">
+                                    {historyEntries.map(entry => (
+                                        <div key={entry.id} className="px-4 py-2.5 text-xs">
+                                            <div className="flex items-center justify-between mb-1">
+                                                <span className="font-semibold text-slate-600">{entry.userEmail ?? "System"}</span>
+                                                <span className="text-slate-400">{new Date(entry.createdAt).toLocaleString()}</span>
+                                            </div>
+                                            <ul className="space-y-0.5">
+                                                {entry.changes.map((c, i) => (
+                                                    <li key={i} className="text-slate-600">
+                                                        <span className="font-medium">{c.label}:</span>{" "}
+                                                        {c.oldValue === null ? (
+                                                            <span className="text-emerald-600">{c.newValue}</span>
+                                                        ) : c.newValue === null ? (
+                                                            <span className="text-red-500 line-through">{c.oldValue}</span>
+                                                        ) : (
+                                                            <>
+                                                                <span className="text-slate-400">{c.oldValue}</span>
+                                                                <span className="mx-1 text-slate-300">→</span>
+                                                                <span className="text-slate-800 font-medium">{c.newValue}</span>
+                                                            </>
+                                                        )}
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
                         <div className="flex justify-between items-center pt-1">
                             <div className="flex items-center gap-2">
                                 <Badge variant={statusVariant(detailOrder.status)}>{detailOrder.status}</Badge>
@@ -463,6 +618,7 @@ export default function OrdersPage() {
                         </div>
                         <ModalFooter>
                             <Button variant="outline" onClick={() => setDetailOrder(null)}>Close</Button>
+                            <Button variant="outline" onClick={() => { const o = detailOrder; setDetailOrder(null); openEditOrder(o); }}>Edit Order</Button>
                             {detailOrder.status === "UNFULFILLED" && (
                                 <>
                                     <Button variant="danger" onClick={() => { cancelOrder(detailOrder.id); setDetailOrder(null); }}>Cancel Order</Button>
@@ -471,6 +627,150 @@ export default function OrdersPage() {
                             )}
                         </ModalFooter>
                     </div>
+                )}
+            </Modal>
+
+            {/* Edit Order Modal */}
+            <Modal open={!!editOrder} onClose={() => setEditOrder(null)}
+                title={`Edit Order #${editOrder?.id.slice(-8).toUpperCase()}`}
+                description="Adjust any part of this order — changes are recorded in its history." size="xl">
+                {editOrder && (
+                    <form onSubmit={saveOrderEdit} className="space-y-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <Input label="Customer Name" required value={editForm.customerName}
+                                onChange={e => setEditForm(p => ({ ...p, customerName: e.target.value }))} />
+                            <Input label="Customer Email" type="email" required value={editForm.customerEmail}
+                                onChange={e => setEditForm(p => ({ ...p, customerEmail: e.target.value }))} />
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            <div>
+                                <label className="field-label">Status</label>
+                                <Select value={editForm.status} onChange={e => setEditForm(p => ({ ...p, status: e.target.value }))}>
+                                    {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s.charAt(0) + s.slice(1).toLowerCase()}</option>)}
+                                </Select>
+                            </div>
+                            <div>
+                                <label className="field-label">Payment Status</label>
+                                <Select value={editForm.paymentStatus} onChange={e => setEditForm(p => ({ ...p, paymentStatus: e.target.value }))}>
+                                    {PAYMENT_STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                                </Select>
+                            </div>
+                            <div>
+                                <label className="field-label">Payment Method</label>
+                                <Select value={editForm.paymentMethod} onChange={e => setEditForm(p => ({ ...p, paymentMethod: e.target.value }))}>
+                                    {PAYMENT_METHOD_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                                </Select>
+                            </div>
+                            <div>
+                                <label className="field-label">Shop</label>
+                                <Select value={editForm.shopId} onChange={e => setEditForm(p => ({ ...p, shopId: e.target.value }))}>
+                                    <option value="">— No shop —</option>
+                                    {shops.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                </Select>
+                            </div>
+                        </div>
+
+                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                    <label className="field-label">Fulfillment</label>
+                                    <Select value={editForm.shippingMethod} onChange={e => setEditForm(p => ({ ...p, shippingMethod: e.target.value }))}>
+                                        <option value="PICKUP">Pickup</option>
+                                        <option value="SHIP">Ship</option>
+                                    </Select>
+                                </div>
+                                <Input label="Shipping Cost ($)" type="number" step="0.01" min="0" value={editForm.shippingDollars}
+                                    onChange={e => setEditForm(p => ({ ...p, shippingDollars: e.target.value }))} />
+                            </div>
+                            {editForm.shippingMethod === "SHIP" && (
+                                <>
+                                    <Input label="Address" value={editForm.shipAddress1}
+                                        onChange={e => setEditForm(p => ({ ...p, shipAddress1: e.target.value }))} />
+                                    <Input placeholder="Apt, suite, etc. (optional)" value={editForm.shipAddress2}
+                                        onChange={e => setEditForm(p => ({ ...p, shipAddress2: e.target.value }))} />
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                        <Input label="City" value={editForm.shipCity}
+                                            onChange={e => setEditForm(p => ({ ...p, shipCity: e.target.value }))} />
+                                        <Input label="State" value={editForm.shipState}
+                                            onChange={e => setEditForm(p => ({ ...p, shipState: e.target.value }))} />
+                                        <Input label="ZIP" value={editForm.shipZip}
+                                            onChange={e => setEditForm(p => ({ ...p, shipZip: e.target.value }))} />
+                                    </div>
+                                    <label className="flex items-center gap-2 text-sm text-slate-600">
+                                        <input type="checkbox" className="accent-brand-600" checked={editForm.residential}
+                                            onChange={e => setEditForm(p => ({ ...p, residential: e.target.checked }))} />
+                                        Residential address
+                                    </label>
+                                </>
+                            )}
+                        </div>
+
+                        <div>
+                            <label className="field-label">Special Instructions</label>
+                            <textarea rows={2} placeholder="Notes, comments, or requests for this order…"
+                                value={editForm.specialInstructions}
+                                onChange={e => setEditForm(p => ({ ...p, specialInstructions: e.target.value }))}
+                                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 resize-none transition-all" />
+                        </div>
+
+                        <div>
+                            <div className="flex items-center justify-between mb-2">
+                                <label className="field-label mb-0">Items</label>
+                                <button type="button" onClick={addEditItem}
+                                    className="text-xs font-semibold text-brand-600 hover:text-brand-700 transition-colors">
+                                    + Add item
+                                </button>
+                            </div>
+                            {editItems.length === 0 ? (
+                                <p className="text-sm text-slate-400 italic py-3 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200">No items — click "Add item"</p>
+                            ) : (
+                                <div className="space-y-2">
+                                    {editItems.map((item, i) => (
+                                        <div key={i} className="flex flex-wrap gap-2 items-center bg-slate-50 rounded-xl p-2">
+                                            <Select className="flex-1 min-w-[10rem]" value={item.productId}
+                                                onChange={e => updateEditItem(i, { productId: e.target.value })}>
+                                                <option value="">Select product</option>
+                                                {products.map(p => <option key={p.id} value={p.id}>{p.name} — ${(p.priceCents / 100).toFixed(2)}</option>)}
+                                            </Select>
+                                            <input type="text" placeholder="Size" value={item.size} title="Size" aria-label="Size"
+                                                onChange={e => updateEditItem(i, { size: e.target.value })}
+                                                className="w-20 rounded-xl border border-slate-200 px-2 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" />
+                                            <input type="text" placeholder="Color" value={item.color} title="Color" aria-label="Color"
+                                                onChange={e => updateEditItem(i, { color: e.target.value })}
+                                                className="w-24 rounded-xl border border-slate-200 px-2 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" />
+                                            <input type="number" min={1} value={item.quantity} title="Quantity" aria-label="Quantity"
+                                                onChange={e => updateEditItem(i, { quantity: +e.target.value })}
+                                                className="w-16 rounded-xl border border-slate-200 px-2 py-2 text-sm text-center outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" />
+                                            <div className="relative w-24">
+                                                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm">$</span>
+                                                <input type="number" step="0.01" min="0" value={item.priceDollars} title="Unit price" aria-label="Unit price"
+                                                    onChange={e => updateEditItem(i, { priceDollars: e.target.value })}
+                                                    className="w-full pl-5 pr-2 py-2 rounded-xl border border-slate-200 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" />
+                                            </div>
+                                            <button type="button" title="Remove" aria-label="Remove item"
+                                                onClick={() => removeEditItem(i)}
+                                                className="p-1.5 text-slate-300 hover:text-red-500 transition-colors rounded-lg hover:bg-red-50">
+                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="flex justify-between items-center pt-2 border-t border-slate-100">
+                            <div className="text-xs text-slate-400">
+                                Subtotal {fmt(editSubtotalCents)} + Shipping {fmt(editShippingCents)}
+                            </div>
+                            <p className="text-lg font-bold text-slate-900">{fmt(editTotalCents)}</p>
+                        </div>
+
+                        <ModalFooter>
+                            <Button type="button" variant="outline" onClick={() => setEditOrder(null)}>Cancel</Button>
+                            <Button type="submit" loading={savingEdit}>Save Changes</Button>
+                        </ModalFooter>
+                    </form>
                 )}
             </Modal>
 
