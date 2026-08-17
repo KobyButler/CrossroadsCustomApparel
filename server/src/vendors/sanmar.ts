@@ -32,6 +32,10 @@ function sumInventoryQty(ret: any): number {
     }, 0);
 }
 
+function normalize(s: unknown): string {
+    return String(s ?? '').trim().toLowerCase();
+}
+
 type LineGroup = Array<{
     item: any;
     product: { vendorIdentifier: string | null; sku: string };
@@ -67,6 +71,15 @@ export async function submitOrderToSanMar(order: any, lines: LineGroup) {
 }
 
 async function buildPOEnvelope(order: any, lines: LineGroup) {
+    // Live per-style lookups are memoized within a single PO build — a PO with
+    // several colors/sizes of the same style shares one SanMar call instead of
+    // firing a duplicate live lookup per line.
+    const liveInfoByStyle = new Map<string, Promise<SanMarProduct>>();
+    function getLiveInfoCached(style: string): Promise<SanMarProduct> {
+        if (!liveInfoByStyle.has(style)) liveInfoByStyle.set(style, getSanMarProductInfo(style));
+        return liveInfoByStyle.get(style)!;
+    }
+
     const detailList = await Promise.all(lines.map(async ({ item, product }) => {
         // Use the vendor's own style code, not the (freely-editable, possibly
         // duplicate-suffixed) Crossroads SKU — SanMar only recognizes its own codes.
@@ -82,26 +95,69 @@ async function buildPOEnvelope(order: any, lines: LineGroup) {
             select: { inventoryKey: true, sizeIndex: true, mainframeColor: true },
         });
 
-        // SanMar's PO API validates the `color` field against its internal mainframe
-        // color code (e.g. "LtHtGry"), not the display name shown to customers
-        // ("Light Heather Grey") — sending the display name gets rejected as
-        // "Invalid color" even when it's a perfectly valid catalog color. If we
-        // matched a catalog row but it predates the mainframeColor column being
-        // populated, fail clearly instead of submitting a PO we know will bounce.
-        if (variant && !variant.mainframeColor) {
-            throw new Error(
-                `SanMar catalog data for ${style} "${item.color}" ${item.size} is out of date (missing mainframe color code) — run "Sync Catalog" in the SanMar tab, then try again.`
-            );
-        }
+        let inventoryKey    = variant?.inventoryKey ? Number(variant.inventoryKey) : null;
+        let sizeIndex       = variant?.sizeIndex    ? Number(variant.sizeIndex)    : null;
+        let mainframeColor  = variant?.mainframeColor ?? null;
 
-        const inventoryKey = variant?.inventoryKey ? Number(variant.inventoryKey) : null;
-        const sizeIndex    = variant?.sizeIndex    ? Number(variant.sizeIndex)    : null;
-        const color        = variant?.mainframeColor || item.color || '';
+        // SanMar's PO API validates `color` against its internal mainframe color code
+        // (e.g. "LtHtGry"), not the display name shown to customers ("Light Heather
+        // Grey") — sending the display name gets rejected as "Invalid color" even when
+        // it's a perfectly valid catalog color. If our cached SFTP catalog doesn't have
+        // this variant yet (new style, or synced before this field existed), resolve it
+        // live from SanMar's per-style Product Info API and cache the result — this
+        // variant will never need a live lookup again after this one time.
+        if (!mainframeColor) {
+            let info: SanMarProduct;
+            try {
+                info = await getLiveInfoCached(style);
+            } catch (err: any) {
+                throw new Error(`Could not look up ${style} "${item.color}" ${item.size} from SanMar (${err?.message ?? 'lookup failed'}) — try again in a moment.`);
+            }
+
+            const rows = asArray((info.raw as any)?.return?.listResponse);
+            const match = rows.find((r: any) => {
+                const b = r?.productBasicInfo;
+                return b && normalize(b.color) === normalize(item.color) && normalize(b.size) === normalize(item.size);
+            });
+            const basic = match?.productBasicInfo;
+
+            if (!basic?.catalogColor) {
+                throw new Error(`SanMar has no record of ${style} in color "${item.color}" size "${item.size}" — double-check the color and size are correct.`);
+            }
+
+            mainframeColor = basic.catalogColor;
+            inventoryKey   = basic.inventoryKey ? Number(basic.inventoryKey) : inventoryKey;
+            sizeIndex      = basic.sizeIndex    ? Number(basic.sizeIndex)    : sizeIndex;
+
+            // Best-effort cache write — a failure here shouldn't block the PO,
+            // it just means this variant gets resolved live again next time.
+            await prisma.sanmarCatalogProduct.upsert({
+                where: { style_colorName_sizeName: { style, colorName: item.color ?? '', sizeName: item.size ?? '' } },
+                create: {
+                    style, colorName: item.color ?? '', sizeName: item.size ?? '',
+                    mainframeColor,
+                    inventoryKey:     inventoryKey ? String(inventoryKey) : null,
+                    sizeIndex:        sizeIndex    ? String(sizeIndex)    : null,
+                    title:            basic.productTitle ?? null,
+                    description:      basic.productDescription ?? null,
+                    brand:            basic.brandName ?? null,
+                    category:         basic.category ?? null,
+                    priceCents:       match?.productPriceInfo?.piecePrice ? Math.round(Number(match.productPriceInfo.piecePrice) * 100) : 0,
+                    colorSwatchImage: match?.productImageInfo?.colorSwatchImage ?? null,
+                    productImage:     match?.productImageInfo?.colorProductImage ?? match?.productImageInfo?.productImage ?? null,
+                },
+                update: {
+                    mainframeColor,
+                    ...(inventoryKey ? { inventoryKey: String(inventoryKey) } : {}),
+                    ...(sizeIndex    ? { sizeIndex: String(sizeIndex) }       : {}),
+                },
+            }).catch(err => console.error('[SanMar] failed to cache live-resolved variant (non-fatal):', err));
+        }
 
         return {
             ...(inventoryKey && sizeIndex ? { inventoryKey, sizeIndex } : {}),
             style,
-            color,
+            color: mainframeColor,
             size:     item.size     ?? '',
             quantity: Number(item.quantity),
             whseNo:   '',
