@@ -32,7 +32,7 @@ type Receipt = {
 };
 type HistoryLine = { vendorStyle: string; color: string | null; size: string | null; quantity: number; productNames: string[] };
 type HistoryEntry = {
-    poNumber: string; vendor: string; status: string; createdAt: string;
+    id: string; poNumber: string; vendor: string; status: string; createdAt: string;
     shopName: string | null; totalUnits: number | null; lines: HistoryLine[] | null;
     rawResponse: string | null; contributingOrderCount: number;
 };
@@ -326,15 +326,20 @@ export default function OrderReportPage() {
                     ) : (
                         <div className="divide-y divide-slate-100">
                             {history.map(h => {
-                                const isExpanded = expandedHistory === h.poNumber;
+                                const isExpanded = expandedHistory === h.id;
                                 const isError = h.status.toLowerCase() === "error";
                                 const isNotSent = h.status.toLowerCase() === "notsent";
                                 const badgeVariant = isNotSent ? "warning" : isError ? "danger" : "success";
                                 const badgeLabel = isNotSent ? "Not sent (test mode)" : isError ? "Error" : "Submitted";
+                                let errorMessage = "";
+                                if (isError && h.rawResponse) {
+                                    try { errorMessage = JSON.parse(h.rawResponse)?.message ?? h.rawResponse; }
+                                    catch { errorMessage = h.rawResponse; }
+                                }
                                 return (
-                                    <div key={h.poNumber}>
+                                    <div key={h.id}>
                                         <div className="flex items-center justify-between px-5 py-3.5 cursor-pointer hover:bg-slate-50 transition-colors"
-                                            onClick={() => setExpandedHistory(isExpanded ? null : h.poNumber)}>
+                                            onClick={() => setExpandedHistory(isExpanded ? null : h.id)}>
                                             <div className="min-w-0">
                                                 <div className="flex items-center gap-2 flex-wrap">
                                                     <code className="text-sm font-mono font-bold text-slate-800">{h.poNumber}</code>
@@ -350,6 +355,11 @@ export default function OrderReportPage() {
                                         </div>
                                         {isExpanded && (
                                             <div className="px-5 pb-4 -mt-1 space-y-3">
+                                                {isError && errorMessage && (
+                                                    <p className="text-xs text-red-700 bg-red-50 border border-red-100 rounded-lg px-3 py-2 font-mono whitespace-pre-wrap break-words">
+                                                        {errorMessage}
+                                                    </p>
+                                                )}
                                                 {h.lines && h.lines.length > 0 ? (
                                                     <div className="border border-slate-200 rounded-xl overflow-hidden">
                                                         <table className="w-full text-sm">
