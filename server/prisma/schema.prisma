@@ -87,6 +87,21 @@ model Order {
   discountCodeId        String?
   discountCode          DiscountCode?        @relation(fields: [discountCodeId], references: [id])
   financeTransactions   FinanceTransaction[]
+  history                OrderHistoryEntry[]
+}
+
+// Audit trail for admin edits to an order (full-order edits, plus fulfill/cancel
+// status changes). One row per edit action, storing a JSON array of field-level
+// diffs so the admin UI can render a readable timeline of what changed and when.
+model OrderHistoryEntry {
+  id          String   @id @default(cuid())
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id])
+  userEmail   String?  // admin who made the change; null if not attributable
+  changesJson String   // JSON array of { field, label, oldValue, newValue }
+  createdAt   DateTime @default(now())
+
+  @@index([orderId])
 }
 
 model OrderItem {
