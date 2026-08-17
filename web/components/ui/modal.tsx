@@ -37,18 +37,19 @@ export function Modal({ open, onClose, title, description, size = "md", children
     return (
         <AnimatePresence>
             {open && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                    {/* Backdrop */}
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 print:static print:block print:p-0">
+                    {/* Backdrop — decorative only, not needed on a printed page */}
                     <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                         transition={{ duration: 0.2 }}
-                        className="absolute inset-0 bg-ink-950/60 backdrop-blur-sm"
+                        className="absolute inset-0 bg-ink-950/60 backdrop-blur-sm print:hidden"
                         onClick={onClose}
                     />
 
-                    {/* Panel */}
+                    {/* Panel — un-clip from the viewport and let content flow fully when printing,
+                        so a scrolled-past item list isn't silently cut off the printout. */}
                     <motion.div
                         initial={{ opacity: 0, scale: 0.93, y: 12 }}
                         animate={{ opacity: 1, scale: 1,    y: 0  }}
@@ -58,7 +59,8 @@ export function Modal({ open, onClose, title, description, size = "md", children
                             "relative w-full bg-white rounded-2xl shadow-modal",
                             "ring-1 ring-black/8 flex flex-col",
                             sizes[size],
-                            "max-h-[90vh]"
+                            "max-h-[90vh]",
+                            "print:max-h-none print:shadow-none print:ring-0 print:rounded-none"
                         )}
                     >
                         {/* Header */}
@@ -82,7 +84,7 @@ export function Modal({ open, onClose, title, description, size = "md", children
                             onClick={onClose}
                             className={cn(
                                 "absolute top-4 right-4 p-1.5 rounded-lg text-slate-400",
-                                "hover:text-slate-600 hover:bg-slate-100 transition-colors"
+                                "hover:text-slate-600 hover:bg-slate-100 transition-colors print:hidden"
                             )}
                         >
                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -91,7 +93,7 @@ export function Modal({ open, onClose, title, description, size = "md", children
                         </button>
 
                         {/* Body */}
-                        <div className="px-6 py-5 overflow-y-auto flex-1">
+                        <div className="px-6 py-5 overflow-y-auto flex-1 print:overflow-visible print:max-h-none">
                             {children}
                         </div>
                     </motion.div>

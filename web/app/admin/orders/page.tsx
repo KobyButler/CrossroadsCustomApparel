@@ -536,34 +536,53 @@ export default function OrdersPage() {
                                     {detailOrder.vendorOrders.map(vo => {
                                         const isError = vo.status.toLowerCase() === "error";
                                         const isSubmitted = vo.status.toLowerCase() === "submitted";
+                                        const isNotSent = vo.status.toLowerCase() === "notsent";
                                         const isExpanded = expandedVendorOrder === vo.id;
-                                        let readableError = "";
-                                        if (isError && vo.rawResponse) {
-                                            try { readableError = JSON.parse(vo.rawResponse)?.message ?? vo.rawResponse; }
-                                            catch { readableError = vo.rawResponse; }
-                                        }
+
+                                        // dryRun can show up on an old "Submitted" record too — those were
+                                        // created before this got its own NotSent status, so still check
+                                        // the raw response rather than trusting the status label alone.
+                                        let parsedRaw: any = null;
+                                        try { parsedRaw = vo.rawResponse ? JSON.parse(vo.rawResponse) : null; } catch { /* not JSON */ }
+                                        const wasDryRun = isNotSent || Boolean(parsedRaw?.dryRun);
+
+                                        let detailText = "";
+                                        if (isError) detailText = parsedRaw?.message ?? vo.rawResponse ?? "No error details recorded.";
+                                        else if (wasDryRun) detailText = parsedRaw?.note ?? "Vendor integration was disabled — nothing was actually sent.";
+                                        else detailText = parsedRaw?.message ?? "";
+
+                                        const expandable = Boolean(vo.rawResponse);
                                         return (
                                             <div key={vo.id}>
-                                                <div className={`flex items-center justify-between px-4 py-3 text-sm ${isError ? "cursor-pointer hover:bg-red-50/50" : ""}`}
-                                                    onClick={() => isError && setExpandedVendorOrder(isExpanded ? null : vo.id)}>
+                                                <div className={`flex items-center justify-between px-4 py-3 text-sm ${expandable ? "cursor-pointer hover:bg-slate-50" : ""}`}
+                                                    onClick={() => expandable && setExpandedVendorOrder(isExpanded ? null : vo.id)}>
                                                     <div>
                                                         <span className="font-medium text-slate-800">{vo.vendor}</span>
                                                         {vo.externalOrderNumber && <span className="ml-2 text-xs text-slate-400 font-mono">#{vo.externalOrderNumber}</span>}
+                                                        {wasDryRun && <span className="ml-2 text-[10px] font-bold text-amber-600 uppercase">Not actually sent</span>}
                                                     </div>
                                                     <div className="flex items-center gap-2">
-                                                        <Badge variant={isSubmitted ? "success" : isError ? "danger" : "default"}>
-                                                            {vo.status}
+                                                        <Badge variant={wasDryRun ? "warning" : isSubmitted ? "success" : isError ? "danger" : "default"}>
+                                                            {wasDryRun && isSubmitted ? "Submitted (test mode)" : vo.status}
                                                         </Badge>
-                                                        {isError && (
+                                                        {expandable && (
                                                             <svg className={`w-3.5 h-3.5 text-slate-400 transition-transform ${isExpanded ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7"/></svg>
                                                         )}
                                                     </div>
                                                 </div>
-                                                {isError && isExpanded && (
-                                                    <div className="px-4 pb-3 -mt-1">
-                                                        <p className="text-xs text-red-700 bg-red-50 border border-red-100 rounded-lg px-3 py-2 font-mono whitespace-pre-wrap break-words">
-                                                            {readableError || "No error details recorded."}
-                                                        </p>
+                                                {expandable && isExpanded && (
+                                                    <div className="px-4 pb-3 -mt-1 space-y-1.5">
+                                                        {detailText && (
+                                                            <p className={`text-xs rounded-lg px-3 py-2 font-mono whitespace-pre-wrap break-words ${isError ? "text-red-700 bg-red-50 border border-red-100" : wasDryRun ? "text-amber-800 bg-amber-50 border border-amber-100" : "text-slate-600 bg-slate-50 border border-slate-100"}`}>
+                                                                {detailText}
+                                                            </p>
+                                                        )}
+                                                        <details>
+                                                            <summary className="text-[11px] text-slate-400 cursor-pointer hover:text-slate-600">Raw vendor response</summary>
+                                                            <p className="text-[11px] text-slate-500 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 font-mono whitespace-pre-wrap break-words mt-1 max-h-48 overflow-y-auto print:max-h-none print:overflow-visible">
+                                                                {vo.rawResponse}
+                                                            </p>
+                                                        </details>
                                                     </div>
                                                 )}
                                             </div>
