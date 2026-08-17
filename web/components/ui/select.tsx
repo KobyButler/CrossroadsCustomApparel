@@ -10,7 +10,7 @@ export function Select({ label, error, className, id, children, ...props }: Sele
     const selectId = id ?? label?.toLowerCase().replace(/\s+/g, "-");
 
     return (
-        <div className="w-full">
+        <div className={cn("w-full", className)}>
             {label && (
                 <label htmlFor={selectId} className="field-label">
                     {label}
@@ -26,8 +26,7 @@ export function Select({ label, error, className, id, children, ...props }: Sele
                         "disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-slate-50",
                         error
                             ? "border-red-300"
-                            : "border-slate-200 hover:border-slate-300",
-                        className
+                            : "border-slate-200 hover:border-slate-300"
                     )}
                     {...props}
                 >

@@ -24,6 +24,27 @@ function lineKey(vendorStyle: string, color: string | null, size: string | null)
     return `${vendorStyle}|${color ?? ''}|${size ?? ''}`;
 }
 
+// Strips a shop name down to something safe to embed in a vendor-facing PO
+// number field (letters/digits only, hyphen-joined) — vendor PO fields tend to
+// be picky about punctuation/length, so this errs conservative rather than
+// risking another vendor-side validation rejection.
+function sanitizeForPoNumber(s: string): string {
+    const cleaned = s
+        .replace(/[^A-Za-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+    return (cleaned || 'Shop').slice(0, 30);
+}
+
+// PO reference format: RESTOCK-{ShopName}-{YYYY-MM-DD}-{uniqueId} — human-readable
+// (which shop, which day) while still unique if multiple POs go out for the same
+// shop on the same day. Falls back to "AllShops" when no single shop was selected.
+function buildPoNumber(shopName: string | null): string {
+    const datePart = new Date().toISOString().slice(0, 10);
+    const shopPart = sanitizeForPoNumber(shopName ?? 'AllShops');
+    const uniqueId = Math.random().toString(36).slice(2, 8).toUpperCase();
+    return `RESTOCK-${shopPart}-${datePart}-${uniqueId}`;
+}
+
 async function aggregate(shopId: string | undefined, status: string) {
     const where: any = { status };
     if (shopId) where.shopId = shopId;
@@ -95,6 +116,48 @@ router.get('/', async (req, res) => {
     });
 });
 
+// GET /api/order-report/history?vendor=SANMAR&limit=100 — past PO submissions,
+// one entry per real submission (a single "place order" click fans out into one
+// VendorOrder row per contributing customer order, sharing the same
+// externalOrderNumber — this groups those back into a single history entry so a
+// PO covering 5 customer orders shows up once, not five times).
+router.get('/history', async (req, res) => {
+    const vendor = (req.query.vendor as string) || 'SANMAR';
+    const limit = Math.min(parseInt(req.query.limit as string ?? '100', 10) || 100, 300);
+
+    const rows = await prisma.vendorOrder.findMany({
+        where: { vendor },
+        include: { shop: { select: { id: true, name: true } } },
+        orderBy: { createdAt: 'desc' },
+        take: limit * 5 // rows fan out per contributing order — over-fetch, then collapse below
+    });
+
+    const groups = new Map<string, {
+        poNumber: string; vendor: string; status: string; createdAt: Date;
+        shopName: string | null; totalUnits: number | null;
+        lines: any[] | null; rawResponse: string | null; contributingOrderCount: number;
+    }>();
+    for (const vo of rows) {
+        const key = vo.externalOrderNumber ?? vo.id;
+        if (!groups.has(key)) {
+            let lines: any[] | null = null;
+            try { lines = vo.linesJson ? JSON.parse(vo.linesJson) : null; } catch { lines = null; }
+            groups.set(key, {
+                poNumber: vo.externalOrderNumber ?? '(no reference)', vendor: vo.vendor, status: vo.status,
+                createdAt: vo.createdAt, shopName: vo.shop?.name ?? null, totalUnits: vo.totalUnits,
+                lines, rawResponse: vo.rawResponse, contributingOrderCount: 0
+            });
+        }
+        groups.get(key)!.contributingOrderCount += 1;
+    }
+
+    const history = [...groups.values()]
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+        .slice(0, limit);
+
+    res.json({ history });
+});
+
 // GET /api/order-report/ship-to — the address vendor POs will ship to, so the
 // UI can show it during confirmation before anything is actually submitted.
 router.get('/ship-to', async (_req, res) => {
@@ -129,6 +192,7 @@ router.post('/place-order', async (req, res) => {
         });
     }
 
+    const shop = shopId ? await prisma.shop.findUnique({ where: { id: shopId }, select: { id: true, name: true } }) : null;
     const { orders } = await aggregate(shopId, status);
     const wantedKeys = selector && selector.length
         ? new Set(selector.map(s => lineKey(s.vendorStyle, s.color ?? null, s.size ?? null)))
@@ -170,7 +234,7 @@ router.post('/place-order', async (req, res) => {
 
     const lines = [...lineMap.values()];
     const totalUnits = lines.reduce((a, l) => a + l.item.quantity, 0);
-    const poNumber = `restock-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+    const poNumber = buildPoNumber(shop?.name ?? null);
     const shipTo = {
         name: b.name, address1: b.address1, address2: b.address2 || null,
         city: b.city, state: b.state, zip: b.zip, residential: b.residential
@@ -192,16 +256,38 @@ router.post('/place-order', async (req, res) => {
             ? await submitOrderToSanMar(syntheticOrder, lines)
             : await submitOrderToSS(syntheticOrder, lines);
 
+        // A dry-run (vendor integration disabled) and a genuine successful submission
+        // must never look identical — a dry-run means NOTHING was actually sent to the
+        // vendor, so the DB record and the API response both need to say so unmistakably.
+        const isDryRun = Boolean((result as any)?.dryRun);
+
         const externalOrderNumber = vendor === 'SANMAR'
             ? (result?.poNumber ?? poNumber)
             : (Array.isArray(result) ? result.map((o: any) => o.orderNumber).filter(Boolean).join(',') || null : null);
 
+        // SanMar's own confirmation text (e.g. "PO submitted successfully") — genuine
+        // evidence from the vendor, not just our own success flag. Not applicable to
+        // S&S, whose client returns an array of per-order results instead.
+        const vendorMessage = vendor === 'SANMAR' && !Array.isArray(result) ? ((result as any)?.message ?? null) : null;
+
+        const linesJson = JSON.stringify(lines.map(l => ({
+            vendorStyle: l.product.sku, color: l.item.color, size: l.item.size,
+            quantity: l.item.quantity, productNames: [...l.productNames]
+        })));
+
         await Promise.all([...contributingOrderIds].map(orderId => prisma.vendorOrder.create({
-            data: { orderId, vendor, externalOrderNumber, status: 'Submitted', rawResponse: JSON.stringify(result).slice(0, 65000) }
+            data: {
+                orderId, vendor, externalOrderNumber,
+                status: isDryRun ? 'NotSent' : 'Submitted',
+                rawResponse: JSON.stringify(result).slice(0, 65000),
+                shopId: shop?.id ?? null, linesJson, totalUnits
+            }
         })));
 
         res.json({
-            success: true, poNumber, externalOrderNumber, vendor, placedAt: new Date().toISOString(),
+            success: true, dryRun: isDryRun, dryRunNote: isDryRun ? (result as any)?.note ?? null : null,
+            vendorMessage,
+            poNumber, externalOrderNumber, vendor, placedAt: new Date().toISOString(),
             shipTo, totalUnits, ordersMarked: contributingOrderIds.size,
             lines: lines.map(l => ({
                 vendorStyle: l.product.sku, color: l.item.color, size: l.item.size,

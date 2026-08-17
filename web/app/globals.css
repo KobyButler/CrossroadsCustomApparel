@@ -8,6 +8,17 @@
 @media print {
   .no-print { display: none !important; }
   .print-full-width { max-width: 100% !important; padding: 0 !important; }
+
+  /* Any scrollable, height-clipped list (a modal body, an itemized table
+     wrapper, etc.) should print its FULL contents, not just whatever happened
+     to be scrolled into view on screen — otherwise items below the fold
+     silently vanish from the printout. Belt-and-suspenders alongside the
+     print-aware Modal component itself. */
+  [class*="overflow-y-auto"],
+  [class*="overflow-auto"] {
+    overflow: visible !important;
+    max-height: none !important;
+  }
 }
 
 /* ─── Base ─────────────────────────────────────────────────────────────────── */

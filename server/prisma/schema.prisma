@@ -48,6 +48,7 @@ model Shop {
   orders           Order[]
   checkouts        Checkout[]
   products         Product[]  @relation("ShopProducts")
+  vendorOrders     VendorOrder[]
 }
 
 model Customer {
@@ -137,7 +138,13 @@ model VendorOrder {
   externalOrderNumber String?
   status              String
   rawResponse         String?
+  shopId              String?             // shop this restock PO was placed for (null = spanned multiple/all shops)
+  shop                Shop?    @relation(fields: [shopId], references: [id])
+  linesJson           String?             // JSON snapshot of what was actually submitted: [{vendorStyle,color,size,quantity,productNames}]
+  totalUnits          Int?
   createdAt           DateTime @default(now())
+
+  @@index([externalOrderNumber])
 }
 
 model ContentPage {

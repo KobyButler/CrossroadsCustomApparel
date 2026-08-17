@@ -198,7 +198,7 @@ export default function ShopsPage() {
                                             <td>
                                                 {shop.expiresAt ? (
                                                     <span className={`text-xs ${expired ? "text-red-500 font-medium" : "text-slate-500"}`}>
-                                                        {new Date(shop.expiresAt).toLocaleDateString("en-US", { month:"short", day:"numeric", year:"numeric" })}
+                                                        {new Date(shop.expiresAt).toLocaleDateString("en-US", { month:"short", day:"numeric", year:"numeric", timeZone:"UTC" })}
                                                     </span>
                                                 ) : <span className="text-xs text-slate-300">No expiry</span>}
                                             </td>

@@ -130,7 +130,7 @@ export default function DiscountsPage() {
                                             <td>
                                                 {c.expiresAt ? (
                                                     <span className={`text-xs ${expired ? "text-red-500 font-medium" : "text-slate-400"}`}>
-                                                        {new Date(c.expiresAt).toLocaleDateString("en-US", { month:"short", day:"numeric", year:"numeric" })}
+                                                        {new Date(c.expiresAt).toLocaleDateString("en-US", { month:"short", day:"numeric", year:"numeric", timeZone:"UTC" })}
                                                     </span>
                                                 ) : <span className="text-xs text-slate-300">Never</span>}
                                             </td>
