@@ -24,25 +24,33 @@ function lineKey(vendorStyle: string, color: string | null, size: string | null)
     return `${vendorStyle}|${color ?? ''}|${size ?? ''}`;
 }
 
-// Strips a shop name down to something safe to embed in a vendor-facing PO
-// number field (letters/digits only, hyphen-joined) — vendor PO fields tend to
-// be picky about punctuation/length, so this errs conservative rather than
-// risking another vendor-side validation rejection.
+// Strips a string down to something safe to embed in a vendor-facing PO number
+// field (letters/digits only, hyphen-joined) — vendor PO fields tend to be picky
+// about punctuation, so this errs conservative rather than risking another
+// vendor-side validation rejection.
 function sanitizeForPoNumber(s: string): string {
-    const cleaned = s
-        .replace(/[^A-Za-z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '');
-    return (cleaned || 'Shop').slice(0, 30);
+    return s.replace(/[^A-Za-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 }
 
-// PO reference format: RESTOCK-{ShopName}-{YYYY-MM-DD}-{uniqueId} — human-readable
-// (which shop, which day) while still unique if multiple POs go out for the same
-// shop on the same day. Falls back to "AllShops" when no single shop was selected.
+// PO reference format: RS-{ShopName}-{YYMMDD}-{uniqueId}. SanMar rejects PO
+// numbers over 28 characters (confirmed live: "PO Number length exceeds
+// maximum of 28 characters") — the date and unique-id segments are fixed-width
+// and never dropped (that's what keeps two same-day POs for one shop
+// distinguishable), so the shop name is what flexes: it's truncated to
+// whatever's left after everything else is accounted for. Falls back to
+// "AllShops" when no single shop was selected.
 function buildPoNumber(shopName: string | null): string {
-    const datePart = new Date().toISOString().slice(0, 10);
-    const shopPart = sanitizeForPoNumber(shopName ?? 'AllShops');
-    const uniqueId = Math.random().toString(36).slice(2, 8).toUpperCase();
-    return `RESTOCK-${shopPart}-${datePart}-${uniqueId}`;
+    const MAX_LEN = 28;
+    const PREFIX = 'RS';
+    const datePart = new Date().toISOString().slice(2, 10).replace(/-/g, ''); // YYMMDD, e.g. "260819"
+    const uniqueId = Math.random().toString(36).slice(2, 6).toUpperCase(); // 4 chars
+
+    const fixed = `${PREFIX}-${datePart}-${uniqueId}`; // e.g. "RS-260819-XF3Q" (14 chars)
+    const shopBudget = Math.max(0, MAX_LEN - fixed.length - 1); // -1 for the separator before the shop segment
+
+    const shopPart = sanitizeForPoNumber((shopName ?? 'AllShops').slice(0, shopBudget));
+
+    return shopPart ? `${PREFIX}-${shopPart}-${datePart}-${uniqueId}` : fixed;
 }
 
 async function aggregate(shopId: string | undefined, status: string) {
