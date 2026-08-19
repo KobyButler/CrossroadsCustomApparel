@@ -165,6 +165,14 @@ export default function OrdersPage() {
         a.click(); setShowExport(false); toast("Orders exported");
     }
 
+    // Prints the orders currently selected via checkboxes, or every currently
+    // filtered/visible order if nothing's selected — same scoping as Export.
+    function printOrders() {
+        const ids = selectedIds.size > 0 ? [...selectedIds] : filtered.map(o => o.id);
+        if (ids.length === 0) { toast("No orders to print", "error"); return; }
+        window.open(`/admin/orders/print?ids=${ids.join(",")}`, "_blank");
+    }
+
     async function createOrder(e: React.FormEvent) {
         e.preventDefault();
         if (cartItems.length === 0) { toast("Add at least one item", "error"); return; }
@@ -265,6 +273,14 @@ export default function OrdersPage() {
                     >
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
                         Export
+                    </motion.button>
+                    <motion.button whileHover={{ y:-1 }} whileTap={{ scale:0.97 }}
+                        onClick={printOrders}
+                        title={selectedIds.size > 0 ? `Print ${selectedIds.size} selected order(s) to PDF` : "Print all currently shown orders to PDF"}
+                        className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-slate-700 bg-white ring-1 ring-black/8 shadow-sm hover:shadow-md transition-all duration-200"
+                    >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m0 0v3a1 1 0 001 1h8a1 1 0 001-1v-3m0 0H7m10-11V4a1 1 0 00-1-1H8a1 1 0 00-1 1v3"/></svg>
+                        Print PDF{selectedIds.size > 0 ? ` (${selectedIds.size})` : ""}
                     </motion.button>
                     <motion.button whileHover={{ y:-1 }} whileTap={{ scale:0.97 }}
                         onClick={() => setShowCreate(true)}

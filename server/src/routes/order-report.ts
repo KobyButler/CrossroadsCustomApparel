@@ -170,6 +170,27 @@ router.get('/history', async (req, res) => {
         .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
         .slice(0, limit);
 
+    // Garment type/category isn't captured on the order line itself (it's a
+    // property of the vendor style, not the order) — look it up from the synced
+    // SanMar catalog by style code and attach it to each line for display/export.
+    const allStyles = [...new Set(history.flatMap(h => (h.lines ?? []).map((l: any) => l.vendorStyle).filter(Boolean)))];
+    const categoryRows = allStyles.length
+        ? await prisma.sanmarCatalogProduct.findMany({
+            where: { style: { in: allStyles } },
+            select: { style: true, category: true },
+            distinct: ['style']
+        })
+        : [];
+    const categoryByStyle = new Map(categoryRows.map(r => [r.style, r.category]));
+    for (const h of history) {
+        if (h.lines) {
+            h.lines = h.lines.map((l: any) => ({
+                ...l,
+                category: l.vendorStyle ? (categoryByStyle.get(l.vendorStyle) ?? null) : null
+            }));
+        }
+    }
+
     res.json({ history });
 });
 

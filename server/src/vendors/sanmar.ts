@@ -36,6 +36,29 @@ function normalize(s: unknown): string {
     return String(s ?? '').trim().toLowerCase();
 }
 
+function lineMatchKey(d: { style?: unknown; color?: unknown; size?: unknown }): string {
+    return `${normalize(d.style)}|${normalize(d.color)}|${normalize(d.size)}`;
+}
+
+// When a default warehouse is configured, buildPOEnvelope already tries every
+// line against it. This reads the pre-submit response (SanMar's own dry-run
+// check — confirmed live that it honors a forced whseNo and reports back
+// per-line availability there) and reverts any line that warehouse doesn't
+// actually have stock for back to '' (auto-select), so the PO still fully
+// ships — just from wherever necessary — instead of failing or backordering
+// those specific items. If the pre-submit call itself didn't return a usable
+// per-line list (network hiccup, unexpected shape), every line falls back to
+// auto-select — never guess availability, only trust what SanMar confirmed.
+function adjustForDefaultWarehouse(poEnvelope: any, presubmitResp: any): void {
+    const checked = asArray(presubmitResp?.return?.response?.webServicePoDetailList);
+    const availableAtDefault = new Set(
+        checked.filter((d: any) => d?.errorOccured === false).map(lineMatchKey)
+    );
+    poEnvelope.webServicePoDetailList = poEnvelope.webServicePoDetailList.map((d: any) =>
+        availableAtDefault.has(lineMatchKey(d)) ? d : { ...d, whseNo: '' }
+    );
+}
+
 type LineGroup = Array<{
     item: any;
     product: { vendorIdentifier: string | null; sku: string };
@@ -53,11 +76,21 @@ export async function submitOrderToSanMar(order: any, lines: LineGroup) {
     const poEnvelope = await buildPOEnvelope(order, lines);
     const auth = poAuthArgs();
 
-    // Optional pre-submit availability check (non-fatal if it fails)
+    // Pre-submit availability check (SanMar's own documented dry-run step).
+    // Failures here are non-fatal — submitPO often returns clearer messages —
+    // but when a default warehouse is configured, a successful response also
+    // drives which lines actually get consolidated there vs fall back to
+    // auto-select (see adjustForDefaultWarehouse). If this call fails, every
+    // line stays on auto-select rather than guessing default-warehouse stock.
     try {
-        await client.getPreSubmitInfoAsync({ arg0: poEnvelope, arg1: auth });
+        const [presubmit] = await client.getPreSubmitInfoAsync({ arg0: poEnvelope, arg1: auth });
+        if (config.sanmar.defaultWarehouse != null) {
+            adjustForDefaultWarehouse(poEnvelope, presubmit);
+        }
     } catch {
-        // presubmit failures are non-fatal; submitPO often returns clearer messages
+        if (config.sanmar.defaultWarehouse != null) {
+            poEnvelope.webServicePoDetailList = poEnvelope.webServicePoDetailList.map((d: any) => ({ ...d, whseNo: '' }));
+        }
     }
 
     const [resp] = await client.submitPOAsync({ arg0: poEnvelope, arg1: auth });
@@ -160,7 +193,12 @@ async function buildPOEnvelope(order: any, lines: LineGroup) {
             color: mainframeColor,
             size:     item.size     ?? '',
             quantity: Number(item.quantity),
-            whseNo:   '',
+            // Tentatively assigned to the configured default warehouse (if any) so
+            // the whole order consolidates into one shipment when possible —
+            // submitOrderToSanMar checks real availability there via the pre-submit
+            // call and reverts individual lines to '' (auto-select) if this specific
+            // warehouse doesn't actually have stock for them.
+            whseNo: config.sanmar.defaultWarehouse ?? '',
         };
     }));
 
