@@ -70,6 +70,18 @@ export const config = {
         inventoryStageWsdlUrl: process.env.SANMAR_INVENTORY_STAGE_WSDL_URL ?? '',
         productInfoWsdlUrl: process.env.SANMAR_PRODUCTINFO_WSDL_URL ?? '',
         enable: bool(process.env.SANMAR_ENABLE),
+        // Preferred distribution center (SanMar's internal warehouse number, e.g. 4)
+        // to consolidate PO line items into a single shipment when possible. Unset
+        // by default — SanMar auto-picks the best-stocked warehouse per line, which
+        // can split one order across multiple shipments/warehouses. When set, every
+        // line is first tried against this warehouse; any line it doesn't actually
+        // have stock for falls back to auto-select for just that item (see
+        // adjustForDefaultWarehouse in vendors/sanmar.ts) — this never blocks an
+        // order from fully shipping, it only prefers consolidation when possible.
+        defaultWarehouse: (() => {
+            const n = Number(process.env.SANMAR_DEFAULT_WAREHOUSE);
+            return Number.isInteger(n) && n > 0 ? n : null;
+        })(),
         sftp: {
             host: process.env.SANMAR_SFTP_HOST ?? '',
             port: Number(process.env.SANMAR_SFTP_PORT ?? 2200),

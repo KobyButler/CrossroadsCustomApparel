@@ -19,6 +19,13 @@
     overflow: visible !important;
     max-height: none !important;
   }
+
+  /* Force a new printed page before this element — used for one-page-per-order
+     PDF exports so each order starts on its own sheet. */
+  .print-page-break {
+    page-break-before: always;
+    break-before: page;
+  }
 }
 
 /* ─── Base ─────────────────────────────────────────────────────────────────── */

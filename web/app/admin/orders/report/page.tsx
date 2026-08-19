@@ -30,7 +30,20 @@ type Receipt = {
     totalUnits: number; ordersMarked: number;
     lines: { vendorStyle: string; color: string | null; size: string | null; quantity: number; productNames: string[] }[];
 };
-type HistoryLine = { vendorStyle: string; color: string | null; size: string | null; quantity: number; productNames: string[] };
+type HistoryLine = { vendorStyle: string; color: string | null; size: string | null; quantity: number; productNames: string[]; category?: string | null };
+
+// SanMar's category feed joins garment type + fit/demographic modifiers with
+// semicolons in no consistent order (e.g. "T-Shirts;Youth" or "Youth;T-Shirts")
+// — just make it readable rather than guessing which segment is "the real" type.
+function formatCategory(category: string | null | undefined): string {
+    if (!category) return "—";
+    return category.split(";").map(s => s.trim()).filter(Boolean).join(" / ");
+}
+
+function csvCell(value: string | number | null | undefined): string {
+    const s = String(value ?? "");
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
 type HistoryEntry = {
     id: string; poNumber: string; vendor: string; status: string; createdAt: string;
     shopName: string | null; totalUnits: number | null; lines: HistoryLine[] | null;
@@ -82,6 +95,21 @@ export default function OrderReportPage() {
             setHistory(r.history ?? []);
         } catch (err: any) { toast(err.message || "Failed to load order history", "error"); }
         finally { setLoadingHistory(false); }
+    }
+
+    function exportHistoryEntryCSV(h: HistoryEntry) {
+        const header = ["PO Number", "Shop", "Date", "Status", "Vendor Style", "Product", "Category", "Color", "Size", "Quantity"];
+        const rows = (h.lines && h.lines.length > 0 ? h.lines : [null]).map(l => [
+            h.poNumber, h.shopName ?? "Multiple / all shops", new Date(h.createdAt).toLocaleString(), h.status,
+            l?.vendorStyle ?? "", l?.productNames?.join("; ") ?? "", formatCategory(l?.category) === "—" ? "" : formatCategory(l?.category),
+            l?.color ?? "", l?.size ?? "", l?.quantity ?? ""
+        ]);
+        const csv = [header, ...rows].map(row => row.map(csvCell).join(",")).join("\n");
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+        a.download = `sanmar-order-${h.poNumber.replace(/[^A-Za-z0-9-]+/g, "_")}.csv`;
+        a.click();
+        toast("Order exported");
     }
 
     async function fetchReport() {
@@ -351,7 +379,14 @@ export default function OrderReportPage() {
                                                     {h.contributingOrderCount > 1 && ` · ${h.contributingOrderCount} customer orders`}
                                                 </p>
                                             </div>
-                                            <svg className={`w-4 h-4 text-slate-400 shrink-0 transition-transform ${isExpanded ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7"/></svg>
+                                            <div className="flex items-center gap-3 shrink-0">
+                                                <button type="button" title="Export this order to CSV" aria-label="Export this order to CSV"
+                                                    onClick={e => { e.stopPropagation(); exportHistoryEntryCSV(h); }}
+                                                    className="text-xs font-semibold text-brand-600 hover:text-brand-700 transition-colors">
+                                                    Export CSV
+                                                </button>
+                                                <svg className={`w-4 h-4 text-slate-400 shrink-0 transition-transform ${isExpanded ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7"/></svg>
+                                            </div>
                                         </div>
                                         {isExpanded && (
                                             <div className="px-5 pb-4 -mt-1 space-y-3">
@@ -366,6 +401,7 @@ export default function OrderReportPage() {
                                                             <thead className="bg-slate-50"><tr>
                                                                 <th className="text-left px-3 py-2 font-semibold text-slate-500 text-xs">Style</th>
                                                                 <th className="text-left px-3 py-2 font-semibold text-slate-500 text-xs">Product</th>
+                                                                <th className="text-left px-3 py-2 font-semibold text-slate-500 text-xs">Type</th>
                                                                 <th className="text-left px-3 py-2 font-semibold text-slate-500 text-xs">Color</th>
                                                                 <th className="text-left px-3 py-2 font-semibold text-slate-500 text-xs">Size</th>
                                                                 <th className="text-right px-3 py-2 font-semibold text-slate-500 text-xs">Qty</th>
@@ -375,6 +411,7 @@ export default function OrderReportPage() {
                                                                     <tr key={i}>
                                                                         <td className="px-3 py-2 font-mono text-xs font-bold text-slate-800">{l.vendorStyle}</td>
                                                                         <td className="px-3 py-2 text-slate-600 text-xs">{l.productNames.join(", ")}</td>
+                                                                        <td className="px-3 py-2 text-slate-600 text-xs">{formatCategory(l.category)}</td>
                                                                         <td className="px-3 py-2 text-slate-600">{l.color ?? "—"}</td>
                                                                         <td className="px-3 py-2 text-slate-600">{l.size ?? "—"}</td>
                                                                         <td className="px-3 py-2 text-right font-bold text-slate-900">{l.quantity}</td>

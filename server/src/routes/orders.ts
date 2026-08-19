@@ -9,10 +9,13 @@ import { diffScalarFields, diffItems, recordOrderHistory } from '../utils/orderH
 
 export const router = Router();
 
-// list; optional ?status=UNFULFILLED, ?shopId=xxx, ?groupBy=shop, ?limit=N, ?page=1 (admin only)
+// list; optional ?status=UNFULFILLED, ?shopId=xxx, ?ids=a,b,c, ?groupBy=shop, ?limit=N, ?page=1 (admin only)
+// ?ids fetches a specific set of orders by id (e.g. for "print these exact orders")
+// — pagination doesn't apply in that mode, every matching id is returned.
 router.get('/', requireAuth, async (req, res) => {
     const status = (req.query.status as string) ?? undefined;
     const shopId = (req.query.shopId as string) ?? undefined;
+    const ids = req.query.ids ? String(req.query.ids).split(',').map(s => s.trim()).filter(Boolean) : undefined;
     const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
     const page = req.query.page ? Math.max(1, parseInt(req.query.page as string, 10)) : 1;
     const skip = (page - 1) * limit;
@@ -20,14 +23,14 @@ router.get('/', requireAuth, async (req, res) => {
     const where: any = {};
     if (status) where.status = status;
     if (shopId) where.shopId = shopId;
+    if (ids) where.id = { in: ids };
 
     const [orders, total] = await Promise.all([
         prisma.order.findMany({
             where,
             include: { items: { include: { product: true } }, shop: true, vendorOrders: true },
             orderBy: { createdAt: 'desc' },
-            take: limit,
-            skip
+            ...(ids ? {} : { take: limit, skip })
         }),
         prisma.order.count({ where })
     ]);
