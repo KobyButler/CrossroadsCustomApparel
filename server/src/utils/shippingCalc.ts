@@ -1,6 +1,6 @@
 import { prisma } from '../prisma.js';
 import { config } from '../config.js';
-import { getShippingRate, Address } from '../vendors/shippo.js';
+import { getShippingRate, purchaseShippingLabel, Address, PurchasedLabel } from '../vendors/shippo.js';
 
 export type ShippingQuote = {
     cents: number;
@@ -49,4 +49,43 @@ export async function quoteShipping(
     }
 
     return { cents: config.shipping.flatRateCents, estimated: true };
+}
+
+// The business's own address, used as the "ship from" on both rate quotes and
+// purchased labels. Null when it hasn't been filled in yet (see
+// order_report_business_address memory — required before any real Shippo call works).
+function businessFromAddress(): Address | null {
+    const b = config.business;
+    if (!b.address1 || !b.city || !b.state || !b.zip) return null;
+    return { name: b.name, street1: b.address1, street2: b.address2 || null, city: b.city, state: b.state, zip: b.zip, residential: b.residential };
+}
+
+// Buys a real, print-ready shipping label for an already-placed order via
+// Shippo. Throws with a message safe to show an admin (missing config,
+// incomplete address, no rates, etc.) rather than a raw axios error.
+export async function buyLabelForOrder(order: {
+    items: { productId: string; quantity: number }[];
+    customerName: string; customerEmail: string;
+    shipAddress1: string | null; shipAddress2: string | null;
+    shipCity: string | null; shipState: string | null; shipZip: string | null;
+    residential: boolean;
+}): Promise<PurchasedLabel> {
+    if (!config.shipping.enable) {
+        throw new Error('Shipping isn\'t configured — set SHIPPO_API_KEY on the server');
+    }
+    const from = businessFromAddress();
+    if (!from) {
+        throw new Error('Business address isn\'t set — fill in BUSINESS_ADDRESS1/CITY/STATE/ZIP before buying labels');
+    }
+    if (!order.shipAddress1 || !order.shipCity || !order.shipState || !order.shipZip) {
+        throw new Error('This order is missing a full shipping address');
+    }
+
+    const to: Address = {
+        name: order.customerName, street1: order.shipAddress1, street2: order.shipAddress2,
+        city: order.shipCity, state: order.shipState, zip: order.shipZip,
+        residential: order.residential, email: order.customerEmail
+    };
+    const weightOz = await totalWeightOz(order.items);
+    return purchaseShippingLabel(from, to, weightOz);
 }
