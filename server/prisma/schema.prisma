@@ -83,6 +83,15 @@ model Order {
   specialInstructions   String?              // customer-provided notes/comments at checkout
   totalCents            Int                  @default(0)
   createdAt             DateTime             @default(now())
+  // Purchased Shippo shipping label (set by POST /orders/:id/shipping-label).
+  // labelUrl is a hosted, print-ready PDF; transactionId lets a future refund/void
+  // flow reference it back to Shippo. All null until a label has been bought.
+  shippingLabelUrl        String?
+  shippingLabelPurchasedAt DateTime?
+  shippingTrackingNumber  String?
+  shippingCarrier         String?
+  shippingService         String?
+  shippingTransactionId   String?
   items                 OrderItem[]
   vendorOrders          VendorOrder[]
   discountCodeId        String?

@@ -4,7 +4,7 @@ import { requireAuth, AuthUser } from '../middleware/auth.js';
 import { sendOrderConfirmation, sendOfflinePaymentNotification } from '../utils/email.js';
 import { computeItemPriceCents } from '../utils/pricing.js';
 import { buildShopGroups, applyDiscountAcrossGroups, allocateShippingAcrossGroups, newOrderGroupId, assertShippingAllowed } from '../utils/checkoutHelpers.js';
-import { quoteShipping } from '../utils/shippingCalc.js';
+import { quoteShipping, buyLabelForOrder } from '../utils/shippingCalc.js';
 import { diffScalarFields, diffItems, recordOrderHistory } from '../utils/orderHistory.js';
 
 export const router = Router();
@@ -450,6 +450,58 @@ router.get('/:id/history', requireAuth, async (req, res) => {
         id: e.id, userEmail: e.userEmail, createdAt: e.createdAt,
         changes: JSON.parse(e.changesJson)
     })));
+});
+
+// Buy a real, print-ready shipping label via Shippo (admin only). Idempotent
+// by default — if this order already has a label, returns it as-is rather
+// than buying (and paying for) a second one; pass ?regenerate=true to force
+// a fresh purchase (e.g. the address was wrong and has since been corrected).
+// The old label/tracking number, if any, is simply overwritten — Shippo does
+// not auto-refund it, so regenerate only after the original really is unusable.
+router.post('/:id/shipping-label', requireAuth, async (req, res) => {
+    const id = String(req.params.id);
+    const regenerate = req.query.regenerate === 'true';
+    const existing = await prisma.order.findUnique({ where: { id }, include: { items: true } });
+    if (!existing) return res.status(404).json({ error: 'order not found' });
+    if (existing.shippingMethod !== 'SHIP') return res.status(400).json({ error: 'this order is set to pickup, not shipping' });
+
+    if (existing.shippingLabelUrl && !regenerate) {
+        return res.json(existing);
+    }
+
+    try {
+        const label = await buyLabelForOrder({
+            items: existing.items.map(i => ({ productId: i.productId, quantity: i.quantity })),
+            customerName: existing.customerName, customerEmail: existing.customerEmail,
+            shipAddress1: existing.shipAddress1, shipAddress2: existing.shipAddress2,
+            shipCity: existing.shipCity, shipState: existing.shipState, shipZip: existing.shipZip,
+            residential: existing.residential
+        });
+
+        const o = await prisma.order.update({
+            where: { id },
+            data: {
+                shippingLabelUrl: label.labelUrl,
+                shippingLabelPurchasedAt: new Date(),
+                shippingTrackingNumber: label.trackingNumber,
+                shippingCarrier: label.carrier,
+                shippingService: label.service,
+                shippingTransactionId: label.transactionId
+            },
+            include: { items: { include: { product: true } } }
+        });
+
+        const user = (req as any).user as AuthUser | undefined;
+        await recordOrderHistory(id, user?.email, [{
+            field: 'shippingLabel', label: 'Shipping label',
+            oldValue: existing.shippingTrackingNumber ? `Tracking ${existing.shippingTrackingNumber}` : null,
+            newValue: `${label.carrier} ${label.service} — tracking ${label.trackingNumber ?? label.transactionId}`
+        }]);
+
+        res.json(o);
+    } catch (err: any) {
+        res.status(502).json({ error: err.message ?? 'Failed to buy shipping label' });
+    }
 });
 
 // CSV of shipping addresses for label tools (admin only)

@@ -3,51 +3,123 @@ import { useEffect, useState } from "react";
 import { api } from "@/app/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Select } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { Modal, ModalFooter } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
 import { motion, AnimatePresence } from "framer-motion";
 
 type LabelRow = {
-    id:string; orderId:string; customerName:string; customerEmail:string;
-    shipAddress1:string; shipCity:string; shipState:string; shipZip:string;
-    status:"pending"|"printed"|"shipped";
+    id: string; orderId: string; customerName: string; customerEmail: string;
+    shipAddress1: string; shipCity: string; shipState: string; shipZip: string;
+    shippingLabelUrl: string | null;
+    shippingTrackingNumber: string | null;
+    shippingCarrier: string | null;
+    shippingService: string | null;
 };
 
-const statusColor: Record<string, string> = { pending:"warning", printed:"info", shipped:"success" };
+type ConfirmBuy = { ids: string[]; regenerate: boolean } | null;
+
+const statusColor: Record<string, string> = { pending: "warning", labeled: "success" };
+const statusLabel: Record<string, string> = { pending: "Pending", labeled: "Labeled" };
 
 export default function ShippingLabelsPage() {
-    const { toast }   = useToast();
-    const [rows, setRows]         = useState<LabelRow[]>([]);
-    const [loading, setLoading]   = useState(true);
-    const [search, setSearch]     = useState("");
+    const { toast } = useToast();
+    const [rows, setRows] = useState<LabelRow[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [search, setSearch] = useState("");
     const [statusFilter, setStatusFilter] = useState("");
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [buyingIds, setBuyingIds] = useState<Set<string>>(new Set());
+    const [confirmBuy, setConfirmBuy] = useState<ConfirmBuy>(null);
+    const [buying, setBuying] = useState(false);
 
-    useEffect(() => {
+    function load() {
+        setLoading(true);
         api("/orders?status=UNFULFILLED&limit=500")
             .then((d: any) => {
                 const orders = Array.isArray(d) ? d : d?.data ?? [];
                 // Pickup orders don't ship — nothing to label here
                 const shipping = orders.filter((o: any) => o.shippingMethod === "SHIP");
-                setRows(shipping.map((o: any) => ({ id:o.id, orderId:o.id, customerName:o.customerName, customerEmail:o.customerEmail,
-                    shipAddress1:o.shipAddress1, shipCity:o.shipCity, shipState:o.shipState, shipZip:o.shipZip, status:"pending" as const })));
+                setRows(shipping.map((o: any) => ({
+                    id: o.id, orderId: o.id, customerName: o.customerName, customerEmail: o.customerEmail,
+                    shipAddress1: o.shipAddress1, shipCity: o.shipCity, shipState: o.shipState, shipZip: o.shipZip,
+                    shippingLabelUrl: o.shippingLabelUrl ?? null,
+                    shippingTrackingNumber: o.shippingTrackingNumber ?? null,
+                    shippingCarrier: o.shippingCarrier ?? null,
+                    shippingService: o.shippingService ?? null,
+                })));
             }).catch(console.error).finally(() => setLoading(false));
-    }, []);
+    }
+
+    useEffect(load, []);
+
+    function statusOf(r: LabelRow) { return r.shippingLabelUrl ? "labeled" : "pending"; }
 
     const filtered = rows.filter(r => {
         const q = search.toLowerCase();
-        return (!q || r.customerName.toLowerCase().includes(q) || r.customerEmail.toLowerCase().includes(q)) && (!statusFilter || r.status === statusFilter);
+        return (!q || r.customerName.toLowerCase().includes(q) || r.customerEmail.toLowerCase().includes(q))
+            && (!statusFilter || statusOf(r) === statusFilter);
     });
 
-    function toggleSelect(id: string) { setSelectedIds(p => { const n=new Set(p); n.has(id)?n.delete(id):n.add(id); return n; }); }
-    function selectAll() { setSelectedIds(p => p.size===filtered.length ? new Set() : new Set(filtered.map(r=>r.id))); }
-    function markStatus(ids: string[], status: LabelRow["status"]) {
-        setRows(p => p.map(r => ids.includes(r.id) ? { ...r, status } : r));
-        setSelectedIds(new Set()); toast(`${ids.length} label(s) marked as ${status}`);
+    function toggleSelect(id: string) { setSelectedIds(p => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; }); }
+    function selectAll() { setSelectedIds(p => p.size === filtered.length ? new Set() : new Set(filtered.map(r => r.id))); }
+
+    // Purchasing a label is a real, chargeable Shippo transaction — always
+    // confirmed first, one at a time here, so a stray double-click can't buy two.
+    async function confirmedBuy() {
+        if (!confirmBuy || buying) return;
+        const { ids, regenerate } = confirmBuy;
+        setBuying(true);
+        setBuyingIds(prev => new Set([...prev, ...ids]));
+        let bought = 0;
+        const errors: string[] = [];
+        for (const id of ids) {
+            try {
+                const updated = await api(`/orders/${id}/shipping-label${regenerate ? "?regenerate=true" : ""}`, { method: "POST" });
+                setRows(p => p.map(r => r.id === id ? {
+                    ...r,
+                    shippingLabelUrl: updated.shippingLabelUrl,
+                    shippingTrackingNumber: updated.shippingTrackingNumber,
+                    shippingCarrier: updated.shippingCarrier,
+                    shippingService: updated.shippingService,
+                } : r));
+                bought++;
+            } catch (err: any) {
+                const row = rows.find(r => r.id === id);
+                errors.push(`${row?.customerName ?? id}: ${err.message?.replace(/^HTTP \d+:\s*/, "") ?? "failed"}`);
+            }
+        }
+        setBuyingIds(prev => { const n = new Set(prev); ids.forEach(id => n.delete(id)); return n; });
+        setBuying(false);
+        setConfirmBuy(null);
+        if (bought) toast(`${bought} label${bought !== 1 ? "s" : ""} purchased`);
+        if (errors.length) toast(errors.slice(0, 3).join(" · "));
     }
+
+    function printLabels(ids: string[]) {
+        const urls = rows.filter(r => ids.includes(r.id) && r.shippingLabelUrl).map(r => r.shippingLabelUrl!);
+        if (urls.length === 0) { toast("No labels bought yet for the selected order(s)"); return; }
+        urls.forEach(u => window.open(u, "_blank"));
+        toast(`Opened ${urls.length} label${urls.length !== 1 ? "s" : ""} — print from each tab (allow pop-ups if blocked)`);
+    }
+
+    async function markShipped(ids: string[]) {
+        let count = 0;
+        for (const id of ids) {
+            try { await api(`/orders/${id}/fulfill`, { method: "POST" }); count++; } catch { /* keep going */ }
+        }
+        setRows(p => p.filter(r => !ids.includes(r.id)));
+        setSelectedIds(new Set());
+        toast(`${count} order${count !== 1 ? "s" : ""} marked shipped`);
+    }
+
     function exportCSV() {
         const url = `${process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:4000/api"}/orders/shipping/export?status=UNFULFILLED`;
         window.open(url, "_blank"); toast("Downloading shipping CSV");
     }
+
+    const selectedPending = Array.from(selectedIds).filter(id => !rows.find(r => r.id === id)?.shippingLabelUrl);
+    const selectedLabeled = Array.from(selectedIds).filter(id => rows.find(r => r.id === id)?.shippingLabelUrl);
 
     return (
         <div className="space-y-6">
@@ -57,21 +129,30 @@ export default function ShippingLabelsPage() {
                     <p className="page-subtitle">Unfulfilled orders ready for shipment</p>
                 </div>
                 <div className="flex gap-2.5 flex-wrap">
-                    <motion.button type="button" whileHover={{ y:-1 }} whileTap={{ scale:0.97 }} onClick={exportCSV}
+                    <motion.button type="button" whileHover={{ y: -1 }} whileTap={{ scale: 0.97 }} onClick={exportCSV}
                         className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-slate-700 bg-white ring-1 ring-black/8 shadow-sm hover:shadow-md transition-all duration-200">
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                         Export CSV
                     </motion.button>
                     <AnimatePresence>
                         {selectedIds.size > 0 && (
-                            <motion.div initial={{ opacity:0, scale:0.92 }} animate={{ opacity:1, scale:1 }} exit={{ opacity:0, scale:0.92 }} className="flex gap-2">
-                                <motion.button type="button" whileHover={{ y:-1 }} whileTap={{ scale:0.97 }} onClick={() => { window.print(); toast(`Printing ${selectedIds.size} label(s)`); }}
-                                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-slate-700 bg-white ring-1 ring-black/8 shadow-sm hover:shadow-md transition-all duration-200">
-                                    🖨️ Print ({selectedIds.size})
-                                </motion.button>
-                                <motion.button type="button" whileHover={{ y:-1 }} whileTap={{ scale:0.97 }} onClick={() => markStatus(Array.from(selectedIds), "shipped")}
+                            <motion.div initial={{ opacity: 0, scale: 0.92 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.92 }} className="flex gap-2">
+                                {selectedPending.length > 0 && (
+                                    <motion.button type="button" whileHover={{ y: -1 }} whileTap={{ scale: 0.97 }}
+                                        onClick={() => setConfirmBuy({ ids: selectedPending, regenerate: false })}
+                                        className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-slate-700 bg-white ring-1 ring-black/8 shadow-sm hover:shadow-md transition-all duration-200">
+                                        💳 Buy Labels ({selectedPending.length})
+                                    </motion.button>
+                                )}
+                                {selectedLabeled.length > 0 && (
+                                    <motion.button type="button" whileHover={{ y: -1 }} whileTap={{ scale: 0.97 }} onClick={() => printLabels(selectedLabeled)}
+                                        className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-slate-700 bg-white ring-1 ring-black/8 shadow-sm hover:shadow-md transition-all duration-200">
+                                        🖨️ Print ({selectedLabeled.length})
+                                    </motion.button>
+                                )}
+                                <motion.button type="button" whileHover={{ y: -1 }} whileTap={{ scale: 0.97 }} onClick={() => markShipped(Array.from(selectedIds))}
                                     className="btn-shine flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white transition-all duration-200"
-                                    style={{ background:"linear-gradient(135deg,#10b981 0%,#059669 100%)", boxShadow:"0 4px 16px rgba(16,185,129,0.35)" }}>
+                                    style={{ background: "linear-gradient(135deg,#10b981 0%,#059669 100%)", boxShadow: "0 4px 16px rgba(16,185,129,0.35)" }}>
                                     Mark Shipped
                                 </motion.button>
                             </motion.div>
@@ -82,26 +163,25 @@ export default function ShippingLabelsPage() {
 
             <div className="flex flex-wrap items-center gap-3">
                 <div className="relative max-w-xs flex-1">
-                    <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                    <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                     <input className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-xl outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 bg-white shadow-sm transition-all"
                         placeholder="Search by name or email…" value={search} onChange={e => setSearch(e.target.value)} />
                 </div>
                 <Select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="w-full sm:w-36">
                     <option value="">All statuses</option>
                     <option value="pending">Pending</option>
-                    <option value="printed">Printed</option>
-                    <option value="shipped">Shipped</option>
+                    <option value="labeled">Labeled</option>
                 </Select>
             </div>
 
             <div className="bg-white rounded-2xl ring-1 ring-black/5 shadow-card overflow-hidden">
                 {loading ? (
                     <div className="p-8 space-y-3">
-                        {[1,2,3,4].map(i => (<div key={i} className="animate-pulse flex items-center gap-4"><div className="w-4 h-4 bg-slate-100 rounded"/><div className="flex-1 h-3 bg-slate-200 rounded"/><div className="h-3 w-40 bg-slate-100 rounded"/><div className="h-5 w-16 bg-slate-100 rounded-full"/></div>))}
+                        {[1, 2, 3, 4].map(i => (<div key={i} className="animate-pulse flex items-center gap-4"><div className="w-4 h-4 bg-slate-100 rounded" /><div className="flex-1 h-3 bg-slate-200 rounded" /><div className="h-3 w-40 bg-slate-100 rounded" /><div className="h-5 w-16 bg-slate-100 rounded-full" /></div>))}
                     </div>
                 ) : filtered.length === 0 ? (
                     <div className="flex flex-col items-center py-16 text-slate-300">
-                        <svg className="w-12 h-12 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/></svg>
+                        <svg className="w-12 h-12 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" /></svg>
                         <p className="text-sm text-slate-400 font-medium">No orders to ship</p>
                         <p className="text-xs text-slate-300 mt-0.5">Unfulfilled orders will appear here</p>
                     </div>
@@ -112,53 +192,94 @@ export default function ShippingLabelsPage() {
                                 <tr>
                                     <th className="pl-5 w-10">
                                         <input type="checkbox" title="Select all" aria-label="Select all"
-                                            checked={selectedIds.size===filtered.length && filtered.length>0} onChange={selectAll}
+                                            checked={selectedIds.size === filtered.length && filtered.length > 0} onChange={selectAll}
                                             className="rounded border-slate-300 accent-brand-600" />
                                     </th>
-                                    <th>Order</th><th>Customer</th><th>Ship To</th><th>Status</th><th className="text-right pr-5">Actions</th>
+                                    <th>Order</th><th>Customer</th><th>Ship To</th><th>Status</th><th>Tracking</th><th className="text-right pr-5">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {filtered.map((r, idx) => (
-                                    <motion.tr key={r.id} initial={{ opacity:0, y:4 }} animate={{ opacity:1, y:0 }} transition={{ delay:idx*0.025, duration:0.2 }}>
-                                        <td className="pl-5">
-                                            <input type="checkbox" title={`Select ${r.customerName}`} aria-label={`Select ${r.customerName}`}
-                                                checked={selectedIds.has(r.id)} onChange={() => toggleSelect(r.id)}
-                                                className="rounded border-slate-300 accent-brand-600" />
-                                        </td>
-                                        <td><code className="text-xs font-mono font-medium text-brand-600">#{r.orderId.slice(-8).toUpperCase()}</code></td>
-                                        <td>
-                                            <p className="text-sm font-semibold text-slate-800">{r.customerName}</p>
-                                            <p className="text-xs text-slate-400">{r.customerEmail}</p>
-                                        </td>
-                                        <td>
-                                            <p className="text-sm text-slate-700">{r.shipAddress1 || "—"}</p>
-                                            {r.shipCity && <p className="text-xs text-slate-400">{r.shipCity}, {r.shipState} {r.shipZip}</p>}
-                                        </td>
-                                        <td><Badge variant={statusColor[r.status] as any} size="sm">{r.status.charAt(0).toUpperCase()+r.status.slice(1)}</Badge></td>
-                                        <td className="text-right pr-5">
-                                            <div className="flex items-center justify-end gap-1.5">
-                                                {r.status==="pending" && (
-                                                    <button type="button" onClick={() => markStatus([r.id],"printed")}
-                                                        className="px-2.5 py-1 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors">
-                                                        Mark Printed
-                                                    </button>
-                                                )}
-                                                {r.status!=="shipped" && (
-                                                    <button type="button" onClick={() => markStatus([r.id],"shipped")}
+                                {filtered.map((r, idx) => {
+                                    const status = statusOf(r);
+                                    const isBuying = buyingIds.has(r.id);
+                                    return (
+                                        <motion.tr key={r.id} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.025, duration: 0.2 }}>
+                                            <td className="pl-5">
+                                                <input type="checkbox" title={`Select ${r.customerName}`} aria-label={`Select ${r.customerName}`}
+                                                    checked={selectedIds.has(r.id)} onChange={() => toggleSelect(r.id)}
+                                                    className="rounded border-slate-300 accent-brand-600" />
+                                            </td>
+                                            <td><code className="text-xs font-mono font-medium text-brand-600">#{r.orderId.slice(-8).toUpperCase()}</code></td>
+                                            <td>
+                                                <p className="text-sm font-semibold text-slate-800">{r.customerName}</p>
+                                                <p className="text-xs text-slate-400">{r.customerEmail}</p>
+                                            </td>
+                                            <td>
+                                                <p className="text-sm text-slate-700">{r.shipAddress1 || "—"}</p>
+                                                {r.shipCity && <p className="text-xs text-slate-400">{r.shipCity}, {r.shipState} {r.shipZip}</p>}
+                                            </td>
+                                            <td><Badge variant={statusColor[status] as any} size="sm">{statusLabel[status]}</Badge></td>
+                                            <td>
+                                                {r.shippingTrackingNumber ? (
+                                                    <>
+                                                        <p className="text-xs font-medium text-slate-700">{r.shippingCarrier} {r.shippingService}</p>
+                                                        <p className="text-xs text-slate-400 font-mono">{r.shippingTrackingNumber}</p>
+                                                    </>
+                                                ) : <span className="text-xs text-slate-300">—</span>}
+                                            </td>
+                                            <td className="text-right pr-5">
+                                                <div className="flex items-center justify-end gap-1.5">
+                                                    {status === "pending" ? (
+                                                        <button type="button" disabled={isBuying} onClick={() => setConfirmBuy({ ids: [r.id], regenerate: false })}
+                                                            className="px-2.5 py-1 rounded-lg text-xs font-semibold text-brand-700 bg-brand-50 hover:bg-brand-100 transition-colors disabled:opacity-50">
+                                                            {isBuying ? "Buying…" : "Buy Label"}
+                                                        </button>
+                                                    ) : (
+                                                        <>
+                                                            <button type="button" onClick={() => printLabels([r.id])}
+                                                                className="px-2.5 py-1 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors">
+                                                                Print
+                                                            </button>
+                                                            <button type="button" disabled={isBuying} onClick={() => setConfirmBuy({ ids: [r.id], regenerate: true })}
+                                                                title="Wrong address or damaged label? Buy a fresh one — this does not refund the original."
+                                                                className="px-2.5 py-1 rounded-lg text-xs font-medium text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors disabled:opacity-50">
+                                                                {isBuying ? "…" : "Regenerate"}
+                                                            </button>
+                                                        </>
+                                                    )}
+                                                    <button type="button" onClick={() => markShipped([r.id])}
                                                         className="px-2.5 py-1 rounded-lg text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-colors">
                                                         Mark Shipped
                                                     </button>
-                                                )}
-                                            </div>
-                                        </td>
-                                    </motion.tr>
-                                ))}
+                                                </div>
+                                            </td>
+                                        </motion.tr>
+                                    );
+                                })}
                             </tbody>
                         </table></div>
                     </div>
                 )}
             </div>
+
+            <Modal open={!!confirmBuy} onClose={() => !buying && setConfirmBuy(null)} title={confirmBuy?.regenerate ? "Buy a Replacement Label" : "Buy Shipping Label"} size="sm">
+                <p className="text-sm text-slate-600 mb-1">
+                    {confirmBuy && confirmBuy.ids.length === 1
+                        ? <>This purchases a real, chargeable label from Shippo for <span className="font-semibold text-slate-900">{rows.find(r => r.id === confirmBuy.ids[0])?.customerName}</span>.</>
+                        : <>This purchases <span className="font-semibold text-slate-900">{confirmBuy?.ids.length}</span> real, chargeable labels from Shippo.</>}
+                </p>
+                <p className="text-xs text-slate-400 mb-4">
+                    {confirmBuy?.regenerate
+                        ? "The previous label/tracking number for this order will be replaced and is not refunded."
+                        : "Your Shippo account will be charged at the carrier's rate. This can't be undone from here."}
+                </p>
+                <ModalFooter>
+                    <Button type="button" variant="outline" onClick={() => setConfirmBuy(null)} disabled={buying}>Cancel</Button>
+                    <Button type="button" variant="primary" loading={buying} onClick={confirmedBuy}>
+                        {confirmBuy?.regenerate ? "Buy Replacement" : "Buy Label"}
+                    </Button>
+                </ModalFooter>
+            </Modal>
         </div>
     );
 }
