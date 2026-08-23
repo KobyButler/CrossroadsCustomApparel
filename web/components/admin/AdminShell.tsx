@@ -260,7 +260,14 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
                         <Image src="/logo.png" alt="Crossroads Custom Apparel" width={100} height={40} className="object-contain" />
                     </div>
 
-                    <main className="flex-1 overflow-x-hidden">
+                    {/* overflow-x-clip (not overflow-x-hidden) on purpose: per the CSS overflow
+                        spec, overflow-x: hidden paired with an unset overflow-y silently computes
+                        overflow-y to auto, turning <main> into its own clipped scroll region. That
+                        was invisible on screen (scrolling inside <main> feels like scrolling the
+                        page) but meant printing only rasterized whatever was scrolled into view and
+                        silently dropped everything past the fold. overflow-x-clip clips the same
+                        horizontal overflow without triggering that y-axis side effect. */}
+                    <main className="flex-1 overflow-x-clip">
                         <motion.div
                             key={pathname}
                             initial={{ opacity: 0, y: 10 }}
