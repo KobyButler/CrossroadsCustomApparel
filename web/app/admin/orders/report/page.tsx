@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select } from "@/components/ui/select";
 import { Modal, ModalFooter } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
+import { ZoomableImage } from "@/components/ui/zoomable-image";
 import { motion } from "framer-motion";
 import { getColorCss } from "@/lib/colors";
 
@@ -301,7 +302,9 @@ export default function OrderReportPage() {
                                                         <td>
                                                             <div className="flex items-center gap-3">
                                                                 {l.image ? (
-                                                                    <img src={imgUrl(l.image)} alt={l.vendorStyle} className="w-8 h-8 rounded-lg object-cover ring-1 ring-black/5 no-print" />
+                                                                    <ZoomableImage src={imgUrl(l.image)} alt={l.vendorStyle}
+                                                                        wrapperClassName="no-print"
+                                                                        className="w-8 h-8 rounded-lg object-cover ring-1 ring-black/5" />
                                                                 ) : null}
                                                                 <code className="text-sm font-mono font-bold text-slate-800">{l.vendorStyle}</code>
                                                             </div>
