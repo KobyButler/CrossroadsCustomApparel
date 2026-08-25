@@ -1,7 +1,7 @@
 "use client";
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { api } from "@/app/lib/api";
+import { api, printAs } from "@/app/lib/api";
 
 type OrderItemRow = {
     id: string; product?: { name: string; sku: string } | null;
@@ -147,6 +147,14 @@ function PrintOrdersContent() {
     if (error) return <div className="p-10 text-red-600 text-sm">{error}</div>;
     if (orders.length === 0) return <div className="p-10 text-slate-400 text-sm">No orders found.</div>;
 
+    function printOrders() {
+        const dateStr = new Date().toISOString().split("T")[0];
+        const name = orders.length === 1
+            ? `Order-${orders[0].id.slice(-8).toUpperCase()}`
+            : `Orders-${orders.length}-${dateStr}`;
+        printAs(name);
+    }
+
     return (
         <div className="print-full-width bg-white min-h-screen">
             <div className="no-print sticky top-0 z-10 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between">
@@ -154,7 +162,7 @@ function PrintOrdersContent() {
                     <h1 className="text-lg font-bold text-slate-900">Print Orders</h1>
                     <p className="text-sm text-slate-500">{orders.length} order{orders.length !== 1 ? "s" : ""} — one page each</p>
                 </div>
-                <button type="button" onClick={() => window.print()}
+                <button type="button" onClick={printOrders}
                     className="btn-shine text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-all"
                     style={{ background: "linear-gradient(135deg,#8b5cf6 0%,#7c3aed 100%)", boxShadow: "0 4px 16px rgba(124,58,237,0.35)" }}>
                     Print / Save as PDF

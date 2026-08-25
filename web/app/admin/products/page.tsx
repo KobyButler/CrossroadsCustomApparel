@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Modal, ModalFooter } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
+import { ZoomableImage } from "@/components/ui/zoomable-image";
 import { motion, Reorder } from "framer-motion";
 import { getColorCss } from "@/lib/colors";
 
@@ -779,8 +780,8 @@ export default function ProductsPage() {
                                         <td>
                                             <div className="flex items-center gap-3">
                                                 {p.imagesJson && JSON.parse(p.imagesJson)[0] ? (
-                                                    <img src={imgUrl(JSON.parse(p.imagesJson)[0])}
-                                                        alt={p.name} className="w-8 h-8 rounded-lg object-cover shrink-0 ring-1 ring-black/5" />
+                                                    <ZoomableImage src={imgUrl(JSON.parse(p.imagesJson)[0])} alt={p.name}
+                                                        className="w-8 h-8 rounded-lg object-cover shrink-0 ring-1 ring-black/5" />
                                                 ) : (
                                                     <div className="w-8 h-8 rounded-lg bg-brand-50 flex items-center justify-center shrink-0">
                                                         <svg className="w-4 h-4 text-brand-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14"/></svg>

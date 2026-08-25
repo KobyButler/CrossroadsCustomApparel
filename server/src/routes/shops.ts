@@ -5,6 +5,16 @@ import { requireAuth } from '../middleware/auth.js';
 
 export const router = Router();
 
+// The admin only ever picks a calendar day for "expires on" (a plain <input type="date">,
+// no time-of-day), so `new Date("2026-08-25")` parses to 2026-08-25T00:00:00.000Z. Stored
+// as-is, the shop reads as "Expired" for almost all of its own last day, and a same-day
+// "extension" can look like it didn't work at all. Normalize to the END of that calendar
+// day instead, so "expires on Aug 25" actually means valid through all of Aug 25.
+function endOfDayUTC(input: string): Date {
+    const d = new Date(input);
+    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 23, 59, 59, 999));
+}
+
 // List all shops (admin only)
 router.get('/', requireAuth, async (_req, res) => {
     const data = await prisma.shop.findMany({
@@ -42,7 +52,7 @@ router.post('/', requireAuth, async (req, res) => {
             name,
             slug,
             notes: notes ?? null,
-            expiresAt: expiresAt ? new Date(expiresAt) : null,
+            expiresAt: expiresAt ? endOfDayUTC(expiresAt) : null,
             ...(shippingEnabled !== undefined ? { shippingEnabled: Boolean(shippingEnabled) } : {}),
             ...(Array.isArray(productIds) && productIds.length
                 ? { products: { connect: productIds.map((id: string) => ({ id })) } }
@@ -94,17 +104,30 @@ router.patch('/:id', requireAuth, async (req, res) => {
     const existing = await prisma.shop.findUnique({ where: { id } });
     if (!existing) return res.status(404).json({ error: 'shop not found' });
 
+    const nextExpiresAt = expiresAt !== undefined
+        ? (expiresAt ? endOfDayUTC(expiresAt) : null)
+        : existing.expiresAt;
+    const now = new Date();
+    const wasExpired = existing.expiresAt !== null && existing.expiresAt < now;
+    const stillExpired = nextExpiresAt !== null && nextExpiresAt < now;
+
+    // Pushing the due date out (or clearing it) on a shop that had expired should bring
+    // it back live automatically — that's the whole point of extending it. An explicit
+    // `active` in the same request always takes precedence over this.
+    const autoReactivate = active === undefined && wasExpired && !stillExpired;
+
     const updated = await prisma.shop.update({
         where: { id },
         data: {
             ...(name !== undefined && { name }),
-            ...(expiresAt !== undefined && { expiresAt: expiresAt ? new Date(expiresAt) : null }),
+            ...(expiresAt !== undefined && { expiresAt: nextExpiresAt }),
             ...(notes !== undefined && { notes: notes ?? null }),
             ...(active !== undefined && { active }),
             // Archiving a live shop also takes it off the storefront — there's no
             // reason to archive a shop you still want customers ordering from.
             // Unarchiving does not re-activate it; the admin does that separately.
             ...(archived !== undefined && { archived: Boolean(archived), ...(archived ? { active: false } : {}) }),
+            ...(autoReactivate && { active: true }),
             ...(shippingEnabled !== undefined && { shippingEnabled: Boolean(shippingEnabled) }),
             ...(Array.isArray(productIds) && { products: { set: productIds.map((pid: string) => ({ id: pid })) } })
         },

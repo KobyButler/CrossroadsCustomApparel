@@ -26,6 +26,21 @@
     page-break-before: always;
     break-before: page;
   }
+
+  /* AdminShell's <main> wraps every admin page, including the print views. Any
+     ancestor that ends up with a non-visible overflow on one axis only (even
+     unintentionally — see the overflow-x/overflow-y computed-value pairing
+     rule in the CSS overflow spec) turns into a fixed-height scroll box whose
+     off-screen content silently never reaches the printer. Force the whole
+     shell back to plain, unclipped block flow for print so content always
+     paginates in full no matter what a future layout change does upstream. */
+  main, .app-bg, .app-bg > div {
+    display: block !important;
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+    min-height: 0 !important;
+  }
 }
 
 /* ─── Base ─────────────────────────────────────────────────────────────────── */
