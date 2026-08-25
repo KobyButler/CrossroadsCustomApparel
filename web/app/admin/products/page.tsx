@@ -8,6 +8,8 @@ import { Select } from "@/components/ui/select";
 import { Modal, ModalFooter } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
 import { ZoomableImage } from "@/components/ui/zoomable-image";
+import { IconButton, IconButtonRow } from "@/components/ui/icon-button";
+import { EditIcon, DuplicateIcon, TrashIcon } from "@/components/ui/icons";
 import { motion, Reorder } from "framer-motion";
 import { getColorCss } from "@/lib/colors";
 
@@ -295,13 +297,16 @@ function SizeChartUploader({ url, onChange, label = "Size Chart (PDF)" }: { url:
 // SanMar sells youth sizing as a fully separate style/SKU (e.g. PC61 vs
 // PC61Y), so under the hood it's still a separate Product here too — but the
 // admin never has to build that second product by hand. Searching and picking
-// a SanMar style calls /sanmar/import right away (same "find or create by
-// vendor style" the SanMar tab's bulk import uses) and links the result,
-// unlisted from any shop until the admin decides otherwise. The link is
-// edited from the adult side only; a product already linked as someone's
-// youth shows read-only info instead, so there's one place to manage each pair.
-function YouthLinkPanel({ products, editProductId, value, onChange, sizeChartUrl, onSizeChartChange }: {
-    products: Product[]; editProductId: string | null;
+// a SanMar style loads its colors/sizes for a quick confirm step (colors are
+// locked to whatever Adult already offers — no point stocking a youth color
+// Adult doesn't have; sizes are the admin's choice, since youth's size run is
+// its own thing), then calls /sanmar/import (same "find or create by vendor
+// style" the SanMar tab's bulk import uses) and links the result, unlisted
+// from any shop until the admin decides otherwise. The link is edited from
+// the adult side only; a product already linked as someone's youth shows
+// read-only info instead, so there's one place to manage each pair.
+function YouthLinkPanel({ products, editProductId, adultColors, value, onChange, sizeChartUrl, onSizeChartChange }: {
+    products: Product[]; editProductId: string | null; adultColors: string[];
     value: YouthProductRef | null; onChange: (v: YouthProductRef | null) => void;
     sizeChartUrl: string; onSizeChartChange: (url: string) => void;
 }) {
@@ -311,6 +316,8 @@ function YouthLinkPanel({ products, editProductId, value, onChange, sizeChartUrl
     const [searching, setSearching] = useState(false);
     const [loading, setLoading] = useState(false);
     const [resolving, setResolving] = useState(false);
+    const [detail, setDetail] = useState<{ style: string; title: string; brand?: string; colors: string[]; sizes: string[] } | null>(null);
+    const [selectedSizes, setSelectedSizes] = useState<Set<string>>(new Set());
     const timerRef = useRef<ReturnType<typeof setTimeout>>();
 
     const linkedFromAdult = editProductId ? products.find(y => y.youthProductId === editProductId) : undefined;
@@ -343,17 +350,59 @@ function YouthLinkPanel({ products, editProductId, value, onChange, sizeChartUrl
         timerRef.current = setTimeout(() => doSearch(q), 400);
     }
 
-    async function pick(result: any) {
+    async function pickResult(result: any) {
+        setLoading(true);
+        try {
+            const d = await api(`/sanmar/catalog/${encodeURIComponent(result.style)}`);
+            setDetail({ style: result.style, title: d.title ?? result.style, brand: d.brand, colors: d.colors ?? [], sizes: d.sizes ?? [] });
+            setSelectedSizes(new Set(d.sizes ?? []));
+        } catch (err: any) { toast(err.message || "Failed to load style details", "error"); }
+        finally { setLoading(false); }
+    }
+
+    const colorIntersection = detail ? detail.colors.filter(c => adultColors.includes(c)) : [];
+
+    async function confirmLink() {
+        if (!detail) return;
         setResolving(true);
         try {
-            const res = await api("/sanmar/import", { method: "POST", body: JSON.stringify({ style: result.style }) });
-            const p = res.product;
+            const res = await api("/sanmar/import", { method: "POST", body: JSON.stringify({
+                style: detail.style, colors: colorIntersection, sizes: [...selectedSizes]
+            }) });
+            let p = res.product;
+
+            // Brand new product — give it a Crossroads SKU that matches this
+            // shop's convention ({SanMar style}{product name}) with a trailing
+            // "Y" so it reads unmistakably as the youth companion in the
+            // products list, whether or not SanMar's own style code ends in Y.
+            if (res.action === "created") {
+                const youthSku = `${p.vendorIdentifier ?? detail.style}${p.name}Y`;
+                try {
+                    p = await api(`/products/${p.id}`, { method: "PUT", body: JSON.stringify({
+                        name: p.name, sku: youthSku, vendor: p.vendor, vendorIdentifier: p.vendorIdentifier,
+                        brand: p.brand, description: p.description, priceCents: p.priceCents,
+                        images: p.imagesJson ? JSON.parse(p.imagesJson) : [],
+                        sizes: p.sizesJson ? JSON.parse(p.sizesJson) : [],
+                        colors: p.colorsJson ? JSON.parse(p.colorsJson) : [],
+                        sizeChartUrl: p.sizeChartUrl, upchargeEnabled: p.upchargeEnabled,
+                        upchargeCents: p.upchargeCents, weightOz: p.weightOz,
+                        shopIds: (p.shops ?? []).map((s: any) => s.id),
+                    }) });
+                } catch (err: any) {
+                    toast(`Linked, but couldn't set its SKU (${err.message || "unknown error"}) — it kept the default one.`, "error");
+                }
+            }
+
             onChange({ id: p.id, name: p.name, vendorIdentifier: p.vendorIdentifier });
             onSizeChartChange(p.sizeChartUrl ?? "");
-            setSearching(false); setQuery(""); setResults([]);
-            toast(`Linked to SanMar ${result.style}`);
+            setSearching(false); setQuery(""); setResults([]); setDetail(null);
+            toast(`Linked to SanMar ${detail.style}`);
         } catch (err: any) { toast(err.message || "Failed to link youth style", "error"); }
         finally { setResolving(false); }
+    }
+
+    function cancel() {
+        setSearching(false); setQuery(""); setResults([]); setDetail(null);
     }
 
     if (value && !searching) {
@@ -377,6 +426,69 @@ function YouthLinkPanel({ products, editProductId, value, onChange, sizeChartUrl
         );
     }
 
+    // ── Confirm step: colors (locked to Adult's) + size picker ──
+    if (detail) {
+        return (
+            <div>
+                <div className="flex items-start justify-between gap-3 mb-3">
+                    <div>
+                        <p className="text-sm font-bold text-slate-900">{detail.title}</p>
+                        <p className="text-xs text-slate-400">{detail.brand} · Style {detail.style}</p>
+                    </div>
+                    <button type="button" onClick={() => setDetail(null)} className="text-xs text-slate-500 hover:text-slate-700 underline shrink-0">← Back to search</button>
+                </div>
+
+                <div className="mb-3">
+                    <label className="field-label mb-1.5">Colors (same as Adult)</label>
+                    {colorIntersection.length === 0 ? (
+                        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                            None of Adult&apos;s colors are offered for this youth style — pick a different style, or add colors to Adult first.
+                        </p>
+                    ) : (
+                        <div className="flex flex-wrap gap-1.5">
+                            {colorIntersection.map(c => (
+                                <span key={c} className="inline-flex items-center gap-1.5 text-xs bg-brand-50 text-brand-700 border border-brand-200 px-2 py-0.5 rounded-full">
+                                    <span className="w-3 h-3 rounded-full border border-black/15 shrink-0" style={{ backgroundColor: getColorCss(c) }} />
+                                    {c}
+                                </span>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                {detail.sizes.length > 0 && (
+                    <div className="mb-3">
+                        <div className="flex items-center justify-between mb-1.5">
+                            <label className="field-label mb-0">Sizes to offer</label>
+                            <div className="flex gap-2">
+                                <button type="button" onClick={() => setSelectedSizes(new Set(detail.sizes))} className="text-xs font-semibold text-brand-600 hover:text-brand-700">Select all</button>
+                                <button type="button" onClick={() => setSelectedSizes(new Set())} className="text-xs font-semibold text-slate-400 hover:text-slate-600">Clear</button>
+                            </div>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            {detail.sizes.map(s => {
+                                const checked = selectedSizes.has(s);
+                                return (
+                                    <label key={s} className={`px-2.5 py-1 rounded-lg border text-xs font-semibold cursor-pointer transition-colors ${checked ? "bg-brand-600 text-white border-brand-600" : "border-slate-200 text-slate-500 hover:border-brand-300 hover:text-brand-600"}`}>
+                                        <input type="checkbox" checked={checked} className="sr-only"
+                                            onChange={() => setSelectedSizes(prev => { const n = new Set(prev); n.has(s) ? n.delete(s) : n.add(s); return n; })} />
+                                        {s}
+                                    </label>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
+
+                <button type="button" onClick={confirmLink} disabled={resolving || colorIntersection.length === 0 || selectedSizes.size === 0}
+                    className="w-full py-2.5 text-sm font-bold rounded-xl text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all active:scale-95"
+                    style={{ background: "linear-gradient(135deg,#8b5cf6 0%,#7c3aed 100%)" }}>
+                    {resolving ? "Linking…" : "Confirm & Link"}
+                </button>
+            </div>
+        );
+    }
+
     return (
         <div>
             <label className="field-label">Youth version (optional)</label>
@@ -384,7 +496,7 @@ function YouthLinkPanel({ products, editProductId, value, onChange, sizeChartUrl
                 <input value={query} onChange={handleChange}
                     placeholder="Search SanMar for the youth style (e.g. PC61Y)…"
                     className="w-full pl-3 pr-8 py-2 text-sm border border-slate-200 rounded-xl outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 bg-white transition-all" />
-                {(loading || resolving) && (
+                {loading && (
                     <div className="absolute right-3 top-1/2 -translate-y-1/2">
                         <div className="w-4 h-4 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
                     </div>
@@ -393,8 +505,8 @@ function YouthLinkPanel({ products, editProductId, value, onChange, sizeChartUrl
             {results.length > 0 && (
                 <div className="mt-1.5 border border-slate-200 rounded-xl overflow-hidden max-h-56 overflow-y-auto divide-y divide-slate-100 bg-white shadow-sm">
                     {results.map((r, i) => (
-                        <button key={i} type="button" disabled={resolving} onClick={() => pick(r)}
-                            className="w-full text-left px-3.5 py-2 hover:bg-brand-50 transition-colors flex items-center gap-3 disabled:opacity-50">
+                        <button key={i} type="button" onClick={() => pickResult(r)}
+                            className="w-full text-left px-3.5 py-2 hover:bg-brand-50 transition-colors flex items-center gap-3">
                             {r.productImage ? (
                                 <img src={r.productImage} alt="" className="w-7 h-7 rounded-lg object-cover border border-slate-200 shrink-0" />
                             ) : null}
@@ -407,12 +519,9 @@ function YouthLinkPanel({ products, editProductId, value, onChange, sizeChartUrl
                 </div>
             )}
             {value && (
-                <button type="button" onClick={() => { setSearching(false); setQuery(""); setResults([]); }}
-                    className="text-xs text-slate-400 hover:text-slate-600 mt-1.5">
-                    ← Cancel
-                </button>
+                <button type="button" onClick={cancel} className="text-xs text-slate-400 hover:text-slate-600 mt-1.5">← Cancel</button>
             )}
-            <p className="text-xs text-slate-400 mt-1.5">If this style also comes in youth sizes, search for it and pick it — it&apos;s imported automatically and linked here. Shoppers get an Adult/Youth toggle on this product&apos;s page.</p>
+            <p className="text-xs text-slate-400 mt-1.5">If this style also comes in youth sizes, search for it and pick it — it&apos;s imported automatically and linked here, offering the same colors as Adult. Shoppers get an Adult/Youth toggle on this product&apos;s page.</p>
         </div>
     );
 }
@@ -927,20 +1036,17 @@ export default function ProductsPage() {
                                             )}
                                         </td>
                                         <td className="text-right pr-5">
-                                            <div className="flex items-center justify-end gap-1">
-                                                <button type="button" onClick={() => openEdit(p)}
-                                                    className="px-2.5 py-1 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors">
-                                                    Edit
-                                                </button>
-                                                <button type="button" disabled={duplicatingId===p.id} onClick={() => duplicateProduct(p)}
-                                                    className="px-2.5 py-1 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors disabled:opacity-50">
-                                                    {duplicatingId===p.id ? "…" : "Duplicate"}
-                                                </button>
-                                                <button type="button" onClick={() => setDeleteTarget(p)}
-                                                    className="px-2.5 py-1 rounded-lg text-xs font-medium text-red-500 hover:bg-red-50 hover:text-red-700 transition-colors">
-                                                    Delete
-                                                </button>
-                                            </div>
+                                            <IconButtonRow>
+                                                <IconButton title="Edit product" onClick={() => openEdit(p)}>
+                                                    <EditIcon />
+                                                </IconButton>
+                                                <IconButton title="Duplicate product" loading={duplicatingId === p.id} onClick={() => duplicateProduct(p)}>
+                                                    <DuplicateIcon />
+                                                </IconButton>
+                                                <IconButton title="Delete product" tone="red" onClick={() => setDeleteTarget(p)}>
+                                                    <TrashIcon />
+                                                </IconButton>
+                                            </IconButtonRow>
                                         </td>
                                     </motion.tr>
                                 ))}
@@ -1067,7 +1173,7 @@ export default function ProductsPage() {
                     <SizeChartUploader url={form.sizeChartUrl} onChange={sizeChartUrl => setForm(p => ({ ...p, sizeChartUrl }))}
                         label={form.youthLink ? "Adult Size Chart (PDF)" : "Size Chart (PDF)"} />
 
-                    <YouthLinkPanel products={products} editProductId={editProduct?.id ?? null}
+                    <YouthLinkPanel products={products} editProductId={editProduct?.id ?? null} adultColors={form.colors}
                         value={form.youthLink} onChange={youthLink => setForm(p => ({ ...p, youthLink }))}
                         sizeChartUrl={form.youthSizeChartUrl} onSizeChartChange={youthSizeChartUrl => setForm(p => ({ ...p, youthSizeChartUrl }))} />
 

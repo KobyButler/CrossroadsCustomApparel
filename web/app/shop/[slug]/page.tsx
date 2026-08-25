@@ -27,11 +27,14 @@ type Shop = { id:string; name:string; notes?:string; expiresAt?:string; shipping
 const stripHtml = (s?: string) => (s ?? "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
 
 // Resolves a product's adult/youth pairing (if any) into a direction-agnostic
-// shape: what the "other" listing is, and what to label each side of the toggle.
-function getVariantInfo(p: Product): { linked: Product | null; selfLabel: string; linkedLabel: string } {
-    if (p.youthVariant) return { linked: p.youthVariant, selfLabel: "Adult", linkedLabel: "Youth" };
-    if (p.adultVariant) return { linked: p.adultVariant, selfLabel: "Youth", linkedLabel: "Adult" };
-    return { linked: null, selfLabel: "", linkedLabel: "" };
+// shape: what the "other" listing is, what to label each side of the toggle,
+// and which of the two is the adult listing (whichever side that is, its
+// photos are used for both — the garment design is the same either way, so
+// switching to Youth shouldn't swap in different product photography).
+function getVariantInfo(p: Product): { linked: Product | null; selfLabel: string; linkedLabel: string; adultSource: Product } {
+    if (p.youthVariant) return { linked: p.youthVariant, selfLabel: "Adult", linkedLabel: "Youth", adultSource: p };
+    if (p.adultVariant) return { linked: p.adultVariant, selfLabel: "Youth", linkedLabel: "Adult", adultSource: p.adultVariant };
+    return { linked: null, selfLabel: "", linkedLabel: "", adultSource: p };
 }
 
 // Compact two-segment pill used to switch a product card/drawer between its
@@ -71,11 +74,13 @@ function ProductDetailDrawer({
     onAddToCart: (product: Product, size?: string, color?: string, qty?: number) => void;
     cartQuantityFor: (productId: string) => number;
 }) {
-    const { linked, selfLabel, linkedLabel } = getVariantInfo(product);
+    const { linked, selfLabel, linkedLabel, adultSource } = getVariantInfo(product);
     const [variantChoice, setVariantChoice] = useState<"self" | "linked">(linked ? initialVariant : "self");
     const active = variantChoice === "linked" && linked ? linked : product;
 
-    const imgs: string[] = active.imagesJson ? JSON.parse(active.imagesJson) : [];
+    // Photos always come from the adult listing — same garment, same photo,
+    // regardless of which sizing the shopper is currently viewing.
+    const imgs: string[] = adultSource.imagesJson ? JSON.parse(adultSource.imagesJson) : [];
     const sizes: string[] = active.sizesJson ? JSON.parse(active.sizesJson) : [];
     const colors: string[] = active.colorsJson ? JSON.parse(active.colorsJson) : [];
 
@@ -87,13 +92,14 @@ function ProductDetailDrawer({
 
     const unitPrice = computeItemPriceCents(active, selSize || undefined);
 
-    // Sizes/colors/images differ between the adult and youth listing, so a
-    // selection made on one side rarely still makes sense on the other —
-    // reset when the toggle flips instead of carrying over a stale pick.
+    // Sizes/colors differ between the adult and youth listing, so a selection
+    // made on one side rarely still makes sense on the other — reset when the
+    // toggle flips instead of carrying over a stale pick. Photos are shared
+    // between both (see adultSource above), so the gallery position is left
+    // alone — no reason to jump back to the first photo on toggle.
     useEffect(() => {
         setSelSize(sizes.length === 1 ? sizes[0] : "");
         setSelColor(colors.length === 1 ? colors[0] : "");
-        setImgIdx(0);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [variantChoice]);
 
@@ -485,7 +491,7 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
                         <>
                             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
                                 {products.map((p, idx) => {
-                                    const { linked, selfLabel, linkedLabel } = getVariantInfo(p);
+                                    const { linked, selfLabel, linkedLabel, adultSource } = getVariantInfo(p);
                                     const choice = variantChoice[p.id] ?? "self";
                                     const active = choice === "linked" && linked ? linked : p;
 
@@ -493,7 +499,8 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
                                     const colors: string[] = active.colorsJson ? JSON.parse(active.colorsJson) : [];
                                     const sel = getSelection(active.id);
                                     const totalInCart = cartQuantityFor(active.id);
-                                    const imgs: string[] = active.imagesJson ? JSON.parse(active.imagesJson) : [];
+                                    // Photos always come from the adult listing — see getVariantInfo.
+                                    const imgs: string[] = adultSource.imagesJson ? JSON.parse(adultSource.imagesJson) : [];
                                     const displayPrice = computeItemPriceCents(active, sel.size || undefined);
                                     const openDetail = () => { setDetailProduct(p); setDetailInitialVariant(choice); };
                                     return (

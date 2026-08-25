@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Modal, ModalFooter } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
+import { IconButton, IconButtonRow } from "@/components/ui/icon-button";
+import { EyeIcon, EditIcon, CheckIcon, XCircleIcon } from "@/components/ui/icons";
 import { motion, AnimatePresence } from "framer-motion";
 
 type VendorOrder = {
@@ -96,6 +98,8 @@ export default function OrdersPage() {
 
     const [historyEntries, setHistoryEntries] = useState<HistoryEntry[]>([]);
     const [loadingHistory, setLoadingHistory]  = useState(false);
+    const [cancelTarget, setCancelTarget] = useState<Order | null>(null);
+    const [cancelling, setCancelling]     = useState(false);
 
     useEffect(() => { setPage(1); }, [tab, filterShop]);
     useEffect(() => { fetchOrders(); }, [tab, page, filterShop]);
@@ -139,9 +143,14 @@ export default function OrdersPage() {
         setSelectedIds(prev => prev.size === filtered.length ? new Set() : new Set(filtered.map(o => o.id)));
     }
 
-    async function cancelOrder(id: string) {
-        try { await api(`/orders/${id}/cancel`, { method: "POST" }); toast("Order cancelled"); fetchOrders(); }
-        catch (err: any) { toast(err.message || "Failed to cancel order", "error"); }
+    async function cancelOrder() {
+        if (!cancelTarget) return;
+        setCancelling(true);
+        try {
+            await api(`/orders/${cancelTarget.id}/cancel`, { method: "POST" });
+            toast("Order cancelled"); setCancelTarget(null); fetchOrders();
+        } catch (err: any) { toast(err.message || "Failed to cancel order", "error"); }
+        finally { setCancelling(false); }
     }
     async function markFulfilled(id: string) {
         try { await api(`/orders/${id}/fulfill`, { method: "POST" }); toast("Order marked as fulfilled"); fetchOrders(); }
@@ -447,28 +456,24 @@ export default function OrdersPage() {
                                             </span>
                                         </td>
                                         <td className="text-right pr-5">
-                                            <div className="flex items-center justify-end gap-1.5">
-                                                <button type="button" onClick={() => setDetailOrder(order)}
-                                                    className="px-2.5 py-1 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors">
-                                                    View
-                                                </button>
-                                                <button type="button" onClick={() => openEditOrder(order)}
-                                                    className="px-2.5 py-1 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors">
-                                                    Edit
-                                                </button>
+                                            <IconButtonRow>
+                                                <IconButton title="View order" onClick={() => setDetailOrder(order)}>
+                                                    <EyeIcon />
+                                                </IconButton>
+                                                <IconButton title="Edit order" onClick={() => openEditOrder(order)}>
+                                                    <EditIcon />
+                                                </IconButton>
                                                 {order.status === "UNFULFILLED" && (
                                                     <>
-                                                        <button type="button" onClick={() => markFulfilled(order.id)}
-                                                            className="px-2.5 py-1 rounded-lg text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-colors">
-                                                            Fulfill
-                                                        </button>
-                                                        <button type="button" onClick={() => cancelOrder(order.id)}
-                                                            className="px-2.5 py-1 rounded-lg text-xs font-medium text-red-500 hover:bg-red-50 hover:text-red-700 transition-colors">
-                                                            Cancel
-                                                        </button>
+                                                        <IconButton title="Mark fulfilled" tone="emerald" onClick={() => markFulfilled(order.id)}>
+                                                            <CheckIcon />
+                                                        </IconButton>
+                                                        <IconButton title="Cancel order" tone="red" onClick={() => setCancelTarget(order)}>
+                                                            <XCircleIcon />
+                                                        </IconButton>
                                                     </>
                                                 )}
-                                            </div>
+                                            </IconButtonRow>
                                         </td>
                                     </motion.tr>
                                 ))}
@@ -657,7 +662,7 @@ export default function OrdersPage() {
                             <Button variant="outline" onClick={() => { const o = detailOrder; setDetailOrder(null); openEditOrder(o); }}>Edit Order</Button>
                             {detailOrder.status === "UNFULFILLED" && (
                                 <>
-                                    <Button variant="danger" onClick={() => { cancelOrder(detailOrder.id); setDetailOrder(null); }}>Cancel Order</Button>
+                                    <Button variant="danger" onClick={() => { const o = detailOrder; setDetailOrder(null); setCancelTarget(o); }}>Cancel Order</Button>
                                     <Button onClick={() => { markFulfilled(detailOrder.id); setDetailOrder(null); }}>Mark Fulfilled</Button>
                                 </>
                             )}
@@ -885,6 +890,18 @@ export default function OrdersPage() {
                 <ModalFooter>
                     <Button variant="outline" onClick={() => setShowExport(false)}>Cancel</Button>
                     <Button onClick={exportCSV}>Download CSV</Button>
+                </ModalFooter>
+            </Modal>
+
+            {/* Cancel Order Confirmation */}
+            <Modal open={!!cancelTarget} onClose={() => !cancelling && setCancelTarget(null)} title="Cancel Order" size="sm">
+                <p className="text-sm text-slate-600 mb-1">
+                    Cancel the order from <span className="font-semibold text-slate-900">{cancelTarget?.customerName}</span>?
+                </p>
+                <p className="text-xs text-slate-400 mb-4">This can&apos;t be undone from here — the customer isn&apos;t automatically notified or refunded.</p>
+                <ModalFooter>
+                    <Button type="button" variant="outline" onClick={() => setCancelTarget(null)} disabled={cancelling}>Keep Order</Button>
+                    <Button type="button" variant="danger" loading={cancelling} onClick={cancelOrder}>Cancel Order</Button>
                 </ModalFooter>
             </Modal>
         </div>

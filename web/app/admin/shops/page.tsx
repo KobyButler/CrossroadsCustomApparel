@@ -6,6 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Modal, ModalFooter } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
+import { IconButton, IconButtonRow } from "@/components/ui/icon-button";
+import { EditIcon, PowerIcon, CheckIcon, ArchiveIcon, RestoreIcon } from "@/components/ui/icons";
 import { motion } from "framer-motion";
 
 type Shop = {
@@ -15,25 +17,6 @@ type Shop = {
 };
 
 const EMPTY = { name:"", expiresAt:"", notes:"", shippingEnabled:true };
-
-// Small icon-only action buttons — keeps the actions column compact no matter
-// how many actions a row needs, instead of stacking text pills that wrap/crowd.
-function IconButton({ title, onClick, tone = "slate", children }: {
-    title: string; onClick: () => void; tone?: "slate" | "emerald" | "amber" | "red"; children: React.ReactNode;
-}) {
-    const toneCls: Record<string, string> = {
-        slate:   "text-slate-400 hover:text-slate-700 hover:bg-slate-100",
-        emerald: "text-slate-400 hover:text-emerald-600 hover:bg-emerald-50",
-        amber:   "text-slate-400 hover:text-amber-600 hover:bg-amber-50",
-        red:     "text-slate-400 hover:text-red-600 hover:bg-red-50",
-    };
-    return (
-        <button type="button" title={title} aria-label={title} onClick={onClick}
-            className={`w-7 h-7 flex items-center justify-center rounded-lg transition-colors shrink-0 ${toneCls[tone]}`}>
-            {children}
-        </button>
-    );
-}
 
 export default function ShopsPage() {
     const { toast } = useToast();
@@ -266,29 +249,25 @@ export default function ShopsPage() {
                                                 ) : <span className="text-xs text-slate-300">No expiry</span>}
                                             </td>
                                             <td className="text-right pr-5">
-                                                <div className="flex items-center justify-end gap-0.5">
+                                                <IconButtonRow>
                                                     {shop.archived ? (
                                                         <IconButton title="Restore from archive" tone="emerald" onClick={() => unarchiveShop(shop)}>
-                                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                                                            <RestoreIcon />
                                                         </IconButton>
                                                     ) : (
                                                         <>
                                                             <IconButton title="Edit shop" onClick={() => openEdit(shop)}>
-                                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                                                                <EditIcon />
                                                             </IconButton>
                                                             <IconButton title={shop.active ? "Deactivate" : "Activate"} tone={shop.active ? "amber" : "emerald"} onClick={() => toggleActive(shop)}>
-                                                                {shop.active ? (
-                                                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 3v9m6.364-6.364a9 9 0 11-12.728 0"/></svg>
-                                                                ) : (
-                                                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>
-                                                                )}
+                                                                {shop.active ? <PowerIcon /> : <CheckIcon />}
                                                             </IconButton>
                                                             <IconButton title="Archive shop" tone="red" onClick={() => setArchiveTarget(shop)}>
-                                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 8h14M5 8a2 2 0 01-2-2V4a2 2 0 012-2h14a2 2 0 012 2v2a2 2 0 01-2 2M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/></svg>
+                                                                <ArchiveIcon />
                                                             </IconButton>
                                                         </>
                                                     )}
-                                                </div>
+                                                </IconButtonRow>
                                             </td>
                                         </motion.tr>
                                     );
