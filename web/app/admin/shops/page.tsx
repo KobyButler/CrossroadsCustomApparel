@@ -10,21 +10,42 @@ import { motion } from "framer-motion";
 
 type Shop = {
     id: string; name: string; slug: string;
-    active: boolean; shippingEnabled: boolean; expiresAt?: string; notes?: string; createdAt: string;
+    active: boolean; archived: boolean; shippingEnabled: boolean; expiresAt?: string; notes?: string; createdAt: string;
     _count?: { products: number };
 };
 
 const EMPTY = { name:"", expiresAt:"", notes:"", shippingEnabled:true };
 
+// Small icon-only action buttons — keeps the actions column compact no matter
+// how many actions a row needs, instead of stacking text pills that wrap/crowd.
+function IconButton({ title, onClick, tone = "slate", children }: {
+    title: string; onClick: () => void; tone?: "slate" | "emerald" | "amber" | "red"; children: React.ReactNode;
+}) {
+    const toneCls: Record<string, string> = {
+        slate:   "text-slate-400 hover:text-slate-700 hover:bg-slate-100",
+        emerald: "text-slate-400 hover:text-emerald-600 hover:bg-emerald-50",
+        amber:   "text-slate-400 hover:text-amber-600 hover:bg-amber-50",
+        red:     "text-slate-400 hover:text-red-600 hover:bg-red-50",
+    };
+    return (
+        <button type="button" title={title} aria-label={title} onClick={onClick}
+            className={`w-7 h-7 flex items-center justify-center rounded-lg transition-colors shrink-0 ${toneCls[tone]}`}>
+            {children}
+        </button>
+    );
+}
+
 export default function ShopsPage() {
     const { toast } = useToast();
     const [shops, setShops]           = useState<Shop[]>([]);
     const [loading, setLoading]       = useState(true);
+    const [tab, setTab]               = useState<"active"|"archived">("active");
     const [showCreate, setShowCreate] = useState(false);
     const [editShop, setEditShop]     = useState<Shop | null>(null);
     const [form, setForm]             = useState({ ...EMPTY });
     const [saving, setSaving]         = useState(false);
     const [search, setSearch]         = useState("");
+    const [archiveTarget, setArchiveTarget] = useState<Shop | null>(null);
 
     useEffect(() => {
         api("/shops")
@@ -33,8 +54,11 @@ export default function ShopsPage() {
             .finally(() => setLoading(false));
     }, []);
 
-    const filtered = shops.filter(s => !search || s.name.toLowerCase().includes(search.toLowerCase()));
-    const activeCount = shops.filter(s => s.active).length;
+    const liveShops = shops.filter(s => !s.archived);
+    const archivedShops = shops.filter(s => s.archived);
+    const tabShops = tab === "active" ? liveShops : archivedShops;
+    const filtered = tabShops.filter(s => !search || s.name.toLowerCase().includes(search.toLowerCase()));
+    const activeCount = liveShops.filter(s => s.active).length;
 
     async function createShop(e: React.FormEvent) {
         e.preventDefault(); setSaving(true);
@@ -81,6 +105,23 @@ export default function ShopsPage() {
         } catch (err: any) { toast(err.message || "Failed", "error"); }
     }
 
+    async function archiveShop(shop: Shop) {
+        try {
+            const u = await api(`/shops/${shop.id}`, { method:"PATCH", body:JSON.stringify({ archived:true }) });
+            setShops(p => p.map(s => s.id===shop.id ? { ...s, archived:true, active:u.active } : s));
+            setArchiveTarget(null);
+            toast(`${shop.name} archived`);
+        } catch (err: any) { toast(err.message || "Failed to archive shop", "error"); }
+    }
+
+    async function unarchiveShop(shop: Shop) {
+        try {
+            const u = await api(`/shops/${shop.id}`, { method:"PATCH", body:JSON.stringify({ archived:false }) });
+            setShops(p => p.map(s => s.id===shop.id ? { ...s, archived:false } : s));
+            toast(`${shop.name} restored — reactivate it from the Shops tab when ready`);
+        } catch (err: any) { toast(err.message || "Failed to restore shop", "error"); }
+    }
+
     function copyLink(slug: string) {
         navigator.clipboard.writeText(`${window.location.origin}/shop/${slug}`).then(() => toast("Link copied!"));
     }
@@ -113,15 +154,37 @@ export default function ShopsPage() {
             {/* Stats */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                 {[
-                    { label:"Total Shops", value:shops.length, color:"text-slate-900" },
+                    { label:"Total Shops", value:liveShops.length, color:"text-slate-900" },
                     { label:"Active", value:activeCount, color:"text-emerald-600" },
-                    { label:"Inactive", value:shops.length-activeCount, color:"text-slate-500" }
+                    { label:"Inactive", value:liveShops.length-activeCount, color:"text-slate-500" }
                 ].map((s, i) => (
                     <motion.div key={s.label} initial={{ opacity:0, y:8 }} animate={{ opacity:1, y:0 }} transition={{ delay:i*0.07 }}
                         className="bg-white rounded-2xl p-5 ring-1 ring-black/5 shadow-card cursor-default">
                         <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">{s.label}</p>
                         <p className={`text-2xl font-bold ${s.color}`}>{loading ? "—" : s.value}</p>
                     </motion.div>
+                ))}
+            </div>
+
+            {/* Tabs */}
+            <div className="flex items-center gap-1 border-b border-slate-200">
+                {([
+                    { key:"active" as const,   label:`Shops (${liveShops.length})` },
+                    { key:"archived" as const, label:`Archived (${archivedShops.length})` },
+                ]).map(t => (
+                    <button key={t.key} type="button" onClick={() => setTab(t.key)}
+                        className={`relative px-4 py-2.5 text-sm font-medium transition-colors -mb-px ${
+                            tab === t.key ? "text-brand-700" : "text-slate-500 hover:text-slate-700"
+                        }`}
+                    >
+                        {tab === t.key && (
+                            <motion.div layoutId="shops-tab-indicator"
+                                className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand-600 rounded-full"
+                                transition={{ duration: 0.2 }}
+                            />
+                        )}
+                        {t.label}
+                    </button>
                 ))}
             </div>
 
@@ -147,8 +210,8 @@ export default function ShopsPage() {
                 ) : filtered.length === 0 ? (
                     <div className="flex flex-col items-center py-16 text-slate-300">
                         <svg className="w-12 h-12 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
-                        <p className="text-sm text-slate-400 font-medium">No shops yet</p>
-                        <p className="text-xs text-slate-300 mt-0.5">Create a shop to generate a shareable link</p>
+                        <p className="text-sm text-slate-400 font-medium">{tab === "active" ? "No shops yet" : "No archived shops"}</p>
+                        <p className="text-xs text-slate-300 mt-0.5">{tab === "active" ? "Create a shop to generate a shareable link" : "Shops you archive will show up here"}</p>
                     </div>
                 ) : (
                     <div className="overflow-x-auto">
@@ -184,8 +247,8 @@ export default function ShopsPage() {
                                                 </div>
                                             </td>
                                             <td>
-                                                <Badge variant={shop.active && !expired ? "success" : "danger"} size="sm">
-                                                    {expired ? "Expired" : shop.active ? "Active" : "Inactive"}
+                                                <Badge variant={shop.archived ? "neutral" : shop.active && !expired ? "success" : "danger"} size="sm">
+                                                    {shop.archived ? "Archived" : expired ? "Expired" : shop.active ? "Active" : "Inactive"}
                                                 </Badge>
                                             </td>
                                             <td>
@@ -203,15 +266,28 @@ export default function ShopsPage() {
                                                 ) : <span className="text-xs text-slate-300">No expiry</span>}
                                             </td>
                                             <td className="text-right pr-5">
-                                                <div className="flex items-center justify-end gap-1.5">
-                                                    <button type="button" onClick={() => openEdit(shop)}
-                                                        className="px-2.5 py-1 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors">
-                                                        Edit
-                                                    </button>
-                                                    <button type="button" onClick={() => toggleActive(shop)}
-                                                        className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${shop.active ? "text-red-500 hover:bg-red-50 hover:text-red-700" : "text-emerald-600 bg-emerald-50 hover:bg-emerald-100"}`}>
-                                                        {shop.active ? "Deactivate" : "Activate"}
-                                                    </button>
+                                                <div className="flex items-center justify-end gap-0.5">
+                                                    {shop.archived ? (
+                                                        <IconButton title="Restore from archive" tone="emerald" onClick={() => unarchiveShop(shop)}>
+                                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                                                        </IconButton>
+                                                    ) : (
+                                                        <>
+                                                            <IconButton title="Edit shop" onClick={() => openEdit(shop)}>
+                                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                                                            </IconButton>
+                                                            <IconButton title={shop.active ? "Deactivate" : "Activate"} tone={shop.active ? "amber" : "emerald"} onClick={() => toggleActive(shop)}>
+                                                                {shop.active ? (
+                                                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 3v9m6.364-6.364a9 9 0 11-12.728 0"/></svg>
+                                                                ) : (
+                                                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>
+                                                                )}
+                                                            </IconButton>
+                                                            <IconButton title="Archive shop" tone="red" onClick={() => setArchiveTarget(shop)}>
+                                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 8h14M5 8a2 2 0 01-2-2V4a2 2 0 012-2h14a2 2 0 012 2v2a2 2 0 01-2 2M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/></svg>
+                                                            </IconButton>
+                                                        </>
+                                                    )}
                                                 </div>
                                             </td>
                                         </motion.tr>
@@ -254,6 +330,20 @@ export default function ShopsPage() {
                         <Button type="submit" loading={saving}>{editShop ? "Save Changes" : "Create Shop"}</Button>
                     </ModalFooter>
                 </form>
+            </Modal>
+
+            {/* Archive Confirmation Modal */}
+            <Modal open={!!archiveTarget} onClose={() => setArchiveTarget(null)} title="Archive Shop" size="sm">
+                <p className="text-sm text-slate-600 mb-1">
+                    Archive <span className="font-semibold text-slate-900">{archiveTarget?.name}</span>?
+                </p>
+                <p className="text-xs text-slate-400 mb-4">
+                    It's taken off the storefront and moved to the Archived tab. You can restore it any time — nothing is deleted.
+                </p>
+                <ModalFooter>
+                    <Button type="button" variant="outline" onClick={() => setArchiveTarget(null)}>Cancel</Button>
+                    <Button type="button" variant="danger" onClick={() => archiveTarget && archiveShop(archiveTarget)}>Archive</Button>
+                </ModalFooter>
             </Modal>
         </div>
     );

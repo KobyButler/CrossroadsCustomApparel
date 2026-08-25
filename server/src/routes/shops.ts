@@ -19,7 +19,7 @@ router.get('/', requireAuth, async (_req, res) => {
 router.get('/directory', async (_req, res) => {
     const now = new Date();
     const shops = await prisma.shop.findMany({
-        where: { active: true, OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+        where: { active: true, archived: false, OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
         include: { _count: { select: { products: true } } },
         orderBy: { createdAt: 'desc' }
     });
@@ -60,18 +60,36 @@ router.get('/:slug', async (req, res) => {
         where: {
             slug: req.params.slug,
             active: true,
+            archived: false,
             OR: [{ expiresAt: null }, { expiresAt: { gt: now } }]
         },
-        include: { products: { orderBy: { createdAt: 'desc' } } }
+        include: {
+            products: {
+                orderBy: { createdAt: 'desc' },
+                // Pull in a linked adult/youth counterpart's full data even when
+                // it isn't itself part of this shop's product list, so the
+                // storefront's Adult/Youth toggle works regardless of whether
+                // the admin also added the sibling product to this shop.
+                include: { youthProduct: true, adultProduct: true }
+            }
+        }
     });
     if (!s) return res.status(404).json({ error: 'not found' });
-    res.json(s);
+
+    res.json({
+        ...s,
+        products: s.products.map(({ youthProduct, adultProduct, ...p }) => ({
+            ...p,
+            youthVariant: youthProduct ?? null,
+            adultVariant: adultProduct ?? null
+        }))
+    });
 });
 
 // Update shop (toggle active, update name/notes/expiry/products) — admin only
 router.patch('/:id', requireAuth, async (req, res) => {
     const id = String(req.params.id);
-    const { name, expiresAt, notes, active, productIds, shippingEnabled } = req.body;
+    const { name, expiresAt, notes, active, archived, productIds, shippingEnabled } = req.body;
 
     const existing = await prisma.shop.findUnique({ where: { id } });
     if (!existing) return res.status(404).json({ error: 'shop not found' });
@@ -83,6 +101,10 @@ router.patch('/:id', requireAuth, async (req, res) => {
             ...(expiresAt !== undefined && { expiresAt: expiresAt ? new Date(expiresAt) : null }),
             ...(notes !== undefined && { notes: notes ?? null }),
             ...(active !== undefined && { active }),
+            // Archiving a live shop also takes it off the storefront — there's no
+            // reason to archive a shop you still want customers ordering from.
+            // Unarchiving does not re-activate it; the admin does that separately.
+            ...(archived !== undefined && { archived: Boolean(archived), ...(archived ? { active: false } : {}) }),
             ...(shippingEnabled !== undefined && { shippingEnabled: Boolean(shippingEnabled) }),
             ...(Array.isArray(productIds) && { products: { set: productIds.map((pid: string) => ({ id: pid })) } })
         },

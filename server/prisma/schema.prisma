@@ -34,6 +34,17 @@ model Product {
   orderItems       OrderItem[]
   shops            Shop[]      @relation("ShopProducts")
   createdAt        DateTime    @default(now())
+
+  // Optional link from an adult-sized product to its youth-sized counterpart
+  // (SanMar sells these as entirely separate styles/SKUs — e.g. PC61 vs
+  // PC61Y — so they stay separate Products here too; this just lets the
+  // storefront offer an Adult/Youth toggle on one page instead of the
+  // shopper having to find the other listing themselves). The FK lives on
+  // the adult side; onDelete: SetNull so deleting the youth product just
+  // drops the link rather than blocking the delete.
+  youthProductId   String?     @unique
+  youthProduct     Product?    @relation("AdultYouthLink", fields: [youthProductId], references: [id], onDelete: SetNull)
+  adultProduct     Product?    @relation("AdultYouthLink")
 }
 
 model Shop {
@@ -41,6 +52,7 @@ model Shop {
   name             String
   slug             String     @unique
   active           Boolean    @default(true)
+  archived         Boolean    @default(false) // tucked out of the main Shops list into the Archived tab; distinct from active/inactive
   shippingEnabled  Boolean    @default(true) // whether customers may choose "Ship to you" for this shop
   expiresAt        DateTime?
   notes            String?

@@ -349,6 +349,60 @@ export async function getSanMarProductInfo(
     };
 }
 
+/**
+ * Looks up a style directly against SanMar's live Product Info API, bypassing
+ * the local catalog entirely, and upserts every color/size variant it returns
+ * into SanmarCatalogProduct (the same cache table the weekly SFTP sync fills).
+ *
+ * Why this exists: catalog search (GET /sanmar/catalog) only ever queries that
+ * local cache, which is only as fresh as last week's sync file. A style SanMar
+ * already sells but that hasn't made it into a sync yet (brand new, or added
+ * mid-week) is invisible to search until the next sync — this is the same
+ * "missing until it self-heals" gap that PO submission already works around
+ * per-variant (see the mainframeColor live lookup above). This is that same
+ * fix applied to search/browse, so search never depends on sync freshness.
+ *
+ * Returns the freshly-cached rows, or [] if SanMar has no record of the style
+ * either (a typo, or it's simply not a real style code) — callers should treat
+ * that the same as "not found" rather than as an error.
+ */
+export async function liveLookupAndCacheStyle(style: string): Promise<any[]> {
+    let rows: any[];
+    try {
+        const info = await getSanMarProductInfo(style);
+        rows = asArray((info.raw as any)?.return?.listResponse);
+    } catch {
+        return [];
+    }
+    if (rows.length === 0) return [];
+
+    return Promise.all(rows.map((r: any) => {
+        const basic = r?.productBasicInfo ?? {};
+        const price = r?.productPriceInfo ?? {};
+        const img = r?.productImageInfo ?? {};
+        const colorName = basic.color ?? '';
+        const sizeName = basic.size ?? '';
+        const data = {
+            title: basic.productTitle ?? null,
+            description: basic.productDescription ?? null,
+            brand: basic.brandName ?? null,
+            category: basic.category ?? null,
+            subcategory: basic.subcategory ?? null,
+            priceCents: price.piecePrice ? Math.round(Number(price.piecePrice) * 100) : 0,
+            inventoryKey: basic.inventoryKey ? String(basic.inventoryKey) : null,
+            sizeIndex: basic.sizeIndex ? String(basic.sizeIndex) : null,
+            mainframeColor: basic.catalogColor ?? null,
+            colorSwatchImage: img.colorSwatchImage ?? null,
+            productImage: img.colorProductImage ?? img.productImage ?? null,
+        };
+        return prisma.sanmarCatalogProduct.upsert({
+            where: { style_colorName_sizeName: { style, colorName, sizeName } },
+            create: { style, colorName, sizeName, ...data },
+            update: data,
+        });
+    }));
+}
+
 /* ─── Order Status ────────────────────────────────────────────────────────── */
 
 /**

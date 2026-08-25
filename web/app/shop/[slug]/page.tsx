@@ -14,10 +14,42 @@ type Product = {
     priceCents:number; description?:string; imagesJson?:string;
     sizesJson?:string; colorsJson?:string; sizeChartUrl?:string | null;
     upchargeEnabled?:boolean; upchargeCents?:number;
+    // Present when this product is linked to an adult/youth counterpart (see
+    // Product.youthProductId) — at most one of the two is ever set. SanMar
+    // sells these as fully separate styles, so it's still a separate Product
+    // under the hood; this just lets the storefront offer both sizes ranges
+    // from one page via a toggle instead of two disconnected listings.
+    youthVariant?: Product | null;
+    adultVariant?: Product | null;
 };
 type Shop = { id:string; name:string; notes?:string; expiresAt?:string; shippingEnabled:boolean; products:Product[] };
 
 const stripHtml = (s?: string) => (s ?? "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+
+// Resolves a product's adult/youth pairing (if any) into a direction-agnostic
+// shape: what the "other" listing is, and what to label each side of the toggle.
+function getVariantInfo(p: Product): { linked: Product | null; selfLabel: string; linkedLabel: string } {
+    if (p.youthVariant) return { linked: p.youthVariant, selfLabel: "Adult", linkedLabel: "Youth" };
+    if (p.adultVariant) return { linked: p.adultVariant, selfLabel: "Youth", linkedLabel: "Adult" };
+    return { linked: null, selfLabel: "", linkedLabel: "" };
+}
+
+// Compact two-segment pill used to switch a product card/drawer between its
+// adult and youth listing.
+function VariantToggle({ selfLabel, linkedLabel, choice, onChange }: {
+    selfLabel: string; linkedLabel: string; choice: "self" | "linked"; onChange: (c: "self" | "linked") => void;
+}) {
+    return (
+        <div className="inline-flex rounded-lg bg-slate-100 p-0.5 text-xs font-semibold" role="group" aria-label="Adult or youth sizing">
+            {(["self", "linked"] as const).map(c => (
+                <button key={c} type="button" onClick={() => onChange(c)}
+                    className={`px-2.5 py-1 rounded-md transition-colors ${choice === c ? "bg-white text-violet-700 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
+                    {c === "self" ? selfLabel : linkedLabel}
+                </button>
+            ))}
+        </div>
+    );
+}
 
 async function publicFetch(path: string) {
     const base = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:4000/api";
@@ -31,16 +63,21 @@ const fmt = (cents: number) =>
 
 // ─── Product Detail Drawer ────────────────────────────────────────────────────
 function ProductDetailDrawer({
-    product, onClose, onAddToCart, cartCount
+    product, initialVariant = "self", onClose, onAddToCart, cartQuantityFor
 }: {
     product: Product;
+    initialVariant?: "self" | "linked";
     onClose: () => void;
-    onAddToCart: (size?: string, color?: string, qty?: number) => void;
-    cartCount: number;
+    onAddToCart: (product: Product, size?: string, color?: string, qty?: number) => void;
+    cartQuantityFor: (productId: string) => number;
 }) {
-    const imgs: string[] = product.imagesJson ? JSON.parse(product.imagesJson) : [];
-    const sizes: string[] = product.sizesJson ? JSON.parse(product.sizesJson) : [];
-    const colors: string[] = product.colorsJson ? JSON.parse(product.colorsJson) : [];
+    const { linked, selfLabel, linkedLabel } = getVariantInfo(product);
+    const [variantChoice, setVariantChoice] = useState<"self" | "linked">(linked ? initialVariant : "self");
+    const active = variantChoice === "linked" && linked ? linked : product;
+
+    const imgs: string[] = active.imagesJson ? JSON.parse(active.imagesJson) : [];
+    const sizes: string[] = active.sizesJson ? JSON.parse(active.sizesJson) : [];
+    const colors: string[] = active.colorsJson ? JSON.parse(active.colorsJson) : [];
 
     const [imgIdx, setImgIdx] = useState(0);
     const [selSize, setSelSize] = useState(sizes.length === 1 ? sizes[0] : "");
@@ -48,12 +85,22 @@ function ProductDetailDrawer({
     const [qty, setQty] = useState(1);
     const [added, setAdded] = useState(false);
 
-    const unitPrice = computeItemPriceCents(product, selSize || undefined);
+    const unitPrice = computeItemPriceCents(active, selSize || undefined);
+
+    // Sizes/colors/images differ between the adult and youth listing, so a
+    // selection made on one side rarely still makes sense on the other —
+    // reset when the toggle flips instead of carrying over a stale pick.
+    useEffect(() => {
+        setSelSize(sizes.length === 1 ? sizes[0] : "");
+        setSelColor(colors.length === 1 ? colors[0] : "");
+        setImgIdx(0);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [variantChoice]);
 
     function handleAdd() {
         if (sizes.length > 0 && !selSize) { alert("Please select a size."); return; }
         if (colors.length > 0 && !selColor) { alert("Please select a color."); return; }
-        onAddToCart(selSize || undefined, selColor || undefined, qty);
+        onAddToCart(active, selSize || undefined, selColor || undefined, qty);
         setAdded(true);
         setTimeout(() => setAdded(false), 1500);
     }
@@ -92,7 +139,7 @@ function ProductDetailDrawer({
                                     <motion.img key={imgIdx}
                                         initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }}
                                         transition={{ duration:0.2 }}
-                                        src={imgUrl(imgs[imgIdx])} alt={product.name}
+                                        src={imgUrl(imgs[imgIdx])} alt={active.name}
                                         className="w-full h-full object-contain" />
                                 </AnimatePresence>
 
@@ -124,9 +171,9 @@ function ProductDetailDrawer({
                             </div>
                         )}
 
-                        {cartCount > 0 && (
+                        {cartQuantityFor(active.id) > 0 && (
                             <div className="absolute top-3 left-3 bg-violet-600 text-white text-xs font-bold px-2.5 py-1 rounded-full shadow">
-                                {cartCount} in cart
+                                {cartQuantityFor(active.id)} in cart
                             </div>
                         )}
                     </div>
@@ -144,19 +191,24 @@ function ProductDetailDrawer({
 
                     <div className="p-5 space-y-5">
                         <div>
-                            {product.brand && (
-                                <p className="text-xs font-bold text-violet-500 uppercase tracking-wider mb-1">{product.brand}</p>
+                            {active.brand && (
+                                <p className="text-xs font-bold text-violet-500 uppercase tracking-wider mb-1">{active.brand}</p>
                             )}
-                            <h2 className="text-xl font-black text-slate-900 leading-tight">{product.name}</h2>
-                            <p className="text-2xl font-black mt-2" style={{ background:"linear-gradient(135deg,#8b5cf6,#7c3aed)", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent", backgroundClip:"text" }}>
+                            <h2 className="text-xl font-black text-slate-900 leading-tight">{active.name}</h2>
+                            {linked && (
+                                <div className="mt-2.5">
+                                    <VariantToggle selfLabel={selfLabel} linkedLabel={linkedLabel} choice={variantChoice} onChange={setVariantChoice} />
+                                </div>
+                            )}
+                            <p className="text-2xl font-black mt-2.5" style={{ background:"linear-gradient(135deg,#8b5cf6,#7c3aed)", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent", backgroundClip:"text" }}>
                                 {fmt(unitPrice)}
                             </p>
                         </div>
 
-                        {product.description && (
+                        {active.description && (
                             <div>
                                 <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Description</h3>
-                                <p className="text-sm text-slate-600 leading-relaxed">{stripHtml(product.description)}</p>
+                                <p className="text-sm text-slate-600 leading-relaxed">{stripHtml(active.description)}</p>
                             </div>
                         )}
 
@@ -199,8 +251,8 @@ function ProductDetailDrawer({
                             <div>
                                 <div className="flex items-center justify-between mb-2">
                                     <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Size</h3>
-                                    {product.sizeChartUrl && (
-                                        <a href={imgUrl(product.sizeChartUrl)} target="_blank" rel="noopener noreferrer"
+                                    {active.sizeChartUrl && (
+                                        <a href={imgUrl(active.sizeChartUrl)} target="_blank" rel="noopener noreferrer"
                                             className="inline-flex items-center gap-1 text-xs font-semibold text-violet-600 hover:text-violet-800 transition-colors">
                                             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h4"/></svg>
                                             Size chart
@@ -216,8 +268,8 @@ function ProductDetailDrawer({
                                         </button>
                                     ))}
                                 </div>
-                                {product.upchargeEnabled && (
-                                    <p className="text-xs text-slate-400 mt-2">+{fmt(product.upchargeCents ?? 0)} for 2XL and up</p>
+                                {active.upchargeEnabled && (
+                                    <p className="text-xs text-slate-400 mt-2">+{fmt(active.upchargeCents ?? 0)} for 2XL and up</p>
                                 )}
                             </div>
                         )}
@@ -241,7 +293,7 @@ function ProductDetailDrawer({
                         </div>
 
                         <div className="bg-slate-50 rounded-xl p-4 space-y-2 text-xs text-slate-500">
-                            {product.sku && <div className="flex justify-between"><span>SKU</span><span className="font-mono text-slate-700">{product.sku}</span></div>}
+                            {active.sku && <div className="flex justify-between"><span>SKU</span><span className="font-mono text-slate-700">{active.sku}</span></div>}
                         </div>
                     </div>
                 </div>
@@ -270,6 +322,10 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
     const [selections, setSelections] = useState<Record<string, { size:string; color:string }>>({});
     const [notFound, setNotFound]     = useState(false);
     const [detailProduct, setDetailProduct] = useState<Product | null>(null);
+    // Which side (self/linked) each card's Adult/Youth toggle is currently showing.
+    const [variantChoice, setVariantChoice] = useState<Record<string, "self" | "linked">>({});
+    // Seeds the detail drawer's own toggle so it opens on whatever the card was showing.
+    const [detailInitialVariant, setDetailInitialVariant] = useState<"self" | "linked">("self");
 
     useEffect(() => {
         publicFetch(`/shops/${slug}`).then(setShop).catch(() => setNotFound(true));
@@ -298,6 +354,9 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
         if (sizes.length > 0 && !sel.size) { alert("Please select a size."); return; }
         if (colors.length > 0 && !sel.color) { alert("Please select a color."); return; }
         addToCart(product, sel.size || undefined, sel.color || undefined, 1);
+    }
+    function cartQuantityFor(productId: string) {
+        return cart.filter(c => c.shopSlug === slug && c.productId === productId).reduce((a, c) => a + c.quantity, 0);
     }
 
     /* ── Loading ── */
@@ -426,12 +485,17 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
                         <>
                             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
                                 {products.map((p, idx) => {
-                                    const sizes: string[] = p.sizesJson ? JSON.parse(p.sizesJson) : [];
-                                    const colors: string[] = p.colorsJson ? JSON.parse(p.colorsJson) : [];
-                                    const sel = getSelection(p.id);
-                                    const totalInCart = cart.filter(c => c.shopSlug === slug && c.productId===p.id).reduce((a,c) => a+c.quantity, 0);
-                                    const imgs: string[] = p.imagesJson ? JSON.parse(p.imagesJson) : [];
-                                    const displayPrice = computeItemPriceCents(p, sel.size || undefined);
+                                    const { linked, selfLabel, linkedLabel } = getVariantInfo(p);
+                                    const choice = variantChoice[p.id] ?? "self";
+                                    const active = choice === "linked" && linked ? linked : p;
+
+                                    const sizes: string[] = active.sizesJson ? JSON.parse(active.sizesJson) : [];
+                                    const colors: string[] = active.colorsJson ? JSON.parse(active.colorsJson) : [];
+                                    const sel = getSelection(active.id);
+                                    const totalInCart = cartQuantityFor(active.id);
+                                    const imgs: string[] = active.imagesJson ? JSON.parse(active.imagesJson) : [];
+                                    const displayPrice = computeItemPriceCents(active, sel.size || undefined);
+                                    const openDetail = () => { setDetailProduct(p); setDetailInitialVariant(choice); };
                                     return (
                                         <motion.div key={p.id}
                                             initial={{ opacity:0, y:16 }} animate={{ opacity:1, y:0 }}
@@ -439,9 +503,9 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
                                             className="bg-white rounded-2xl ring-1 ring-black/5 shadow-card hover:shadow-card-hover hover:-translate-y-1 transition-all duration-300 overflow-hidden flex flex-col group">
 
                                             <div className="relative aspect-[4/3] overflow-hidden bg-slate-50 cursor-pointer"
-                                                onClick={() => setDetailProduct(p)}>
+                                                onClick={openDetail}>
                                                 {imgs.length > 0 ? (
-                                                    <img src={imgUrl(imgs[0])} alt={p.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                                                    <img src={imgUrl(imgs[0])} alt={active.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                                                 ) : (
                                                     <div className="w-full h-full flex items-center justify-center" style={{ background:"linear-gradient(135deg,#f3f0ff,#ede9fe)" }}>
                                                         <svg className="w-14 h-14 text-violet-200" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
@@ -452,9 +516,9 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
                                                         {totalInCart} in cart
                                                     </div>
                                                 )}
-                                                {p.brand && (
+                                                {active.brand && (
                                                     <div className="absolute bottom-2.5 left-2.5 bg-black/50 backdrop-blur-sm text-white text-[10px] font-semibold px-2 py-0.5 rounded-full">
-                                                        {p.brand}
+                                                        {active.brand}
                                                     </div>
                                                 )}
                                                 <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
@@ -466,16 +530,21 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
 
                                             <div className="p-4 flex flex-col flex-1 gap-3">
                                                 <div className="flex-1">
-                                                    <button type="button" className="text-left w-full"
-                                                        onClick={() => setDetailProduct(p)}>
-                                                        <h3 className="font-bold text-slate-900 text-sm leading-snug hover:text-violet-700 transition-colors">{p.name}</h3>
+                                                    <button type="button" className="text-left w-full" onClick={openDetail}>
+                                                        <h3 className="font-bold text-slate-900 text-sm leading-snug hover:text-violet-700 transition-colors">{active.name}</h3>
                                                     </button>
-                                                    {p.description && (
-                                                        <p className="text-xs text-slate-500 mt-1 line-clamp-2 leading-relaxed">{stripHtml(p.description)}</p>
+                                                    {active.description && (
+                                                        <p className="text-xs text-slate-500 mt-1 line-clamp-2 leading-relaxed">{stripHtml(active.description)}</p>
                                                     )}
-                                                    <p className="text-lg font-black mt-2" style={{ background:"linear-gradient(135deg,#8b5cf6,#7c3aed)", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent", backgroundClip:"text" }}>
-                                                        {fmt(displayPrice)}
-                                                    </p>
+                                                    <div className="flex items-center justify-between gap-2 mt-2">
+                                                        <p className="text-lg font-black" style={{ background:"linear-gradient(135deg,#8b5cf6,#7c3aed)", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent", backgroundClip:"text" }}>
+                                                            {fmt(displayPrice)}
+                                                        </p>
+                                                        {linked && (
+                                                            <VariantToggle selfLabel={selfLabel} linkedLabel={linkedLabel} choice={choice}
+                                                                onChange={c => setVariantChoice(prev => ({ ...prev, [p.id]: c }))} />
+                                                        )}
+                                                    </div>
                                                 </div>
 
                                                 {(sizes.length > 0 || colors.length > 0) && (
@@ -486,7 +555,7 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
                                                                 <div className="flex flex-wrap gap-1">
                                                                     {sizes.map(s => (
                                                                         <button key={s} type="button"
-                                                                            onClick={() => setSelection(p.id,"size", sel.size===s ? "" : s)}
+                                                                            onClick={() => setSelection(active.id,"size", sel.size===s ? "" : s)}
                                                                             className={`text-xs px-2.5 py-1 rounded-lg border font-semibold transition-all duration-150 ${sel.size===s ? "bg-violet-600 text-white border-violet-600 shadow-sm" : "border-slate-200 text-slate-500 hover:border-violet-300 hover:text-violet-600"}`}>
                                                                             {s}
                                                                         </button>
@@ -505,7 +574,7 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
                                                                         const isSelected = sel.color === c;
                                                                         return (
                                                                             <button key={c} type="button" title={c}
-                                                                                onClick={() => setSelection(p.id,"color", sel.color===c ? "" : c)}
+                                                                                onClick={() => setSelection(active.id,"color", sel.color===c ? "" : c)}
                                                                                 className={`w-6 h-6 rounded-full border-2 transition-all ${isSelected ? "border-violet-500 scale-110 shadow-md ring-2 ring-violet-500/20" : "border-slate-200 hover:scale-105 hover:border-slate-300"}`}
                                                                                 style={{ backgroundColor: css }}>
                                                                             </button>
@@ -518,12 +587,12 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
                                                 )}
 
                                                 <div className="flex gap-2">
-                                                    <motion.button type="button" whileTap={{ scale:0.96 }} onClick={() => addToCartFromCard(p)}
+                                                    <motion.button type="button" whileTap={{ scale:0.96 }} onClick={() => addToCartFromCard(active)}
                                                         className="btn-shine flex-1 text-white text-sm font-semibold py-2.5 rounded-xl transition-all"
                                                         style={{ background:"linear-gradient(135deg,#8b5cf6 0%,#7c3aed 100%)", boxShadow:"0 4px 16px rgba(124,58,237,0.25)" }}>
                                                         Add to cart
                                                     </motion.button>
-                                                    <button type="button" onClick={() => setDetailProduct(p)}
+                                                    <button type="button" onClick={openDetail}
                                                         className="px-3 py-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 hover:border-slate-300 transition-colors"
                                                         title="View details">
                                                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
@@ -593,10 +662,11 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
                 {detailProduct && (
                     <ProductDetailDrawer
                         product={detailProduct}
+                        initialVariant={detailInitialVariant}
                         onClose={() => setDetailProduct(null)}
-                        cartCount={cart.filter(c => c.shopSlug === slug && c.productId === detailProduct.id).reduce((a,c) => a+c.quantity, 0)}
-                        onAddToCart={(size, color, qty) => {
-                            addToCart(detailProduct, size, color, qty);
+                        cartQuantityFor={cartQuantityFor}
+                        onAddToCart={(product, size, color, qty) => {
+                            addToCart(product, size, color, qty);
                         }}
                     />
                 )}

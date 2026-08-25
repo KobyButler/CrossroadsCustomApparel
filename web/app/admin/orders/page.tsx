@@ -155,9 +155,10 @@ export default function OrdersPage() {
     }
 
     function exportCSV() {
+        const csvCell = (s: string) => `"${s.replace(/"/g, '""')}"`;
         const csv = [
-            ["Order ID","Customer","Email","Status","Total","Date","Items"].join(","),
-            ...filtered.map(o => [o.id,`"${o.customerName}"`,o.customerEmail,o.status,`$${(o.totalCents/100).toFixed(2)}`,new Date(o.createdAt).toLocaleDateString(),o.items?.length??0].join(","))
+            ["Order ID","Customer","Email","Status","Total","Date","Items","Comments"].join(","),
+            ...filtered.map(o => [o.id,csvCell(o.customerName),o.customerEmail,o.status,`$${(o.totalCents/100).toFixed(2)}`,new Date(o.createdAt).toLocaleDateString(),o.items?.length??0,csvCell(o.specialInstructions ?? "")].join(","))
         ].join("\n");
         const a = document.createElement("a");
         a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
