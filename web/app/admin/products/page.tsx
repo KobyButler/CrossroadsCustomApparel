@@ -12,6 +12,7 @@ import { motion, Reorder } from "framer-motion";
 import { getColorCss } from "@/lib/colors";
 
 type Shop = { id: string; name: string; slug: string };
+type YouthProductRef = { id: string; name: string; vendorIdentifier?: string | null; sizeChartUrl?: string | null };
 type Product = {
     id: string; name: string; sku: string; vendor: string;
     vendorIdentifier?: string; brand?: string; description?: string;
@@ -19,6 +20,7 @@ type Product = {
     sizesJson?: string; colorsJson?: string; imagesJson?: string; sizeChartUrl?: string | null;
     upchargeEnabled?: boolean; upchargeCents?: number; weightOz?: number | null;
     youthProductId?: string | null;
+    youthProduct?: YouthProductRef | null;
 };
 
 const VENDOR_LABELS: Record<string, string> = { SANMAR:"SanMar", SSACTIVEWEAR:"S&S Activewear", OTHER:"Other" };
@@ -26,7 +28,7 @@ const VENDOR_COLORS: Record<string, string> = { SANMAR:"info", SSACTIVEWEAR:"suc
 const EMPTY = {
     name:"", sku:"", vendor:"OTHER", vendorIdentifier:"", brand:"", description:"", priceDollars:"",
     shopIds:[] as string[], sizes:[] as string[], colors:[] as string[], images:[] as string[],
-    sizeChartUrl:"", youthProductId:"",
+    sizeChartUrl:"", youthLink: null as YouthProductRef | null, youthSizeChartUrl:"",
     upchargeEnabled:false, upchargeDollars:"3.00", weightOz:""
 };
 
@@ -241,7 +243,7 @@ function ImageManager({ images, onChange }: { images:string[]; onChange:(images:
 }
 
 // ── SizeChartUploader ────────────────────────────────────────────────────────
-function SizeChartUploader({ url, onChange }: { url:string; onChange:(url:string)=>void }) {
+function SizeChartUploader({ url, onChange, label = "Size Chart (PDF)" }: { url:string; onChange:(url:string)=>void; label?:string }) {
     const { toast } = useToast();
     const [uploading, setUploading] = useState(false);
     const base = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:4000/api";
@@ -266,7 +268,7 @@ function SizeChartUploader({ url, onChange }: { url:string; onChange:(url:string
 
     return (
         <div>
-            <label className="field-label">Size Chart (PDF)</label>
+            <label className="field-label">{label}</label>
             {url ? (
                 <div className="flex items-center gap-2 mb-2">
                     <a href={imgUrl(url)} target="_blank" rel="noopener noreferrer"
@@ -289,15 +291,28 @@ function SizeChartUploader({ url, onChange }: { url:string; onChange:(url:string
     );
 }
 
-// ── YouthLinkField ────────────────────────────────────────────────────────────
-// SanMar sells youth sizing as a fully separate style/SKU, so it stays a
-// separate Product here too — this just links the two so the storefront can
-// offer an Adult/Youth toggle on one page. The link is edited from the adult
-// side only; a product already linked as someone's youth shows read-only info
-// instead, so there's one place to manage each pair.
-function YouthLinkField({ products, editProductId, value, onChange }: {
-    products: Product[]; editProductId: string | null; value: string; onChange: (id: string) => void;
+// ── YouthLinkPanel ────────────────────────────────────────────────────────────
+// SanMar sells youth sizing as a fully separate style/SKU (e.g. PC61 vs
+// PC61Y), so under the hood it's still a separate Product here too — but the
+// admin never has to build that second product by hand. Searching and picking
+// a SanMar style calls /sanmar/import right away (same "find or create by
+// vendor style" the SanMar tab's bulk import uses) and links the result,
+// unlisted from any shop until the admin decides otherwise. The link is
+// edited from the adult side only; a product already linked as someone's
+// youth shows read-only info instead, so there's one place to manage each pair.
+function YouthLinkPanel({ products, editProductId, value, onChange, sizeChartUrl, onSizeChartChange }: {
+    products: Product[]; editProductId: string | null;
+    value: YouthProductRef | null; onChange: (v: YouthProductRef | null) => void;
+    sizeChartUrl: string; onSizeChartChange: (url: string) => void;
 }) {
+    const { toast } = useToast();
+    const [query, setQuery] = useState("");
+    const [results, setResults] = useState<any[]>([]);
+    const [searching, setSearching] = useState(false);
+    const [loading, setLoading] = useState(false);
+    const [resolving, setResolving] = useState(false);
+    const timerRef = useRef<ReturnType<typeof setTimeout>>();
+
     const linkedFromAdult = editProductId ? products.find(y => y.youthProductId === editProductId) : undefined;
 
     if (linkedFromAdult) {
@@ -309,23 +324,95 @@ function YouthLinkField({ products, editProductId, value, onChange }: {
         );
     }
 
-    const claimedElsewhere = new Set(
-        products.filter(x => x.youthProductId && x.id !== editProductId).map(x => x.youthProductId!)
-    );
-    const candidates = products.filter(x =>
-        x.id !== editProductId && (!claimedElsewhere.has(x.id) || x.id === value)
-    );
+    async function doSearch(q: string) {
+        if (!q.trim()) { setResults([]); return; }
+        setLoading(true);
+        try {
+            const data = await api(`/sanmar/catalog?q=${encodeURIComponent(q)}&limit=40`);
+            const seen = new Set<string>(); const unique: any[] = [];
+            for (const row of data.data ?? []) { if (!seen.has(row.style)) { seen.add(row.style); unique.push(row); } }
+            setResults(unique.slice(0, 12));
+        } catch { setResults([]); }
+        finally { setLoading(false); }
+    }
+
+    function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+        const q = e.target.value;
+        setQuery(q);
+        clearTimeout(timerRef.current);
+        timerRef.current = setTimeout(() => doSearch(q), 400);
+    }
+
+    async function pick(result: any) {
+        setResolving(true);
+        try {
+            const res = await api("/sanmar/import", { method: "POST", body: JSON.stringify({ style: result.style }) });
+            const p = res.product;
+            onChange({ id: p.id, name: p.name, vendorIdentifier: p.vendorIdentifier });
+            onSizeChartChange(p.sizeChartUrl ?? "");
+            setSearching(false); setQuery(""); setResults([]);
+            toast(`Linked to SanMar ${result.style}`);
+        } catch (err: any) { toast(err.message || "Failed to link youth style", "error"); }
+        finally { setResolving(false); }
+    }
+
+    if (value && !searching) {
+        return (
+            <div>
+                <label className="field-label">Youth version (optional)</label>
+                <div className="flex items-center justify-between gap-3 bg-brand-50 border border-brand-200 rounded-xl px-3.5 py-2.5">
+                    <div className="min-w-0">
+                        <p className="text-sm font-semibold text-slate-800 truncate">{value.name}</p>
+                        {value.vendorIdentifier && <p className="text-xs text-slate-500">SanMar style {value.vendorIdentifier}</p>}
+                    </div>
+                    <div className="flex gap-3 shrink-0">
+                        <button type="button" onClick={() => setSearching(true)} className="text-xs font-semibold text-brand-600 hover:text-brand-700">Change</button>
+                        <button type="button" onClick={() => { onChange(null); onSizeChartChange(""); }} className="text-xs font-semibold text-red-500 hover:text-red-700">Remove</button>
+                    </div>
+                </div>
+                <div className="mt-3">
+                    <SizeChartUploader url={sizeChartUrl} onChange={onSizeChartChange} label="Youth Size Chart (PDF)" />
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div>
             <label className="field-label">Youth version (optional)</label>
-            <Select value={value} onChange={e => onChange(e.target.value)}>
-                <option value="">No linked youth product</option>
-                {candidates.map(c => (
-                    <option key={c.id} value={c.id}>{c.name} ({c.sku})</option>
-                ))}
-            </Select>
-            <p className="text-xs text-slate-400 mt-1">If this style also comes in youth sizes as its own product, link it here — shoppers get an Adult/Youth toggle on this product&apos;s page.</p>
+            <div className="relative">
+                <input value={query} onChange={handleChange}
+                    placeholder="Search SanMar for the youth style (e.g. PC61Y)…"
+                    className="w-full pl-3 pr-8 py-2 text-sm border border-slate-200 rounded-xl outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 bg-white transition-all" />
+                {(loading || resolving) && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                        <div className="w-4 h-4 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+                    </div>
+                )}
+            </div>
+            {results.length > 0 && (
+                <div className="mt-1.5 border border-slate-200 rounded-xl overflow-hidden max-h-56 overflow-y-auto divide-y divide-slate-100 bg-white shadow-sm">
+                    {results.map((r, i) => (
+                        <button key={i} type="button" disabled={resolving} onClick={() => pick(r)}
+                            className="w-full text-left px-3.5 py-2 hover:bg-brand-50 transition-colors flex items-center gap-3 disabled:opacity-50">
+                            {r.productImage ? (
+                                <img src={r.productImage} alt="" className="w-7 h-7 rounded-lg object-cover border border-slate-200 shrink-0" />
+                            ) : null}
+                            <div className="min-w-0 flex-1">
+                                <p className="text-sm font-semibold text-slate-800 truncate">{r.title ?? r.style}</p>
+                                <p className="text-xs text-slate-400 truncate">{r.brand ?? ""} {r.brand ? "·" : ""} Style {r.style}</p>
+                            </div>
+                        </button>
+                    ))}
+                </div>
+            )}
+            {value && (
+                <button type="button" onClick={() => { setSearching(false); setQuery(""); setResults([]); }}
+                    className="text-xs text-slate-400 hover:text-slate-600 mt-1.5">
+                    ← Cancel
+                </button>
+            )}
+            <p className="text-xs text-slate-400 mt-1.5">If this style also comes in youth sizes, search for it and pick it — it&apos;s imported automatically and linked here. Shoppers get an Adult/Youth toggle on this product&apos;s page.</p>
         </div>
     );
 }
@@ -619,7 +706,9 @@ export default function ProductsPage() {
             priceDollars:(p.priceCents/100).toFixed(2), shopIds:(p.shops ?? []).map(s => s.id),
             sizes:p.sizesJson?JSON.parse(p.sizesJson):[], colors:p.colorsJson?JSON.parse(p.colorsJson):[],
             images:p.imagesJson?JSON.parse(p.imagesJson):[],
-            sizeChartUrl: p.sizeChartUrl ?? "", youthProductId: p.youthProductId ?? "",
+            sizeChartUrl: p.sizeChartUrl ?? "",
+            youthLink: p.youthProduct ? { id: p.youthProduct.id, name: p.youthProduct.name, vendorIdentifier: p.youthProduct.vendorIdentifier } : null,
+            youthSizeChartUrl: p.youthProduct?.sizeChartUrl ?? "",
             upchargeEnabled: Boolean(p.upchargeEnabled), upchargeDollars: ((p.upchargeCents ?? 300)/100).toFixed(2),
             weightOz: p.weightOz != null ? String(p.weightOz) : "",
         });
@@ -667,7 +756,8 @@ export default function ProductsPage() {
                 priceCents:Math.round(parseFloat(form.priceDollars)*100), sizes:form.sizes, colors:form.colors,
                 images:form.images, shopIds:form.shopIds,
                 sizeChartUrl: form.sizeChartUrl || null,
-                youthProductId: form.youthProductId || null,
+                youthProductId: form.youthLink?.id || null,
+                youthSizeChartUrl: form.youthLink ? (form.youthSizeChartUrl || "") : undefined,
                 upchargeEnabled:form.upchargeEnabled,
                 upchargeCents:Math.round(parseFloat(form.upchargeDollars || "0")*100) || 300,
                 weightOz: form.weightOz.trim() ? Math.round(parseFloat(form.weightOz)) : null,
@@ -974,10 +1064,12 @@ export default function ProductsPage() {
 
                     <ImageManager images={form.images} onChange={images => setForm(p => ({ ...p, images }))} />
 
-                    <SizeChartUploader url={form.sizeChartUrl} onChange={sizeChartUrl => setForm(p => ({ ...p, sizeChartUrl }))} />
+                    <SizeChartUploader url={form.sizeChartUrl} onChange={sizeChartUrl => setForm(p => ({ ...p, sizeChartUrl }))}
+                        label={form.youthLink ? "Adult Size Chart (PDF)" : "Size Chart (PDF)"} />
 
-                    <YouthLinkField products={products} editProductId={editProduct?.id ?? null}
-                        value={form.youthProductId} onChange={youthProductId => setForm(p => ({ ...p, youthProductId }))} />
+                    <YouthLinkPanel products={products} editProductId={editProduct?.id ?? null}
+                        value={form.youthLink} onChange={youthLink => setForm(p => ({ ...p, youthLink }))}
+                        sizeChartUrl={form.youthSizeChartUrl} onSizeChartChange={youthSizeChartUrl => setForm(p => ({ ...p, youthSizeChartUrl }))} />
 
                     <ModalFooter>
                         <Button type="button" variant="outline" onClick={() => { setShowAdd(false); setEditProduct(null); }}>Cancel</Button>
