@@ -371,12 +371,9 @@ function YouthLinkPanel({ products, editProductId, adultColors, value, onChange,
             }) });
             let p = res.product;
 
-            // Brand new product — give it a Crossroads SKU that matches this
-            // shop's convention ({SanMar style}{product name}) with a trailing
-            // "Y" so it reads unmistakably as the youth companion in the
-            // products list, whether or not SanMar's own style code ends in Y.
             if (res.action === "created") {
-                const youthSku = `${p.vendorIdentifier ?? detail.style}${p.name}Y`;
+                // {SanMar style}{product name}, spaces stripped so it reads as one clean token.
+                const youthSku = `${p.vendorIdentifier ?? detail.style}${p.name.replace(/\s+/g, "")}`;
                 try {
                     p = await api(`/products/${p.id}`, { method: "PUT", body: JSON.stringify({
                         name: p.name, sku: youthSku, vendor: p.vendor, vendorIdentifier: p.vendorIdentifier,
@@ -987,7 +984,7 @@ export default function ProductsPage() {
                                                     </div>
                                                 )}
                                                 <div>
-                                                    <p className="font-semibold text-slate-800 text-sm">{p.name}</p>
+                                                    <p className="font-semibold text-slate-800 text-[13px]">{p.name}</p>
                                                     {p.brand && <p className="text-xs text-slate-400">{p.brand}</p>}
                                                 </div>
                                             </div>
