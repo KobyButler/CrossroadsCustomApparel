@@ -22,6 +22,43 @@ async function resolveDiscount(discountCode?: string) {
     return null;
 }
 
+// Discards a customer's still-unpaid order (and cancels its PaymentIntent) for
+// this shop before a new checkout attempt creates another one. Without this,
+// every time a customer starts the card-payment step — then hits Back, edits
+// their cart, refreshes, or just retries after a network hiccup — a brand new
+// UNPAID order gets created alongside whichever attempt they eventually pay
+// on, so the same order shows up 2-3x in the admin list (one PAID, the rest
+// stuck UNPAID forever). This keeps at most one live pending-payment order
+// per (shop, customer) at a time, so a retry replaces the abandoned attempt
+// instead of piling up next to it.
+//
+// Scoped to UNPAID + paymentMethod 'stripe' orders only — orders already PAID,
+// or placed for pickup/cash/check, are never touched. If the old PaymentIntent
+// turns out to already be succeeded/processing (the customer's previous
+// attempt is completing right this moment), it's left alone rather than risk
+// deleting an order that's about to be paid.
+async function retireStalePendingOrder(shopId: string | null, customerEmail: string) {
+    const stale = await prisma.order.findFirst({
+        where: { shopId, customerEmail, paymentStatus: 'UNPAID', paymentMethod: 'stripe', status: { not: 'CANCELLED' } },
+        orderBy: { createdAt: 'desc' }
+    });
+    if (!stale) return;
+
+    if (stale.stripePaymentIntentId) {
+        try {
+            const stripe = getStripe();
+            const pi = await stripe.paymentIntents.retrieve(stale.stripePaymentIntentId);
+            if (pi.status === 'succeeded' || pi.status === 'processing') return; // let it finish — don't touch
+            if (pi.status !== 'canceled') await stripe.paymentIntents.cancel(stale.stripePaymentIntentId);
+        } catch (err) {
+            console.error('[checkout] failed to cancel stale PaymentIntent (continuing anyway):', err);
+        }
+    }
+
+    await prisma.orderItem.deleteMany({ where: { orderId: stale.id } });
+    await prisma.order.delete({ where: { id: stale.id } }).catch(() => {});
+}
+
 // ─── POST /api/payments/create-intent ─────────────────────────────────────────
 // Called by the storefront checkout when the customer selects online payment.
 // Supports a cross-shop cart: items may each carry their own shopSlug (falling
@@ -75,6 +112,11 @@ router.post('/create-intent', async (req: Request, res: Response) => {
         update: { name: customerName },
         create: { email: customerEmail, name: customerName }
     });
+
+    // Clear out any abandoned/unpaid attempt this same customer left behind for
+    // these shops (see retireStalePendingOrder) before starting a fresh one —
+    // otherwise a retry piles up as a duplicate instead of replacing it.
+    await Promise.all(finalGroups.map(g => retireStalePendingOrder(g.shopId, customerEmail)));
 
     const orderGroupId = finalGroups.length > 1 ? newOrderGroupId() : null;
 

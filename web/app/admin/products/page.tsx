@@ -17,6 +17,7 @@ type Product = {
     priceCents: number; shops?: Shop[];
     sizesJson?: string; colorsJson?: string; imagesJson?: string; sizeChartUrl?: string | null;
     upchargeEnabled?: boolean; upchargeCents?: number; weightOz?: number | null;
+    youthProductId?: string | null;
 };
 
 const VENDOR_LABELS: Record<string, string> = { SANMAR:"SanMar", SSACTIVEWEAR:"S&S Activewear", OTHER:"Other" };
@@ -24,7 +25,7 @@ const VENDOR_COLORS: Record<string, string> = { SANMAR:"info", SSACTIVEWEAR:"suc
 const EMPTY = {
     name:"", sku:"", vendor:"OTHER", vendorIdentifier:"", brand:"", description:"", priceDollars:"",
     shopIds:[] as string[], sizes:[] as string[], colors:[] as string[], images:[] as string[],
-    sizeChartUrl:"",
+    sizeChartUrl:"", youthProductId:"",
     upchargeEnabled:false, upchargeDollars:"3.00", weightOz:""
 };
 
@@ -283,6 +284,47 @@ function SizeChartUploader({ url, onChange }: { url:string; onChange:(url:string
                 <input type="file" accept="application/pdf" className="sr-only" onChange={handleFile} />
             </label>
             <p className="text-xs text-slate-400 mt-1">Customers can view this from the product page — handy for sizing guides from the vendor.</p>
+        </div>
+    );
+}
+
+// ── YouthLinkField ────────────────────────────────────────────────────────────
+// SanMar sells youth sizing as a fully separate style/SKU, so it stays a
+// separate Product here too — this just links the two so the storefront can
+// offer an Adult/Youth toggle on one page. The link is edited from the adult
+// side only; a product already linked as someone's youth shows read-only info
+// instead, so there's one place to manage each pair.
+function YouthLinkField({ products, editProductId, value, onChange }: {
+    products: Product[]; editProductId: string | null; value: string; onChange: (id: string) => void;
+}) {
+    const linkedFromAdult = editProductId ? products.find(y => y.youthProductId === editProductId) : undefined;
+
+    if (linkedFromAdult) {
+        return (
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                <p className="text-sm font-semibold text-slate-800">Linked as the youth version of &quot;{linkedFromAdult.name}&quot;</p>
+                <p className="text-xs text-slate-400 mt-0.5">Manage or remove this link from that product&apos;s edit form instead.</p>
+            </div>
+        );
+    }
+
+    const claimedElsewhere = new Set(
+        products.filter(x => x.youthProductId && x.id !== editProductId).map(x => x.youthProductId!)
+    );
+    const candidates = products.filter(x =>
+        x.id !== editProductId && (!claimedElsewhere.has(x.id) || x.id === value)
+    );
+
+    return (
+        <div>
+            <label className="field-label">Youth version (optional)</label>
+            <Select value={value} onChange={e => onChange(e.target.value)}>
+                <option value="">No linked youth product</option>
+                {candidates.map(c => (
+                    <option key={c.id} value={c.id}>{c.name} ({c.sku})</option>
+                ))}
+            </Select>
+            <p className="text-xs text-slate-400 mt-1">If this style also comes in youth sizes as its own product, link it here — shoppers get an Adult/Youth toggle on this product&apos;s page.</p>
         </div>
     );
 }
@@ -576,7 +618,7 @@ export default function ProductsPage() {
             priceDollars:(p.priceCents/100).toFixed(2), shopIds:(p.shops ?? []).map(s => s.id),
             sizes:p.sizesJson?JSON.parse(p.sizesJson):[], colors:p.colorsJson?JSON.parse(p.colorsJson):[],
             images:p.imagesJson?JSON.parse(p.imagesJson):[],
-            sizeChartUrl: p.sizeChartUrl ?? "",
+            sizeChartUrl: p.sizeChartUrl ?? "", youthProductId: p.youthProductId ?? "",
             upchargeEnabled: Boolean(p.upchargeEnabled), upchargeDollars: ((p.upchargeCents ?? 300)/100).toFixed(2),
             weightOz: p.weightOz != null ? String(p.weightOz) : "",
         });
@@ -624,6 +666,7 @@ export default function ProductsPage() {
                 priceCents:Math.round(parseFloat(form.priceDollars)*100), sizes:form.sizes, colors:form.colors,
                 images:form.images, shopIds:form.shopIds,
                 sizeChartUrl: form.sizeChartUrl || null,
+                youthProductId: form.youthProductId || null,
                 upchargeEnabled:form.upchargeEnabled,
                 upchargeCents:Math.round(parseFloat(form.upchargeDollars || "0")*100) || 300,
                 weightOz: form.weightOz.trim() ? Math.round(parseFloat(form.weightOz)) : null,
@@ -931,6 +974,9 @@ export default function ProductsPage() {
                     <ImageManager images={form.images} onChange={images => setForm(p => ({ ...p, images }))} />
 
                     <SizeChartUploader url={form.sizeChartUrl} onChange={sizeChartUrl => setForm(p => ({ ...p, sizeChartUrl }))} />
+
+                    <YouthLinkField products={products} editProductId={editProduct?.id ?? null}
+                        value={form.youthProductId} onChange={youthProductId => setForm(p => ({ ...p, youthProductId }))} />
 
                     <ModalFooter>
                         <Button type="button" variant="outline" onClick={() => { setShowAdd(false); setEditProduct(null); }}>Cancel</Button>
