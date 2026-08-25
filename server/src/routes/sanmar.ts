@@ -368,10 +368,11 @@ router.get('/product-info/:style', async (req, res) => {
 /* ─── Import catalog product into local Products ─────────────────────────── */
 
 router.post('/import', async (req, res) => {
-    const { style, shopIds, colors: colorSelection, priceCents } = req.body as {
+    const { style, shopIds, colors: colorSelection, sizes: sizeSelection, priceCents } = req.body as {
         style: string;
         shopIds?: string[];
         colors?: string[];
+        sizes?: string[];
         priceCents?: number;
     };
 
@@ -395,7 +396,9 @@ router.post('/import', async (req, res) => {
         return res.status(400).json({ error: 'At least one color is required. Pick a color to offer, or add this product manually from the Products page.' });
     }
     const sizeRows  = colors.length ? rows.filter(r => colors.includes(r.colorName)) : rows;
-    const sizes     = [...new Set(sizeRows.map(r => r.sizeName).filter(Boolean))];
+    const allSizes  = [...new Set(sizeRows.map(r => r.sizeName).filter(Boolean))];
+    // Only the sizes explicitly picked (falls back to all available for the chosen colors)
+    const sizes     = Array.isArray(sizeSelection) && sizeSelection.length ? sizeSelection.filter(s => allSizes.includes(s)) : allSizes;
     const price     = priceCents ?? Math.min(...rows.map(r => r.priceCents).filter(p => p > 0)) ?? 0;
     // Prefer an image from one of the selected colors; fall back to the style's default image
     const colorImage = rows.find(r => colors.includes(r.colorName) && r.productImage)?.productImage;
