@@ -198,11 +198,18 @@ router.get('/catalog', async (req, res) => {
             prisma.sanmarCatalogProduct.count({ where }),
         ]);
 
-        // Nothing in the local cache — if the query looks like an actual style
-        // code (not a keyword phrase), check SanMar live rather than telling the
-        // admin "no results" just because last week's sync didn't have it yet.
+        // If the query looks like an actual style code (not a keyword phrase),
+        // check SanMar live whenever the local cache doesn't have an EXACT style
+        // match — not just when it returned zero rows. `q` matches with `contains`
+        // against style/title/brand/description, so searching "PC78" can come
+        // back non-empty purely from other styles' description text mentioning
+        // "PC78H"/"PC78ZH" (companion-product copy) while PC78 itself is missing
+        // from last week's sync — a naive "only fall back when empty" check would
+        // never catch that. Only replaces the result set when SanMar actually has
+        // the style; otherwise the original (imperfect) local matches stand.
         const candidate = style ?? (q && STYLE_CODE_RE.test(q) ? q : null);
-        if (data.length === 0 && candidate) {
+        const hasExactMatch = candidate ? data.some(r => r.style.toUpperCase() === candidate.toUpperCase()) : true;
+        if (candidate && !hasExactMatch) {
             const liveRows = await liveLookupAndCacheStyle(candidate.toUpperCase());
             if (liveRows.length > 0) {
                 const liveWhere = { style: candidate.toUpperCase() };
