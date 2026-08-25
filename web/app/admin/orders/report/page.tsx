@@ -1,11 +1,12 @@
 "use client";
 import { useEffect, useState } from "react";
-import { api, imgUrl } from "@/app/lib/api";
+import { api, imgUrl, printAs } from "@/app/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select } from "@/components/ui/select";
 import { Modal, ModalFooter } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
+import { ZoomableImage } from "@/components/ui/zoomable-image";
 import { motion } from "framer-motion";
 import { getColorCss } from "@/lib/colors";
 
@@ -170,6 +171,17 @@ export default function OrderReportPage() {
         finally { setPlacing(false); }
     }
 
+    function printReceipt() {
+        if (!receipt) return;
+        printAs(receipt.poNumber);
+    }
+
+    function printReport() {
+        const shopName = report?.shop?.name ?? "All Shops";
+        const dateStr = new Date().toISOString().split("T")[0];
+        printAs(`Order Report - ${shopName} - ${dateStr}`);
+    }
+
     const vendors = report ? Object.keys(report.byVendor) : [];
     const confirmLines = confirmVendor ? linesToSubmit(confirmVendor) : [];
     const confirmSelectedCount = confirmVendor ? (report?.byVendor[confirmVendor] ?? []).filter(l => selected.has(lineKey(l))).length : 0;
@@ -183,7 +195,7 @@ export default function OrderReportPage() {
                     <p className="page-subtitle">See how many of each product you need to order, and place vendor orders directly</p>
                 </div>
                 <div className="flex gap-2.5">
-                    <Button variant="outline" onClick={() => window.print()}>Print</Button>
+                    <Button variant="outline" onClick={printReport}>Print</Button>
                 </div>
             </div>
 
@@ -301,7 +313,9 @@ export default function OrderReportPage() {
                                                         <td>
                                                             <div className="flex items-center gap-3">
                                                                 {l.image ? (
-                                                                    <img src={imgUrl(l.image)} alt={l.vendorStyle} className="w-8 h-8 rounded-lg object-cover ring-1 ring-black/5 no-print" />
+                                                                    <ZoomableImage src={imgUrl(l.image)} alt={l.vendorStyle}
+                                                                        wrapperClassName="no-print"
+                                                                        className="w-8 h-8 rounded-lg object-cover ring-1 ring-black/5" />
                                                                 ) : null}
                                                                 <code className="text-sm font-mono font-bold text-slate-800">{l.vendorStyle}</code>
                                                             </div>
@@ -576,7 +590,7 @@ export default function OrderReportPage() {
                         </p>
 
                         <ModalFooter>
-                            <Button variant="outline" onClick={() => window.print()}>Print Receipt</Button>
+                            <Button variant="outline" onClick={printReceipt}>Print Receipt</Button>
                             <Button onClick={() => setReceipt(null)}>Done</Button>
                         </ModalFooter>
                     </div>

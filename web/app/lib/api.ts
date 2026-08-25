@@ -12,6 +12,24 @@ export function imgUrl(url: string): string {
     return `${base}${url}`;
 }
 
+/**
+ * Print the current page with document.title temporarily swapped to `name`, so that
+ * browsers' "Print > Save as PDF" suggests a meaningful filename instead of falling
+ * back to the site's title on every page ("Crossroads Custom Apparel.pdf"). Restores
+ * the previous title once the print dialog closes.
+ */
+export function printAs(name: string) {
+    const prevTitle = document.title;
+    const safe = name.replace(/[\\/:*?"<>|]+/g, "-").trim();
+    document.title = safe || prevTitle;
+    const restore = () => {
+        document.title = prevTitle;
+        window.removeEventListener("afterprint", restore);
+    };
+    window.addEventListener("afterprint", restore);
+    window.print();
+}
+
 function getToken(): string | null {
     if (typeof window === "undefined") return null;
     return localStorage.getItem("auth_token");
