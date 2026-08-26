@@ -135,10 +135,12 @@ router.get('/sync-logs', async (req, res) => {
 /* ─── Browse catalog ──────────────────────────────────────────────────────── */
 
 // A real SanMar style code (PC78, PC78H, PC78ZH, DT6000, J317V…) is short,
-// has no spaces, and is basically alphanumeric — unlike a keyword search
-// ("hoodie", "core fleece"). Used to decide when a zero-result local search
-// is worth a live SanMar lookup rather than just being a keyword miss.
-const STYLE_CODE_RE = /^[A-Za-z0-9]{2,14}([.\-][A-Za-z0-9]{1,8})?$/;
+// has no spaces, and always includes a digit somewhere — unlike a plain
+// keyword search ("hoodie", "core fleece", "polo"), which is what most
+// characters typed into this box actually are. Used to decide when a local
+// search miss is worth a live SanMar lookup rather than just a keyword miss —
+// the digit requirement is what keeps ordinary typing from ever qualifying.
+const STYLE_CODE_RE = /^(?=[A-Za-z0-9]*\d)[A-Za-z0-9]{2,14}([.\-][A-Za-z0-9]{1,8})?$/;
 
 router.get('/catalog', async (req, res) => {
     const q           = (req.query.q as string ?? '').trim();
@@ -207,9 +209,17 @@ router.get('/catalog', async (req, res) => {
         // from last week's sync — a naive "only fall back when empty" check would
         // never catch that. Only replaces the result set when SanMar actually has
         // the style; otherwise the original (imperfect) local matches stand.
+        //
+        // The live lookup itself is a real SOAP round-trip to SanMar and routinely
+        // takes several seconds — far too slow to risk on every debounced
+        // keystroke while someone is still typing. The frontend only sets
+        // `live=true` on a second, longer-settled debounce after typing has
+        // actually paused, so this never runs mid-keystroke; every other search
+        // request (the fast, common case) skips this branch entirely.
+        const allowLive = req.query.live === 'true';
         const candidate = style ?? (q && STYLE_CODE_RE.test(q) ? q : null);
         const hasExactMatch = candidate ? data.some(r => r.style.toUpperCase() === candidate.toUpperCase()) : true;
-        if (candidate && !hasExactMatch) {
+        if (allowLive && candidate && !hasExactMatch) {
             const liveRows = await liveLookupAndCacheStyle(candidate.toUpperCase());
             if (liveRows.length > 0) {
                 const liveWhere = { style: candidate.toUpperCase() };

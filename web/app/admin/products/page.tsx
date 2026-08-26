@@ -319,6 +319,7 @@ function YouthLinkPanel({ products, editProductId, adultColors, value, onChange,
     const [detail, setDetail] = useState<{ style: string; title: string; brand?: string; colors: string[]; sizes: string[] } | null>(null);
     const [selectedSizes, setSelectedSizes] = useState<Set<string>>(new Set());
     const timerRef = useRef<ReturnType<typeof setTimeout>>();
+    const liveTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
     const linkedFromAdult = editProductId ? products.find(y => y.youthProductId === editProductId) : undefined;
 
@@ -331,11 +332,15 @@ function YouthLinkPanel({ products, editProductId, adultColors, value, onChange,
         );
     }
 
-    async function doSearch(q: string) {
+    // `live=true` lets the backend fall back to a live SanMar SOAP lookup when
+    // nothing local matches — routinely several seconds. Only ever set from
+    // the longer-settled timer in handleChange below, so normal typing never
+    // gets stuck waiting on it.
+    async function doSearch(q: string, live = false) {
         if (!q.trim()) { setResults([]); return; }
         setLoading(true);
         try {
-            const data = await api(`/sanmar/catalog?q=${encodeURIComponent(q)}&limit=40`);
+            const data = await api(`/sanmar/catalog?q=${encodeURIComponent(q)}&limit=40${live ? "&live=true" : ""}`);
             const seen = new Set<string>(); const unique: any[] = [];
             for (const row of data.data ?? []) { if (!seen.has(row.style)) { seen.add(row.style); unique.push(row); } }
             setResults(unique.slice(0, 12));
@@ -347,7 +352,9 @@ function YouthLinkPanel({ products, editProductId, adultColors, value, onChange,
         const q = e.target.value;
         setQuery(q);
         clearTimeout(timerRef.current);
+        clearTimeout(liveTimerRef.current);
         timerRef.current = setTimeout(() => doSearch(q), 400);
+        liveTimerRef.current = setTimeout(() => doSearch(q, true), 900);
     }
 
     async function pickResult(result: any) {
@@ -542,15 +549,21 @@ function VendorSearchPanel({ source, onSelect }: { source: "SANMAR"|"SS"; onSele
     const [detail, setDetail] = useState<VendorDetail | null>(null);
     const [selectedColors, setSelectedColors] = useState<Set<string>>(new Set());
     const timerRef = useRef<ReturnType<typeof setTimeout>>();
+    const liveTimerRef = useRef<ReturnType<typeof setTimeout>>();
     const requestSeq = useRef(0);
 
-    async function doSearch(q: string) {
+    // `live=true` lets the backend fall back to a live SanMar SOAP lookup when
+    // nothing local matches — routinely several seconds, since it's a real
+    // network round-trip to SanMar. Only ever set from the longer-settled
+    // timer in handleChange below, never from the fast typing-feedback search,
+    // so normal typing never gets stuck waiting on it.
+    async function doSearch(q: string, live = false) {
         const seq = ++requestSeq.current;
         if (!q.trim()) { setResults([]); setNotice(""); setError(""); return; }
         setLoading(true); setError(""); setNotice("");
         try {
             if (source === "SANMAR") {
-                const data = await api(`/sanmar/catalog?q=${encodeURIComponent(q)}&limit=40`);
+                const data = await api(`/sanmar/catalog?q=${encodeURIComponent(q)}&limit=40${live ? "&live=true" : ""}`);
                 if (seq !== requestSeq.current) return; // a newer search superseded this one
                 const seen = new Set<string>();
                 const unique: any[] = [];
@@ -586,7 +599,9 @@ function VendorSearchPanel({ source, onSelect }: { source: "SANMAR"|"SS"; onSele
         const q = e.target.value;
         setQuery(q);
         clearTimeout(timerRef.current);
+        clearTimeout(liveTimerRef.current);
         timerRef.current = setTimeout(() => doSearch(q), 400);
+        if (source === "SANMAR") liveTimerRef.current = setTimeout(() => doSearch(q, true), 900);
     }
 
     async function handlePick(result: any) {
