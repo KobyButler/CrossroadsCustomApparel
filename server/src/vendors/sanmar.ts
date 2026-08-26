@@ -5,6 +5,29 @@ import { vendorStyleCode } from '../utils/vendorGrouping.js';
 
 /* ─── Helpers ─────────────────────────────────────────────────────────────── */
 
+// soap.createClientAsync fetches and parses the target WSDL document from
+// scratch on every call (a few hundred ms, plus a network round-trip if the
+// WSDL is hosted remotely) — real cost on top of the SOAP call itself, and
+// pure waste since the same WSDL never changes between calls. Every SanMar
+// SOAP call in this file goes through this cache instead of calling
+// createClientAsync directly, keyed by WSDL URL. Credentials are passed as
+// method arguments per-call (not stored on the client), so a single client
+// instance is safe to reuse concurrently across unrelated requests. Caches
+// the in-flight promise (not just the resolved client) so concurrent calls
+// racing to create the same client share one creation instead of each
+// starting their own; a failed creation is evicted so the next call retries
+// fresh rather than being stuck permanently broken by one transient failure.
+const soapClientCache = new Map<string, Promise<soap.Client>>();
+function getSoapClient(wsdlUrl: string): Promise<soap.Client> {
+    let clientPromise = soapClientCache.get(wsdlUrl);
+    if (!clientPromise) {
+        clientPromise = soap.createClientAsync(wsdlUrl);
+        clientPromise.catch(() => soapClientCache.delete(wsdlUrl));
+        soapClientCache.set(wsdlUrl, clientPromise);
+    }
+    return clientPromise;
+}
+
 function asArray<T>(value: T | T[] | null | undefined): T[] {
     if (Array.isArray(value)) return value;
     return value == null ? [] : [value];
@@ -71,7 +94,7 @@ export async function submitOrderToSanMar(order: any, lines: LineGroup) {
     if (!config.sanmar.wsdlUrl) throw new Error('SANMAR_WSDL_URL is required');
     if (!config.sanmar.customerNumber) throw new Error('SANMAR_CUSTOMER_NUMBER is required');
 
-    const client = await soap.createClientAsync(config.sanmar.wsdlUrl);
+    const client = await getSoapClient(config.sanmar.wsdlUrl);
 
     const poEnvelope = await buildPOEnvelope(order, lines);
     const auth = poAuthArgs();
@@ -262,7 +285,7 @@ export async function checkSanMarInventory(
     if (!wsdlUrl) throw new Error('SANMAR_INVENTORY_WSDL_URL is required');
     if (!config.sanmar.customerNumber) throw new Error('SANMAR_CUSTOMER_NUMBER is required');
 
-    const client = await soap.createClientAsync(wsdlUrl);
+    const client = await getSoapClient(wsdlUrl);
 
     const [resp] = await client.getInventoryQtyForStyleColorSizeAsync({
         arg0: Number(config.sanmar.customerNumber),
@@ -311,7 +334,7 @@ export async function getSanMarProductInfo(
     if (!wsdlUrl) throw new Error('SANMAR_PRODUCTINFO_WSDL_URL is required');
     if (!config.sanmar.customerNumber) throw new Error('SANMAR_CUSTOMER_NUMBER is required');
 
-    const client = await soap.createClientAsync(wsdlUrl);
+    const client = await getSoapClient(wsdlUrl);
 
     const [resp] = await client.getProductInfoByStyleColorSizeAsync({
         arg0: {
@@ -415,7 +438,7 @@ export async function getOrderStatus(poNumber: string) {
     const wsdlUrl = config.sanmar.orderStatusWsdlUrl;
     if (!wsdlUrl) throw new Error('SANMAR_ORDER_STATUS_WSDL_URL is required');
 
-    const client = await soap.createClientAsync(wsdlUrl);
+    const client = await getSoapClient(wsdlUrl);
     const [resp] = await client.getOrderStatusAsync({
         wsVersion: '2.0.0',
         id: config.sanmar.poUsername,
@@ -440,7 +463,7 @@ export async function getOrderShipmentNotification(poNumber: string) {
     const wsdlUrl = config.sanmar.shipmentWsdlUrl;
     if (!wsdlUrl) throw new Error('SANMAR_SHIPMENT_WSDL_URL is required');
 
-    const client = await soap.createClientAsync(wsdlUrl);
+    const client = await getSoapClient(wsdlUrl);
     const [resp] = await client.getOrderShipmentNotificationAsync({
         wsVersion: '1.0.0',
         id: config.sanmar.poUsername,
@@ -463,7 +486,7 @@ export async function getInvoiceByPO(poNumber: string) {
     const wsdlUrl = config.sanmar.invoiceWsdlUrl;
     if (!wsdlUrl) throw new Error('SANMAR_INVOICE_WSDL_URL is required');
 
-    const client = await soap.createClientAsync(wsdlUrl);
+    const client = await getSoapClient(wsdlUrl);
     const [resp] = await client.GetInvoicesByPurchaseOrderNoAsync({
         CustomerNo: config.sanmar.customerNumber,
         UserName: config.sanmar.poUsername,
