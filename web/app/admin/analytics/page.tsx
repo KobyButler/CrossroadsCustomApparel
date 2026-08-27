@@ -106,7 +106,7 @@ export default function AnalyticsPage() {
                 <motion.div initial={{ opacity:0, y:12 }} animate={{ opacity:1, y:0 }} transition={{ delay:0.22 }}
                     className="bg-white rounded-2xl ring-1 ring-black/5 shadow-card p-5">
                     <h3 className="text-sm font-bold text-slate-900 mb-1">Revenue per day</h3>
-                    <p className="text-xs text-slate-400 mb-4">Gross revenue generated each day</p>
+                    <p className="text-xs text-slate-400 mb-4">Gross revenue generated each day (excl. tax)</p>
                     <BarChart data={data.series} getValue={s => s.grossCents} getLabel={s => `${s.date}: ${fmt(s.grossCents)}`} color="bg-emerald-500" />
                     <div className="flex justify-between mt-2 text-[10px] text-slate-300 font-mono">
                         <span>{data.series[0]?.date}</span>

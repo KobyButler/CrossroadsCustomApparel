@@ -86,6 +86,14 @@ model Order {
   customerEmail         String
   shippingMethod        String               @default("PICKUP") // SHIP|PICKUP
   shippingCents         Int                  @default(0)
+  // Sales tax calculated via Stripe Tax at checkout time (both card and
+  // cash/check/pickup orders — tax is owed regardless of payment method).
+  // stripeTaxCalculationId/stripeTaxTransactionId trace back to the Stripe
+  // Tax Calculation/Transaction so a future refund/cancellation can be
+  // reversed there too. See server/src/utils/tax.ts.
+  taxCents               Int                  @default(0)
+  stripeTaxCalculationId String?
+  stripeTaxTransactionId String?
   shipAddress1          String?
   shipAddress2          String?
   shipCity              String?

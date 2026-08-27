@@ -4,12 +4,14 @@ import { prisma } from '../prisma.js';
 export const router = Router();
 
 // Financial summary (gross revenue from orders + net after finance transactions)
+// Sales tax collected is excluded from revenue — it's collected on behalf of
+// the state and owed back to them, not income to the business.
 router.get('/summary', async (_req, res) => {
     const [orders, txs] = await Promise.all([
         prisma.order.findMany({ where: { status: { in: ['UNFULFILLED', 'FULFILLED'] } } }),
         prisma.financeTransaction.findMany()
     ]);
-    const gross = orders.reduce((a, b) => a + b.totalCents, 0);
+    const gross = orders.reduce((a, b) => a + (b.totalCents - b.taxCents), 0);
     const net = gross + txs.reduce((a, b) => a + b.amountCents, 0);
     res.json({ grossCents: gross, netCents: net, orders: orders.length });
 });
