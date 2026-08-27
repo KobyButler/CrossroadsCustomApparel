@@ -11,7 +11,7 @@ type PrintOrder = {
     id: string; customerName: string; customerEmail: string;
     status: string; paymentStatus?: string; paymentMethod?: string;
     totalCents: number; createdAt: string;
-    shippingMethod?: string; shippingCents?: number;
+    shippingMethod?: string; shippingCents?: number; taxCents?: number;
     shipAddress1?: string; shipAddress2?: string; shipCity?: string; shipState?: string; shipZip?: string;
     residential?: boolean;
     specialInstructions?: string | null;
@@ -27,7 +27,8 @@ const PAYMENT_LABEL: Record<string, string> = {
 
 function OrderPage({ order, isFirst }: { order: PrintOrder; isFirst: boolean }) {
     const isShip = order.shippingMethod === "SHIP";
-    const subtotal = order.totalCents - (isShip ? (order.shippingCents ?? 0) : 0);
+    const taxCents = order.taxCents ?? 0;
+    const subtotal = order.totalCents - (isShip ? (order.shippingCents ?? 0) : 0) - taxCents;
 
     return (
         <div className={`px-10 py-10 ${isFirst ? "" : "print-page-break"}`} style={{ maxWidth: "8.5in", margin: "0 auto" }}>
@@ -111,6 +112,11 @@ function OrderPage({ order, isFirst }: { order: PrintOrder; isFirst: boolean }) 
                     {isShip && (
                         <div className="flex justify-between text-sm text-slate-600 py-1">
                             <span>Shipping</span><span>{fmt(order.shippingCents ?? 0)}</span>
+                        </div>
+                    )}
+                    {taxCents > 0 && (
+                        <div className="flex justify-between text-sm text-slate-600 py-1">
+                            <span>Tax</span><span>{fmt(taxCents)}</span>
                         </div>
                     )}
                     <div className="flex justify-between text-base font-bold text-slate-900 border-t-2 border-slate-900 pt-2 mt-1">

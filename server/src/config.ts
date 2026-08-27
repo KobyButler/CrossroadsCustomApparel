@@ -15,6 +15,12 @@ export const config = {
         secretKey: process.env.STRIPE_SECRET_KEY ?? '',
         webhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? '',
         enable: bool(process.env.STRIPE_ENABLE, true),
+        // Stripe Tax product tax codes (https://stripe.com/docs/tax/tax-categories) —
+        // used to calculate sales tax at checkout. txcd_99999999 ("General -
+        // Tangible Goods") and txcd_92010001 ("Shipping") are safe, broadly-correct
+        // defaults; override if a more specific category (e.g. apparel) fits better.
+        taxCode: process.env.STRIPE_TAX_CODE || 'txcd_99999999',
+        taxShippingCode: process.env.STRIPE_TAX_SHIPPING_CODE || 'txcd_92010001',
     },
 
     ss: {

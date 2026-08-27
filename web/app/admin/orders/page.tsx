@@ -24,7 +24,7 @@ type Order = {
     status: string; totalCents: number; createdAt: string;
     paymentStatus?: string; paymentMethod?: string;
     items: OrderItemRow[]; shop?: { id: string; name: string } | null; shopId?: string | null;
-    shippingMethod?: string; shippingCents?: number;
+    shippingMethod?: string; shippingCents?: number; taxCents?: number;
     shipAddress1?: string; shipAddress2?: string; shipCity?: string; shipState?: string; shipZip?: string;
     residential?: boolean;
     specialInstructions?: string | null;
@@ -48,7 +48,7 @@ const PAYMENT_METHOD_OPTIONS = [
 const EMPTY_EDIT_FORM = {
     customerName: "", customerEmail: "", shopId: "",
     status: "UNFULFILLED", paymentStatus: "UNPAID", paymentMethod: "",
-    shippingMethod: "PICKUP", shippingDollars: "0.00",
+    shippingMethod: "PICKUP", shippingDollars: "0.00", taxDollars: "0.00",
     shipAddress1: "", shipAddress2: "", shipCity: "", shipState: "", shipZip: "", residential: true,
     specialInstructions: "",
 };
@@ -166,8 +166,8 @@ export default function OrdersPage() {
     function exportCSV() {
         const csvCell = (s: string) => `"${s.replace(/"/g, '""')}"`;
         const csv = [
-            ["Order ID","Customer","Email","Status","Total","Date","Items","Comments"].join(","),
-            ...filtered.map(o => [o.id,csvCell(o.customerName),o.customerEmail,o.status,`$${(o.totalCents/100).toFixed(2)}`,new Date(o.createdAt).toLocaleDateString(),o.items?.length??0,csvCell(o.specialInstructions ?? "")].join(","))
+            ["Order ID","Customer","Email","Status","Tax","Total","Date","Items","Comments"].join(","),
+            ...filtered.map(o => [o.id,csvCell(o.customerName),o.customerEmail,o.status,`$${((o.taxCents??0)/100).toFixed(2)}`,`$${(o.totalCents/100).toFixed(2)}`,new Date(o.createdAt).toLocaleDateString(),o.items?.length??0,csvCell(o.specialInstructions ?? "")].join(","))
         ].join("\n");
         const a = document.createElement("a");
         a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
@@ -204,6 +204,7 @@ export default function OrdersPage() {
             shopId: order.shopId ?? order.shop?.id ?? "",
             status: order.status, paymentStatus: order.paymentStatus ?? "UNPAID", paymentMethod: order.paymentMethod ?? "",
             shippingMethod: order.shippingMethod ?? "PICKUP", shippingDollars: (((order.shippingCents ?? 0)) / 100).toFixed(2),
+            taxDollars: (((order.taxCents ?? 0)) / 100).toFixed(2),
             shipAddress1: order.shipAddress1 ?? "", shipAddress2: order.shipAddress2 ?? "",
             shipCity: order.shipCity ?? "", shipState: order.shipState ?? "", shipZip: order.shipZip ?? "",
             residential: order.residential ?? true,
@@ -235,7 +236,8 @@ export default function OrdersPage() {
 
     const editSubtotalCents = editItems.reduce((a, i) => a + Math.round((parseFloat(i.priceDollars) || 0) * 100) * (Number(i.quantity) || 0), 0);
     const editShippingCents = Math.round((parseFloat(editForm.shippingDollars) || 0) * 100);
-    const editTotalCents = editSubtotalCents + editShippingCents;
+    const editTaxCents = Math.round((parseFloat(editForm.taxDollars) || 0) * 100);
+    const editTotalCents = editSubtotalCents + editShippingCents + editTaxCents;
 
     async function saveOrderEdit(e: React.FormEvent) {
         e.preventDefault();
@@ -250,6 +252,7 @@ export default function OrdersPage() {
                 status: editForm.status, paymentStatus: editForm.paymentStatus, paymentMethod: editForm.paymentMethod || null,
                 shippingMethod: editForm.shippingMethod,
                 shippingCents: editShippingCents,
+                taxCents: editTaxCents,
                 shipAddress1: editForm.shipAddress1 || null, shipAddress2: editForm.shipAddress2 || null,
                 shipCity: editForm.shipCity || null, shipState: editForm.shipState || null, shipZip: editForm.shipZip || null,
                 residential: editForm.residential,
@@ -650,12 +653,21 @@ export default function OrdersPage() {
                                 </div>
                             )}
                         </div>
-                        <div className="flex justify-between items-center pt-1">
+                        <div className="flex justify-between items-end pt-1">
                             <div className="flex items-center gap-2">
                                 <Badge variant={statusVariant(detailOrder.status)}>{detailOrder.status}</Badge>
                                 {detailOrder.shop && <span className="text-xs text-slate-400">via {detailOrder.shop.name}</span>}
                             </div>
-                            <p className="text-lg font-bold text-slate-900">{fmt(detailOrder.totalCents)}</p>
+                            <div className="text-right">
+                                {(detailOrder.taxCents ?? 0) > 0 && (
+                                    <p className="text-xs text-slate-400">
+                                        Subtotal {fmt(detailOrder.totalCents - (detailOrder.shippingCents ?? 0) - (detailOrder.taxCents ?? 0))}
+                                        {" + "}Shipping {fmt(detailOrder.shippingCents ?? 0)}
+                                        {" + "}Tax {fmt(detailOrder.taxCents ?? 0)}
+                                    </p>
+                                )}
+                                <p className="text-lg font-bold text-slate-900">{fmt(detailOrder.totalCents)}</p>
+                            </div>
                         </div>
                         <ModalFooter>
                             <Button variant="outline" onClick={() => setDetailOrder(null)}>Close</Button>
@@ -713,7 +725,7 @@ export default function OrdersPage() {
                         </div>
 
                         <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                 <div>
                                     <label className="field-label">Fulfillment</label>
                                     <Select value={editForm.shippingMethod} onChange={e => setEditForm(p => ({ ...p, shippingMethod: e.target.value }))}>
@@ -723,6 +735,8 @@ export default function OrdersPage() {
                                 </div>
                                 <Input label="Shipping Cost ($)" type="number" step="0.01" min="0" value={editForm.shippingDollars}
                                     onChange={e => setEditForm(p => ({ ...p, shippingDollars: e.target.value }))} />
+                                <Input label="Tax ($)" type="number" step="0.01" min="0" value={editForm.taxDollars}
+                                    onChange={e => setEditForm(p => ({ ...p, taxDollars: e.target.value }))} />
                             </div>
                             {editForm.shippingMethod === "SHIP" && (
                                 <>
@@ -802,7 +816,7 @@ export default function OrdersPage() {
 
                         <div className="flex justify-between items-center pt-2 border-t border-slate-100">
                             <div className="text-xs text-slate-400">
-                                Subtotal {fmt(editSubtotalCents)} + Shipping {fmt(editShippingCents)}
+                                Subtotal {fmt(editSubtotalCents)} + Shipping {fmt(editShippingCents)} + Tax {fmt(editTaxCents)}
                             </div>
                             <p className="text-lg font-bold text-slate-900">{fmt(editTotalCents)}</p>
                         </div>
