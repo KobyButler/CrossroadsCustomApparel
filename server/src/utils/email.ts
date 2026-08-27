@@ -16,10 +16,34 @@ type OrderEmailData = {
     customerName: string;
     customerEmail: string;
     totalCents: number;
+    shippingCents?: number;
+    taxCents?: number;
     items: Array<{ name: string; quantity: number; size?: string | null; color?: string | null; priceCents: number }>;
     shopName?: string;
     specialInstructions?: string | null;
 };
+
+// Subtotal/Shipping/Tax/Total breakdown shown under the item table. Rows for
+// shipping and tax are only shown when non-zero, so a simple pickup order with
+// no tax registration covering it still just shows a plain Total.
+function totalsBlock(data: OrderEmailData): string {
+    const shippingCents = data.shippingCents ?? 0;
+    const taxCents = data.taxCents ?? 0;
+    const subtotalCents = data.totalCents - shippingCents - taxCents;
+    const rows: string[] = [];
+    if (shippingCents || taxCents) {
+        rows.push(`<div style="display:flex;justify-content:space-between;color:#64748b;font-size:13px;padding:2px 0;"><span>Subtotal</span><span>${fmt(subtotalCents)}</span></div>`);
+        if (shippingCents) rows.push(`<div style="display:flex;justify-content:space-between;color:#64748b;font-size:13px;padding:2px 0;"><span>Shipping</span><span>${fmt(shippingCents)}</span></div>`);
+        if (taxCents) rows.push(`<div style="display:flex;justify-content:space-between;color:#64748b;font-size:13px;padding:2px 0;"><span>Tax</span><span>${fmt(taxCents)}</span></div>`);
+    }
+    return `<div style="padding-top:8px;border-top:2px solid #f1f5f9;">
+        ${rows.join('')}
+        <div style="display:flex;justify-content:space-between;padding-top:4px;">
+          <span style="font-size:15px;font-weight:700;color:#0f172a;">Total</span>
+          <span style="font-size:15px;font-weight:700;color:#0f172a;">${fmt(data.totalCents)}</span>
+        </div>
+      </div>`;
+}
 
 function instructionsBlock(specialInstructions?: string | null): string {
     if (!specialInstructions) return '';
@@ -66,9 +90,7 @@ function buildOrderHtml(data: OrderEmailData): string {
         </thead>
         <tbody>${itemRows}</tbody>
       </table>
-      <div style="text-align:right;padding-top:8px;border-top:2px solid #f1f5f9;">
-        <span style="font-size:15px;font-weight:700;color:#0f172a;">Total: ${fmt(data.totalCents)}</span>
-      </div>
+      ${totalsBlock(data)}
       ${instructionsBlock(data.specialInstructions)}
       <div style="margin-top:20px;padding:12px;background:#f8fafc;border-radius:8px;font-size:12px;color:#64748b;">
         Order ID: <code style="font-family:monospace;font-weight:600;color:#334155;">#${data.orderId.slice(-8).toUpperCase()}</code>
@@ -133,9 +155,7 @@ export async function sendOfflinePaymentNotification(data: OfflinePaymentData): 
         </thead>
         <tbody>${itemRows}</tbody>
       </table>
-      <div style="text-align:right;padding-top:8px;border-top:2px solid #f1f5f9;">
-        <span style="font-size:15px;font-weight:700;color:#0f172a;">Total: ${fmt(data.totalCents)}</span>
-      </div>
+      ${totalsBlock(data)}
       ${instructionsBlock(data.specialInstructions)}
       <div style="margin-top:20px;padding:12px;background:#f8fafc;border-radius:8px;font-size:12px;color:#64748b;">
         Order ID: <code style="font-family:monospace;font-weight:600;color:#334155;">#${shortId}</code>

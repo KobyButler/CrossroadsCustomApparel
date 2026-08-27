@@ -10,7 +10,8 @@ router.get('/overview', async (_req, res) => {
     for (const o of orders) {
         const d = o.createdAt.toISOString().slice(0, 10);
         const cur = byDay.get(d) ?? { count: 0, cents: 0 };
-        cur.count += 1; cur.cents += o.totalCents;
+        // Sales tax collected isn't revenue — it's owed back to the state.
+        cur.count += 1; cur.cents += o.totalCents - o.taxCents;
         byDay.set(d, cur);
     }
     const series = Array.from(byDay.entries()).sort(([a], [b]) => a.localeCompare(b))

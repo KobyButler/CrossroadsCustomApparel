@@ -6,6 +6,8 @@ import { computeItemPriceCents } from '../utils/pricing.js';
 import { buildShopGroups, applyDiscountAcrossGroups, allocateShippingAcrossGroups, newOrderGroupId, assertShippingAllowed } from '../utils/checkoutHelpers.js';
 import { quoteShipping, buyLabelForOrder } from '../utils/shippingCalc.js';
 import { diffScalarFields, diffItems, recordOrderHistory } from '../utils/orderHistory.js';
+import { quoteOrderTax } from '../utils/tax.js';
+import { getStripeOrNull } from '../utils/stripeClient.js';
 
 export const router = Router();
 
@@ -202,6 +204,16 @@ router.post('/checkout', async (req, res) => {
     const shippingCentsTotal = shippingQuote?.cents ?? 0;
     const finalGroups = allocateShippingAcrossGroups(discountedGroups, shippingCentsTotal);
 
+    // Sales tax is owed on this sale whether it's paid by card, cash, or check —
+    // calculate it the same way the Stripe checkout does.
+    const stripe = getStripeOrNull();
+    const taxQuote = await quoteOrderTax(stripe, {
+        groupSubtotals: finalGroups.map(g => g.subtotal),
+        shippingCents: shippingCentsTotal,
+        shippingMethod: isShipping ? 'SHIP' : 'PICKUP',
+        shipAddress: isShipping ? { line1: shipAddress1, line2: shipAddress2, city: shipCity, state: shipState, zip: shipZip } : null
+    });
+
     const customer = await prisma.customer.upsert({
         where: { email: customerEmail },
         update: { name: customerName },
@@ -211,18 +223,22 @@ router.post('/checkout', async (req, res) => {
     const orderGroupId = finalGroups.length > 1 ? newOrderGroupId() : null;
     const createdOrders = [];
 
-    for (const g of finalGroups) {
-        const orderTotal = g.subtotal + g.shippingCents;
+    for (let idx = 0; idx < finalGroups.length; idx++) {
+        const g = finalGroups[idx];
+        const taxCents = taxQuote.taxCentsByGroup[idx] ?? 0;
+        const orderTotal = g.subtotal + g.shippingCents + taxCents;
         const order = await prisma.order.create({
             data: {
                 shopId: g.shopId, orderGroupId,
                 status: 'UNFULFILLED', paymentStatus: 'OFFLINE_PENDING', paymentMethod: 'pickup',
+                stripeTaxCalculationId: taxQuote.calculationId,
                 customerId: customer.id, customerName, customerEmail,
                 shippingMethod: isShipping ? 'SHIP' : 'PICKUP', shippingCents: g.shippingCents,
                 shipAddress1: isShipping ? shipAddress1 : null, shipAddress2: isShipping ? (shipAddress2 ?? null) : null,
                 shipCity: isShipping ? shipCity : null, shipState: isShipping ? shipState : null, shipZip: isShipping ? shipZip : null,
                 residential,
                 specialInstructions: specialInstructions || null,
+                taxCents,
                 totalCents: orderTotal,
                 items: { createMany: { data: g.items } }
             },
@@ -242,6 +258,8 @@ router.post('/checkout', async (req, res) => {
             customerName: order.customerName,
             customerEmail: order.customerEmail,
             totalCents: order.totalCents,
+            shippingCents: order.shippingCents,
+            taxCents: order.taxCents,
             shopName: g.shopName ?? undefined,
             specialInstructions: order.specialInstructions,
             paymentMethod: 'cash',
@@ -253,11 +271,31 @@ router.post('/checkout', async (req, res) => {
         await prisma.discountCode.update({ where: { id: discount.id }, data: { usedCount: { increment: 1 } } });
     }
 
+    // Sale is final the moment the order is placed (there's no later "payment
+    // succeeded" event for cash/check the way there is for Stripe), so record
+    // the Stripe Tax transaction for filing purposes right away. Best-effort —
+    // the tax was already added to what the customer owes either way.
+    if (stripe && taxQuote.calculationId) {
+        try {
+            const tx = await stripe.tax.transactions.createFromCalculation({
+                calculation: taxQuote.calculationId,
+                reference: orderGroupId ?? createdOrders[0].id
+            });
+            await prisma.order.updateMany({
+                where: { id: { in: createdOrders.map(o => o.id) } },
+                data: { stripeTaxTransactionId: tx.id }
+            });
+        } catch (err: any) {
+            console.error('[checkout] failed to record Stripe Tax transaction (tax was still added to the order total the customer owes):', err.message);
+        }
+    }
+
     res.json({
         orderGroupId,
-        totalCents: discountedTotal + shippingCentsTotal,
+        totalCents: discountedTotal + shippingCentsTotal + taxQuote.totalTaxCents,
         shippingCents: shippingCentsTotal,
         shippingEstimated: shippingQuote?.estimated ?? null,
+        taxCents: taxQuote.totalTaxCents,
         orders: createdOrders.map(o => ({ id: o.id, shopId: o.shopId, totalCents: o.totalCents }))
     });
 });
@@ -297,8 +335,11 @@ router.post('/:id/cancel', requireAuth, async (req, res) => {
 
 // Full order edit (admin only) — customer/shipping/payment/status fields plus
 // line items (add/remove/modify). totalCents is always recomputed server-side
-// from the submitted items + shippingCents, never trusted from the client.
-// Every field-level and item-level change is recorded to OrderHistoryEntry.
+// from the submitted items + shippingCents + taxCents, never trusted from the
+// client directly. shippingCents/taxCents themselves ARE trusted as given (not
+// re-derived from Shippo/Stripe Tax) so an edit doesn't trigger a billed API
+// call — same trade-off for both. Every field-level and item-level change is
+// recorded to OrderHistoryEntry.
 router.put('/:id', requireAuth, async (req, res) => {
     const id = String(req.params.id);
     const existing = await prisma.order.findUnique({
@@ -310,7 +351,7 @@ router.put('/:id', requireAuth, async (req, res) => {
     const {
         customerName, customerEmail, shopId,
         status, paymentStatus, paymentMethod,
-        shippingMethod, shippingCents,
+        shippingMethod, shippingCents, taxCents,
         shipAddress1, shipAddress2, shipCity, shipState, shipZip, residential,
         specialInstructions, items
     } = req.body;
@@ -342,7 +383,13 @@ router.put('/:id', requireAuth, async (req, res) => {
     const nextShippingCents = shippingCents !== undefined && shippingCents !== null && shippingCents !== ''
         ? Math.round(Number(shippingCents))
         : existing.shippingCents;
-    const nextTotalCents = subtotal + nextShippingCents;
+    // Not recalculated via Stripe Tax on every edit (that would mean a billed
+    // API call on each save) — trusted from the client like shippingCents,
+    // defaulting to whatever was already on the order.
+    const nextTaxCents = taxCents !== undefined && taxCents !== null && taxCents !== ''
+        ? Math.round(Number(taxCents))
+        : existing.taxCents;
+    const nextTotalCents = subtotal + nextShippingCents + nextTaxCents;
 
     // Resolve/validate shop reassignment
     const nextShopId = shopId !== undefined ? (shopId || null) : existing.shopId;
@@ -368,7 +415,7 @@ router.put('/:id', requireAuth, async (req, res) => {
     const beforeScalar = {
         customerName: existing.customerName, customerEmail: existing.customerEmail,
         status: existing.status, paymentStatus: existing.paymentStatus, paymentMethod: existing.paymentMethod,
-        shippingMethod: existing.shippingMethod, shippingCents: existing.shippingCents,
+        shippingMethod: existing.shippingMethod, shippingCents: existing.shippingCents, taxCents: existing.taxCents,
         shipAddress1: existing.shipAddress1, shipAddress2: existing.shipAddress2,
         shipCity: existing.shipCity, shipState: existing.shipState, shipZip: existing.shipZip,
         residential: existing.residential, specialInstructions: existing.specialInstructions,
@@ -380,7 +427,7 @@ router.put('/:id', requireAuth, async (req, res) => {
         paymentStatus: paymentStatus ?? existing.paymentStatus,
         paymentMethod: paymentMethod !== undefined ? (paymentMethod || null) : existing.paymentMethod,
         shippingMethod: shippingMethod ?? existing.shippingMethod,
-        shippingCents: nextShippingCents,
+        shippingCents: nextShippingCents, taxCents: nextTaxCents,
         shipAddress1: shipAddress1 !== undefined ? (shipAddress1 || null) : existing.shipAddress1,
         shipAddress2: shipAddress2 !== undefined ? (shipAddress2 || null) : existing.shipAddress2,
         shipCity: shipCity !== undefined ? (shipCity || null) : existing.shipCity,
@@ -424,7 +471,7 @@ router.put('/:id', requireAuth, async (req, res) => {
                 customerName: afterScalar.customerName, customerEmail: afterScalar.customerEmail, customerId: nextCustomerId,
                 shopId: nextShopId,
                 status: afterScalar.status, paymentStatus: afterScalar.paymentStatus, paymentMethod: afterScalar.paymentMethod,
-                shippingMethod: afterScalar.shippingMethod, shippingCents: afterScalar.shippingCents,
+                shippingMethod: afterScalar.shippingMethod, shippingCents: afterScalar.shippingCents, taxCents: afterScalar.taxCents,
                 shipAddress1: afterScalar.shipAddress1, shipAddress2: afterScalar.shipAddress2,
                 shipCity: afterScalar.shipCity, shipState: afterScalar.shipState, shipZip: afterScalar.shipZip,
                 residential: afterScalar.residential, specialInstructions: afterScalar.specialInstructions,

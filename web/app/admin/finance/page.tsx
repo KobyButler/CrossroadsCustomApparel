@@ -68,7 +68,7 @@ export default function FinancePage() {
     const expenses = transactions.filter(t => t.amountCents < 0).reduce((a,t) => a + Math.abs(t.amountCents), 0);
 
     const kpis = [
-        { label:"Gross Revenue",   value:fmt(summary?.grossCents ?? 0), color:"text-brand-600",   icon:"💰" },
+        { label:"Gross Revenue (excl. tax)", value:fmt(summary?.grossCents ?? 0), color:"text-brand-600",   icon:"💰" },
         { label:"Net Profit",      value:fmt(summary?.netCents ?? 0),   color:"text-slate-900",    icon:"📈" },
         { label:"Recorded Income", value:fmt(income),                   color:"text-emerald-600",  icon:"⬆️" },
         { label:"Expenses",        value:fmt(expenses),                 color:"text-red-500",      icon:"⬇️" },
