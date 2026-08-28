@@ -1,291 +1,271 @@
 "use client";
 import { useEffect, useState } from "react";
-import { api } from "@/app/lib/api";
 import Link from "next/link";
+import Image from "next/image";
 import { motion } from "framer-motion";
-import { Badge, statusVariant } from "@/components/ui/badge";
 
-const container = {
-    hidden: {},
-    show: { transition: { staggerChildren: 0.07 } }
-};
-const item = {
-    hidden: { opacity: 0, y: 16 },
-    show:  { opacity: 1, y: 0, transition: { duration: 0.35, ease: [0.32, 0.72, 0, 1] as [number,number,number,number] } }
-};
+type ShopListing = { id: string; name: string; slug: string; notes?: string; expiresAt?: string; productCount: number };
 
-function fmt(cents: number) {
-    return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format((cents ?? 0) / 100);
+async function publicFetch(path: string) {
+    const base = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:4000/api";
+    const res = await fetch(`${base}${path}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
 }
 
-function KpiCard({ label, value, sub, icon, color }: {
-    label: string; value: string | number; sub?: string;
-    icon: React.ReactNode; color: string;
-}) {
+const fadeUp = {
+    hidden: { opacity: 0, y: 20 },
+    show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.32, 0.72, 0, 1] as [number, number, number, number] } }
+};
+
+const stagger = {
+    hidden: {},
+    show: { transition: { staggerChildren: 0.08 } }
+};
+
+const WHAT_WE_DO = [
+    {
+        title: "Screen Printing",
+        desc: "Vibrant, durable prints on tees, hoodies, and more — built to hold up wash after wash.",
+        icon: (
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M7 21h10M9 21v-4a3 3 0 013-3v0a3 3 0 013 3v4M5 11V7a2 2 0 012-2h10a2 2 0 012 2v4M3 11h18l-1.5 5h-15L3 11z" />
+            </svg>
+        )
+    },
+    {
+        title: "Embroidery",
+        desc: "Clean, professional stitching for a polished, premium look on jackets, hats, and polos.",
+        icon: (
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v18M3 12h18M5.5 5.5l13 13M18.5 5.5l-13 13" />
+            </svg>
+        )
+    },
+    {
+        title: "Group Shops",
+        desc: "Your team, school, or event gets its own private shop link — everyone orders their own size, we handle the rest.",
+        icon: (
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m5-3.13a4 4 0 100-8 4 4 0 000 8zm6 3a4 4 0 00-3-3.87m-13 0A4 4 0 003 15" />
+            </svg>
+        )
+    }
+];
+
+const HOW_IT_WORKS = [
+    { step: "1", title: "Get your shop link", desc: "We set up a private, custom shop for your team, school, or event." },
+    { step: "2", title: "Everyone orders their size", desc: "Share the link — each person browses and picks their own items, sizes, and colors." },
+    { step: "3", title: "Pick up or ship", desc: "Pay securely online or at pickup. Get it locally or have it shipped straight to you." }
+];
+
+function ShopPreviewCard({ shop, idx }: { shop: ShopListing; idx: number }) {
     return (
-        <motion.div variants={item}
-            className="bg-white rounded-2xl p-5 ring-1 ring-black/5 shadow-card hover:shadow-card-hover hover:-translate-y-0.5 transition-all duration-300 cursor-default"
-        >
-            <div className="flex items-start justify-between mb-3">
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{label}</p>
-                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${color}`}>
-                    {icon}
+        <motion.div variants={fadeUp} custom={idx}>
+            <Link href={`/shop/${shop.slug}`}
+                className="block bg-white rounded-2xl ring-1 ring-black/5 shadow-card hover:shadow-card-hover hover:-translate-y-1 transition-all duration-300 p-5 h-full">
+                <div className="w-10 h-10 rounded-xl bg-brand-50 flex items-center justify-center mb-3">
+                    <svg className="w-5 h-5 text-brand-500" fill="currentColor" viewBox="0 0 20 20"><path d="M3 1a1 1 0 000 2h1.22l.305 1.222a.997.997 0 00.01.042l1.358 5.43-.893.892C3.74 11.846 4.632 14 6.414 14H15a1 1 0 000-2H6.414l1-1H14a1 1 0 00.894-.553l3-6A1 1 0 0017 3H6.28l-.31-1.243A1 1 0 005 1H3z"/></svg>
                 </div>
-            </div>
-            <p className="text-2xl font-bold text-slate-900 leading-none">{value}</p>
-            {sub && <p className="text-xs text-slate-400 mt-1.5">{sub}</p>}
+                <h3 className="text-base font-bold text-slate-900">{shop.name}</h3>
+                {shop.notes && <p className="text-sm text-slate-500 mt-1 line-clamp-2">{shop.notes}</p>}
+                <div className="flex items-center justify-between mt-4 pt-3 border-t border-slate-100">
+                    <span className="text-xs text-slate-400 font-medium">{shop.productCount} item{shop.productCount !== 1 ? "s" : ""}</span>
+                    <span className="text-xs font-bold text-brand-600">Shop now →</span>
+                </div>
+            </Link>
         </motion.div>
     );
 }
 
-function SkeletonKpi() {
-    return (
-        <div className="bg-white rounded-2xl p-5 ring-1 ring-black/5 shadow-card animate-pulse">
-            <div className="flex items-start justify-between mb-3">
-                <div className="h-3 w-20 bg-slate-200 rounded" />
-                <div className="w-9 h-9 bg-slate-100 rounded-xl" />
-            </div>
-            <div className="h-7 w-28 bg-slate-200 rounded" />
-        </div>
-    );
-}
-
-export default function Dashboard() {
-    const [fin, setFin] = useState<any>(null);
-    const [unfulfilledOrders, setUnfulfilledOrders] = useState<any[]>([]);
-    const [recentOrders, setRecentOrders] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
+export default function HomePage() {
+    const [shops, setShops] = useState<ShopListing[] | null>(null);
 
     useEffect(() => {
-        Promise.all([
-            api("/finance/summary"),
-            api("/orders?status=UNFULFILLED&limit=100"),
-            api("/orders?limit=6")
-        ]).then(([finData, unfulfilled, recent]) => {
-            setFin(finData);
-            const uArr = Array.isArray(unfulfilled) ? unfulfilled : (unfulfilled?.data ?? []);
-            const rArr = Array.isArray(recent) ? recent : (recent?.data ?? []);
-            setUnfulfilledOrders(uArr);
-            setRecentOrders(rArr.slice(0, 6));
-        }).catch(console.error).finally(() => setLoading(false));
+        publicFetch("/shops/directory").then(setShops).catch(() => setShops([]));
     }, []);
 
+    const previewShops = (shops ?? []).slice(0, 3);
+
     return (
-        <div className="space-y-8">
-            {/* Header */}
-            <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4, ease: [0.32, 0.72, 0, 1] }}
-                className="flex flex-col sm:flex-row sm:items-end justify-between gap-3"
-            >
-                <div>
-                    <h1 className="page-title">Dashboard</h1>
-                    <p className="page-subtitle">Here's what's happening with your print shop today.</p>
-                </div>
-                <div className="flex gap-2.5 flex-wrap">
-                    <Link href="/admin/orders">
-                        <motion.button
-                            whileHover={{ y: -1 }} whileTap={{ scale: 0.97 }}
-                            className="px-4 py-2 rounded-xl text-sm font-medium text-slate-700 bg-white ring-1 ring-black/8 shadow-sm hover:shadow-md hover:text-brand-600 transition-all duration-200"
-                        >
-                            All Orders
-                        </motion.button>
-                    </Link>
-                    <Link href="/admin/shops">
-                        <motion.button
-                            whileHover={{ y: -1 }} whileTap={{ scale: 0.97 }}
-                            className="btn-shine px-4 py-2 rounded-xl text-sm font-semibold text-white transition-all duration-200"
-                            style={{ background: "linear-gradient(135deg,#8b5cf6 0%,#7c3aed 100%)", boxShadow: "0 4px 16px rgba(124,58,237,0.35)" }}
-                        >
-                            + Create Shop
-                        </motion.button>
-                    </Link>
-                </div>
-            </motion.div>
+        <div className="min-h-screen flex flex-col" style={{ background: "#f4f3fb" }}>
+            {/* ── Hero + nav ─────────────────────────────────────────────────── */}
+            <header className="relative overflow-hidden" style={{ background: "linear-gradient(135deg, #08080f 0%, #1a0a2e 50%, #0f0520 100%)" }}>
+                <div className="orb absolute top-0 left-1/4 w-96 h-96 opacity-20" style={{ background: "radial-gradient(circle, #7c3aed, transparent 70%)" }} />
+                <div className="orb absolute -bottom-24 right-0 w-96 h-96 opacity-15" style={{ background: "radial-gradient(circle, #a78bfa, transparent 70%)" }} />
 
-            {/* KPI Row */}
-            <motion.div
-                variants={container} initial="hidden" animate="show"
-                className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4"
-            >
-                {loading ? (
-                    [1,2,3,4].map(i => <SkeletonKpi key={i} />)
-                ) : (
-                    <>
-                        <KpiCard
-                            label="Total Revenue"
-                            value={fmt(fin?.grossCents ?? 0)}
-                            sub="All time gross, excl. tax"
-                            color="bg-violet-100"
-                            icon={<svg className="w-4 h-4 text-violet-600" fill="currentColor" viewBox="0 0 20 20"><path d="M8.433 7.418c.155-.103.346-.196.567-.267v1.698a2.305 2.305 0 01-.567-.267C8.07 8.34 8 8.114 8 8c0-.114.07-.34.433-.582zM11 12.849v-1.698c.22.071.412.164.567.267.364.243.433.468.433.582 0 .114-.07.34-.433.582a2.305 2.305 0 01-.567.267z"/><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-13a1 1 0 10-2 0v.092a4.535 4.535 0 00-1.676.662C6.602 6.234 6 7.009 6 8c0 .99.602 1.765 1.324 2.246.48.32 1.054.545 1.676.662v1.941c-.391-.127-.68-.317-.843-.504a1 1 0 10-1.51 1.31c.562.649 1.413 1.076 2.353 1.253V15a1 1 0 102 0v-.092a4.535 4.535 0 001.676-.662C13.398 13.766 14 12.991 14 12c0-.99-.602-1.765-1.324-2.246A4.535 4.535 0 0011 9.092V7.151c.391.127.68.317.843.504a1 1 0 101.511-1.31c-.563-.649-1.413-1.076-2.354-1.253V5z" clipRule="evenodd"/></svg>}
-                        />
-                        <KpiCard
-                            label="Net Profit"
-                            value={fmt(fin?.netCents ?? 0)}
-                            sub="After costs"
-                            color="bg-emerald-100"
-                            icon={<svg className="w-4 h-4 text-emerald-600" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M12 7a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0V8.414l-4.293 4.293a1 1 0 01-1.414 0L8 10.414l-4.293 4.293a1 1 0 01-1.414-1.414l5-5a1 1 0 011.414 0L11 10.586 14.586 7H12z" clipRule="evenodd"/></svg>}
-                        />
-                        <KpiCard
-                            label="Unfulfilled"
-                            value={unfulfilledOrders.length}
-                            sub="Need action"
-                            color={unfulfilledOrders.length > 0 ? "bg-amber-100" : "bg-slate-100"}
-                            icon={<svg className={`w-4 h-4 ${unfulfilledOrders.length > 0 ? "text-amber-600" : "text-slate-400"}`} fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 2a4 4 0 00-4 4v1H5a1 1 0 00-.994.89l-1 9A1 1 0 004 18h12a1 1 0 00.994-1.11l-1-9A1 1 0 0015 7h-1V6a4 4 0 00-4-4zm2 5V6a2 2 0 10-4 0v1h4zm-6 3a1 1 0 112 0 1 1 0 01-2 0zm7-1a1 1 0 100 2 1 1 0 000-2z" clipRule="evenodd"/></svg>}
-                        />
-                        <KpiCard
-                            label="Total Orders"
-                            value={fin?.orders ?? 0}
-                            sub="All time"
-                            color="bg-blue-100"
-                            icon={<svg className="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20"><path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"/><path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clipRule="evenodd"/></svg>}
-                        />
-                    </>
-                )}
-            </motion.div>
-
-            {/* Main grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Recent Orders */}
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.2, duration: 0.4, ease: [0.32, 0.72, 0, 1] }}
-                    className="lg:col-span-2 bg-white rounded-2xl ring-1 ring-black/5 shadow-card overflow-hidden"
-                >
-                    <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-                        <h3 className="text-sm font-bold text-slate-900">Recent Orders</h3>
-                        <Link href="/admin/orders">
-                            <span className="text-xs font-semibold text-brand-600 hover:text-brand-700 transition-colors">
-                                View all →
-                            </span>
+                {/* Nav bar */}
+                <div className="relative z-10 border-b border-white/5">
+                    <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+                        <Image src="/logo.png" alt="Crossroads Custom Apparel" width={130} height={52} className="object-contain" priority />
+                        <nav aria-label="Primary" className="hidden sm:flex items-center gap-7 text-sm font-medium text-slate-300">
+                            <a href="#how-it-works" className="hover:text-white transition-colors">How It Works</a>
+                            <a href="#shops" className="hover:text-white transition-colors">Group Shops</a>
+                            <a href="#contact" className="hover:text-white transition-colors">Contact</a>
+                        </nav>
+                        <Link href="/shops"
+                            className="btn-shine inline-flex items-center gap-1.5 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-all"
+                            style={{ background: "linear-gradient(135deg,#8b5cf6 0%,#7c3aed 100%)", boxShadow: "0 4px 16px rgba(124,58,237,0.4)" }}>
+                            Browse Shops
                         </Link>
                     </div>
-                    {loading ? (
-                        <div className="p-5 space-y-4">
-                            {[1,2,3,4].map(i => (
-                                <div key={i} className="animate-pulse flex justify-between items-center">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-8 h-8 bg-slate-100 rounded-full" />
-                                        <div className="space-y-1.5">
-                                            <div className="h-3 w-28 bg-slate-200 rounded" />
-                                            <div className="h-2.5 w-36 bg-slate-100 rounded" />
-                                        </div>
-                                    </div>
-                                    <div className="h-5 w-20 bg-slate-100 rounded-full" />
-                                </div>
+                </div>
+
+                {/* Hero content */}
+                <div className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 py-20 sm:py-28 text-center">
+                    <motion.div initial="hidden" animate="show" variants={stagger}>
+                        <motion.p variants={fadeUp} className="text-xs font-bold uppercase tracking-[0.2em] text-violet-300 mb-4">
+                            Screen Printing &amp; Embroidery
+                        </motion.p>
+                        <motion.h1 variants={fadeUp} className="text-4xl sm:text-5xl lg:text-6xl font-black text-white leading-[1.05] tracking-tight mb-5">
+                            Custom apparel, made simple for groups
+                        </motion.h1>
+                        <motion.p variants={fadeUp} className="text-base sm:text-lg text-slate-300/80 max-w-2xl mx-auto leading-relaxed mb-9">
+                            We print and embroider custom gear for teams, schools, and events. Your group gets its own
+                            private shop link, so everyone can order exactly what they need — in their own size.
+                        </motion.p>
+                        <motion.div variants={fadeUp} className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                            <Link href="/shops"
+                                className="btn-shine w-full sm:w-auto inline-flex items-center justify-center gap-2 text-white text-sm font-semibold px-6 py-3.5 rounded-xl transition-all"
+                                style={{ background: "linear-gradient(135deg,#8b5cf6 0%,#7c3aed 100%)", boxShadow: "0 6px 24px rgba(124,58,237,0.45)" }}>
+                                Browse Group Shops
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/></svg>
+                            </Link>
+                            <a href="#contact"
+                                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 text-white text-sm font-semibold px-6 py-3.5 rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 transition-colors">
+                                Get in Touch
+                            </a>
+                        </motion.div>
+                        <motion.div variants={fadeUp} className="flex flex-wrap items-center justify-center gap-2.5 mt-10">
+                            {["🖨️ Screen Printing", "🧵 Embroidery", "📦 Ship or Pick Up"].map(pill => (
+                                <span key={pill} className="text-xs font-medium text-slate-300 bg-white/5 border border-white/10 rounded-full px-3.5 py-1.5">
+                                    {pill}
+                                </span>
                             ))}
-                        </div>
-                    ) : recentOrders.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-16 text-slate-300">
-                            <svg className="w-12 h-12 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-                            </svg>
-                            <p className="text-sm text-slate-400 font-medium">No orders yet</p>
-                            <p className="text-xs text-slate-300 mt-0.5">Orders will appear here once customers start buying</p>
-                        </div>
-                    ) : (
-                        <div className="divide-y divide-slate-50">
-                            {recentOrders.map((order, idx) => (
-                                <motion.div
-                                    key={order.id}
-                                    initial={{ opacity: 0, x: -8 }}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    transition={{ delay: 0.25 + idx * 0.04, duration: 0.3 }}
-                                    className="flex items-center justify-between px-5 py-3.5 hover:bg-violet-50/30 transition-colors"
-                                >
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-8 h-8 rounded-full bg-brand-100 flex items-center justify-center shrink-0">
-                                            <span className="text-xs font-bold text-brand-600">
-                                                {(order.customerName ?? "?")[0].toUpperCase()}
-                                            </span>
-                                        </div>
-                                        <div>
-                                            <p className="text-sm font-semibold text-slate-800">{order.customerName}</p>
-                                            <p className="text-xs text-slate-400 mt-0.5">{order.customerEmail}</p>
-                                        </div>
+                        </motion.div>
+                    </motion.div>
+                </div>
+            </header>
+
+            <main className="flex-1">
+                {/* ── What We Do ─────────────────────────────────────────────── */}
+                <section className="max-w-6xl mx-auto px-4 sm:px-6 py-16 sm:py-20">
+                    <motion.div initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-80px" }}
+                        transition={{ duration: 0.4, ease: [0.32, 0.72, 0, 1] }} className="text-center max-w-xl mx-auto mb-12">
+                        <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight mb-3">What We Do</h2>
+                        <p className="text-sm sm:text-base text-slate-500 leading-relaxed">
+                            Quality decoration and an ordering process built for groups — not one-off gifts.
+                        </p>
+                    </motion.div>
+                    <motion.div initial="hidden" whileInView="show" viewport={{ once: true, margin: "-80px" }} variants={stagger}
+                        className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+                        {WHAT_WE_DO.map(f => (
+                            <motion.div key={f.title} variants={fadeUp}
+                                className="bg-white rounded-2xl ring-1 ring-black/5 shadow-card p-6 text-center sm:text-left">
+                                <div className="w-11 h-11 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center mb-4 mx-auto sm:mx-0">
+                                    {f.icon}
+                                </div>
+                                <h3 className="text-base font-bold text-slate-900 mb-1.5">{f.title}</h3>
+                                <p className="text-sm text-slate-500 leading-relaxed">{f.desc}</p>
+                            </motion.div>
+                        ))}
+                    </motion.div>
+                </section>
+
+                {/* ── How It Works ───────────────────────────────────────────── */}
+                <section id="how-it-works" className="bg-white border-y border-slate-100">
+                    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-16 sm:py-20">
+                        <motion.div initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-80px" }}
+                            transition={{ duration: 0.4, ease: [0.32, 0.72, 0, 1] }} className="text-center max-w-xl mx-auto mb-12">
+                            <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight mb-3">How It Works</h2>
+                            <p className="text-sm sm:text-base text-slate-500 leading-relaxed">
+                                Three steps from "we need shirts" to everyone wearing them.
+                            </p>
+                        </motion.div>
+                        <motion.div initial="hidden" whileInView="show" viewport={{ once: true, margin: "-80px" }} variants={stagger}
+                            className="grid grid-cols-1 sm:grid-cols-3 gap-8 sm:gap-6">
+                            {HOW_IT_WORKS.map(s => (
+                                <motion.div key={s.step} variants={fadeUp} className="text-center sm:text-left">
+                                    <div className="w-11 h-11 rounded-full flex items-center justify-center text-white font-bold text-base mb-4 mx-auto sm:mx-0"
+                                        style={{ background: "linear-gradient(135deg,#8b5cf6 0%,#7c3aed 100%)" }}>
+                                        {s.step}
                                     </div>
-                                    <div className="flex items-center gap-3">
-                                        <span className="text-xs text-slate-300 hidden sm:block">
-                                            {new Date(order.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                                        </span>
-                                        <Badge variant={statusVariant(order.status)} size="sm">
-                                            {order.status.charAt(0) + order.status.slice(1).toLowerCase()}
-                                        </Badge>
-                                        <span className="text-sm font-bold text-slate-900 tabular-nums w-20 text-right">{fmt(order.totalCents)}</span>
-                                    </div>
+                                    <h3 className="text-base font-bold text-slate-900 mb-1.5">{s.title}</h3>
+                                    <p className="text-sm text-slate-500 leading-relaxed">{s.desc}</p>
                                 </motion.div>
                             ))}
-                        </div>
-                    )}
-                </motion.div>
-
-                {/* Right column */}
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.3, duration: 0.4, ease: [0.32, 0.72, 0, 1] }}
-                    className="space-y-4"
-                >
-                    {/* Alert */}
-                    {!loading && unfulfilledOrders.length > 0 && (
-                        <div className="bg-amber-50 border border-amber-200/80 rounded-2xl p-4">
-                            <div className="flex gap-3">
-                                <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
-                                    <svg className="w-4.5 h-4.5 text-amber-600" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                                    </svg>
-                                </div>
-                                <div>
-                                    <p className="text-sm font-bold text-amber-900">Action needed</p>
-                                    <p className="text-xs text-amber-700 mt-0.5">
-                                        {unfulfilledOrders.length} unfulfilled order{unfulfilledOrders.length !== 1 ? "s" : ""}
-                                    </p>
-                                    <Link href="/admin/orders">
-                                        <span className="text-xs font-semibold text-amber-700 underline underline-offset-2 mt-1 inline-block hover:text-amber-900 transition-colors">
-                                            Review now →
-                                        </span>
-                                    </Link>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Quick Links */}
-                    <div className="bg-white rounded-2xl ring-1 ring-black/5 shadow-card overflow-hidden">
-                        <div className="px-5 py-4 border-b border-slate-100">
-                            <h3 className="text-sm font-bold text-slate-900">Quick Actions</h3>
-                        </div>
-                        <div className="p-2">
-                            {[
-                                { href: "/admin/shops",     label: "Create a group shop",      icon: "🏪", sub: "Set up a new storefront" },
-                                { href: "/admin/products",  label: "Manage products",           icon: "📦", sub: "Add or edit items"        },
-                                { href: "/admin/orders",    label: "View open orders",          icon: "⏳", sub: "Fulfill pending orders"   },
-                                { href: "/admin/analytics", label: "Analytics",                 icon: "📊", sub: "Revenue & trends"         },
-                                { href: "/admin/discounts", label: "Create a discount",         icon: "🏷️", sub: "Promo codes & sales"      },
-                            ].map((a, idx) => (
-                                <Link key={a.href} href={a.href}>
-                                    <motion.div
-                                        whileHover={{ x: 2 }}
-                                        transition={{ duration: 0.15 }}
-                                        className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-brand-50/60 transition-colors group cursor-pointer"
-                                    >
-                                        <span className="text-xl w-8 text-center">{a.icon}</span>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-sm font-medium text-slate-700 group-hover:text-brand-700 transition-colors">{a.label}</p>
-                                            <p className="text-xs text-slate-400">{a.sub}</p>
-                                        </div>
-                                        <svg className="w-3.5 h-3.5 text-slate-300 group-hover:text-brand-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                                        </svg>
-                                    </motion.div>
-                                </Link>
-                            ))}
-                        </div>
+                        </motion.div>
                     </div>
-                </motion.div>
-            </div>
+                </section>
+
+                {/* ── Group Shops preview ────────────────────────────────────── */}
+                <section id="shops" className="max-w-6xl mx-auto px-4 sm:px-6 py-16 sm:py-20">
+                    <motion.div initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-80px" }}
+                        transition={{ duration: 0.4, ease: [0.32, 0.72, 0, 1] }}
+                        className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 mb-8">
+                        <div>
+                            <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight mb-2">Group Shops Open Now</h2>
+                            <p className="text-sm sm:text-base text-slate-500">Have a link from your group already? Jump straight to it below.</p>
+                        </div>
+                        <Link href="/shops" className="text-sm font-bold text-brand-600 hover:text-brand-700 transition-colors shrink-0">
+                            View all shops →
+                        </Link>
+                    </motion.div>
+
+                    {shops === null ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+                            {[1, 2, 3].map(i => <div key={i} className="bg-white rounded-2xl ring-1 ring-black/5 p-5 animate-pulse h-40" />)}
+                        </div>
+                    ) : previewShops.length === 0 ? (
+                        <div className="text-center bg-white rounded-2xl ring-1 ring-black/5 py-16 px-6">
+                            <div className="w-14 h-14 bg-brand-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                                <svg className="w-7 h-7 text-brand-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+                            </div>
+                            <p className="text-slate-600 font-semibold">No group shops are open right now.</p>
+                            <p className="text-sm text-slate-400 mt-1">Check back soon, or reach out below to set one up for your team.</p>
+                        </div>
+                    ) : (
+                        <motion.div initial="hidden" whileInView="show" viewport={{ once: true, margin: "-80px" }} variants={stagger}
+                            className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+                            {previewShops.map((s, idx) => <ShopPreviewCard key={s.id} shop={s} idx={idx} />)}
+                        </motion.div>
+                    )}
+                </section>
+
+                {/* ── Contact ─────────────────────────────────────────────────── */}
+                <section id="contact" className="relative overflow-hidden" style={{ background: "linear-gradient(135deg, #08080f 0%, #1a0a2e 50%, #0f0520 100%)" }}>
+                    <div className="orb absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] opacity-15" style={{ background: "radial-gradient(circle, #7c3aed, transparent 70%)" }} />
+                    <div className="relative z-10 max-w-2xl mx-auto px-4 sm:px-6 py-16 sm:py-20 text-center">
+                        <motion.div initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-80px" }}
+                            transition={{ duration: 0.4, ease: [0.32, 0.72, 0, 1] }}>
+                            <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight mb-3">Have a group that needs gear?</h2>
+                            <p className="text-slate-300/80 text-sm sm:text-base leading-relaxed mb-8">
+                                Tell us about your team, school, or event and we'll get a shop set up for you.
+                                Based in Castle Dale, Utah.
+                            </p>
+                            <a href="mailto:hello@crossroadscustomapparel.com"
+                                className="btn-shine inline-flex items-center gap-2 text-white text-sm font-semibold px-6 py-3.5 rounded-xl transition-all"
+                                style={{ background: "linear-gradient(135deg,#8b5cf6 0%,#7c3aed 100%)", boxShadow: "0 6px 24px rgba(124,58,237,0.45)" }}>
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+                                hello@crossroadscustomapparel.com
+                            </a>
+                        </motion.div>
+                    </div>
+                </section>
+            </main>
+
+            {/* ── Footer ──────────────────────────────────────────────────────── */}
+            <footer className="border-t border-slate-200 bg-white">
+                <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <Image src="/logo.png" alt="Crossroads Custom Apparel" width={100} height={40} className="object-contain" />
+                    <div className="text-center sm:text-right">
+                        <p className="text-xs text-slate-400">Screen printing &amp; embroidery · <a href="mailto:hello@crossroadscustomapparel.com" className="hover:text-violet-600 transition-colors">hello@crossroadscustomapparel.com</a></p>
+                        <p className="text-xs text-slate-300 mt-0.5">
+                            © {new Date().getFullYear()} Crossroads Custom Apparel. All rights reserved. · <Link href="/login" className="hover:text-slate-500 transition-colors">Staff Login</Link>
+                        </p>
+                    </div>
+                </div>
+            </footer>
         </div>
     );
 }
