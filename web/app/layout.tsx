@@ -5,7 +5,7 @@ import { CartProvider } from "@/lib/cart";
 export const metadata = {
     metadataBase: new URL("https://crossroadscustomapparel.com"),
     title: "Crossroads Custom Apparel | Custom Screen Printing & Embroidery",
-    description: "Custom screen printed and embroidered apparel for teams, schools, and events. Browse open group shops or get in touch to start your order — based in Castle Dale, Utah.",
+    description: "Custom screen printing and embroidery for tees, hoodies, hats, and more. Browse open shops or get in touch to start your order — locally owned in Castle Dale, Utah.",
     icons: { icon: "/icon.svg" },
     openGraph: {
         title: "Crossroads Custom Apparel",
