@@ -2,6 +2,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { api, printAs } from "@/app/lib/api";
+import { Button } from "@/components/ui/button";
 
 type OrderItemRow = {
     id: string; product?: { name: string; sku: string } | null;
@@ -143,9 +144,9 @@ function PrintOrdersContent() {
             .finally(() => setLoading(false));
     }, [params]);
 
-    if (loading) return <div className="p-10 text-slate-400 text-sm">Loading orders…</div>;
-    if (error) return <div className="p-10 text-red-600 text-sm">{error}</div>;
-    if (orders.length === 0) return <div className="p-10 text-slate-400 text-sm">No orders found.</div>;
+    if (loading) return <div className="p-10 text-graphite-300 text-sm">Loading orders…</div>;
+    if (error) return <div className="p-10 text-signal-red text-sm">{error}</div>;
+    if (orders.length === 0) return <div className="p-10 text-graphite-300 text-sm">No orders found.</div>;
 
     function printOrders() {
         const dateStr = new Date().toISOString().split("T")[0];
@@ -156,29 +157,31 @@ function PrintOrdersContent() {
     }
 
     return (
-        <div className="print-full-width bg-white min-h-screen">
-            <div className="no-print sticky top-0 z-10 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between">
+        // The toolbar above is on-screen admin chrome and runs the dark console
+        // system; everything from the bg-white wrapper down is a live preview of
+        // the printed page itself, so it stays white/black-on-paper on screen too
+        // — not "chrome" to convert. See OrderPage below: untouched by this pass.
+        <div className="print-full-width min-h-screen">
+            <div className="no-print sticky top-0 z-10 bg-graphite-900 border-b border-white/[0.08] px-6 py-4 flex items-center justify-between">
                 <div>
-                    <h1 className="text-lg font-bold text-slate-900">Print Orders</h1>
-                    <p className="text-sm text-slate-500">{orders.length} order{orders.length !== 1 ? "s" : ""} — one page each</p>
+                    <h1 className="text-lg font-bold text-white">Print Orders</h1>
+                    <p className="text-sm text-graphite-300">{orders.length} order{orders.length !== 1 ? "s" : ""} — one page each</p>
                 </div>
-                <button type="button" onClick={printOrders}
-                    className="btn-shine text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-all"
-                    style={{ background: "linear-gradient(135deg,#8b5cf6 0%,#7c3aed 100%)", boxShadow: "0 4px 16px rgba(124,58,237,0.35)" }}>
-                    Print / Save as PDF
-                </button>
+                <Button onClick={printOrders}>Print / Save as PDF</Button>
             </div>
 
-            {orders.map((order, idx) => (
-                <OrderPage key={order.id} order={order} isFirst={idx === 0} />
-            ))}
+            <div className="bg-white">
+                {orders.map((order, idx) => (
+                    <OrderPage key={order.id} order={order} isFirst={idx === 0} />
+                ))}
+            </div>
         </div>
     );
 }
 
 export default function PrintOrdersPage() {
     return (
-        <Suspense fallback={<div className="p-10 text-slate-400 text-sm">Loading…</div>}>
+        <Suspense fallback={<div className="p-10 text-graphite-300 text-sm">Loading…</div>}>
             <PrintOrdersContent />
         </Suspense>
     );

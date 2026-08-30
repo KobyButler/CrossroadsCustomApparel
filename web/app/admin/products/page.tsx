@@ -11,6 +11,8 @@ import { ZoomableImage } from "@/components/ui/zoomable-image";
 import { motion, Reorder } from "framer-motion";
 import { getColorCss } from "@/lib/colors";
 
+const EASE = [0.16, 1, 0.3, 1] as [number, number, number, number];
+
 type Shop = { id: string; name: string; slug: string };
 type Product = {
     id: string; name: string; sku: string; vendor: string;
@@ -42,23 +44,23 @@ function TagInput({ label, tags, onChange, placeholder }: { label:string; tags:s
             <label className="field-label">{label}</label>
             <div className="flex flex-wrap gap-1.5 mb-2 min-h-[28px]">
                 {tags.map(t => (
-                    <span key={t} className="inline-flex items-center gap-1 text-xs bg-brand-50 text-brand-700 border border-brand-200 px-2 py-0.5 rounded-full">
+                    <span key={t} className="inline-flex items-center gap-1 text-xs bg-signal-cyan/10 text-signal-cyan border border-signal-cyan/25 px-2 py-0.5 rounded-full">
                         {t}
                         <button type="button" title={`Remove ${t}`} aria-label={`Remove ${t}`}
-                            onClick={() => onChange(tags.filter(x => x !== t))} className="hover:text-red-500 transition-colors">
+                            onClick={() => onChange(tags.filter(x => x !== t))} className="hover:text-signal-red transition-colors">
                             <svg viewBox="0 0 12 12" fill="currentColor" className="w-3 h-3"><path d="M4.586 6L1.293 2.707 2.707 1.293 6 4.586l3.293-3.293 1.414 1.414L7.414 6l3.293 3.293-1.414 1.414L6 7.414l-3.293 3.293-1.414-1.414L4.586 6z"/></svg>
                         </button>
                     </span>
                 ))}
-                {tags.length === 0 && <span className="text-xs text-slate-300 italic">None added yet</span>}
+                {tags.length === 0 && <span className="text-xs text-graphite-300 italic">None added yet</span>}
             </div>
             <div className="flex gap-2">
                 <input type="text" value={input} onChange={e => setInput(e.target.value)}
                     onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); add(); } }}
                     placeholder={placeholder ?? "Type and press Enter"}
-                    className="flex-1 px-3 py-1.5 text-sm border border-slate-200 rounded-xl outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all" />
+                    className="flex-1 px-3 py-1.5 text-sm bg-white/[0.03] border border-white/10 hover:border-white/20 rounded-md text-white placeholder:text-graphite-500 outline-none focus:border-signal-cyan/60 focus:ring-2 focus:ring-signal-cyan/30 transition-all" />
                 <button type="button" onClick={add}
-                    className="px-3 py-1.5 text-sm border border-slate-200 rounded-xl text-slate-600 hover:bg-brand-50 hover:border-brand-300 hover:text-brand-700 transition-all">
+                    className="px-3 py-1.5 text-sm border border-white/10 rounded-md text-graphite-200 hover:bg-white/[0.06] hover:border-signal-cyan/40 hover:text-signal-cyan transition-all">
                     Add
                 </button>
             </div>
@@ -78,38 +80,38 @@ function ColorTagInput({ label, tags, onChange, placeholder, required }: { label
         <div>
             <label className="field-label">
                 {label}
-                {required && <span className="text-brand-500 ml-0.5">*</span>}
+                {required && <span className="text-signal-cyan ml-0.5">*</span>}
             </label>
             {required && tags.length === 0 && (
-                <p className="text-xs text-amber-600 -mt-0.5 mb-1.5">At least one color is required</p>
+                <p className="text-xs text-signal-amber -mt-0.5 mb-1.5">At least one color is required</p>
             )}
             <div className="flex flex-wrap gap-1.5 mb-2 min-h-[28px]">
                 {tags.map(t => (
-                    <span key={t} className="inline-flex items-center gap-1.5 text-xs bg-brand-50 text-brand-700 border border-brand-200 px-2 py-0.5 rounded-full">
-                        <span className="w-3 h-3 rounded-full border border-black/15 shrink-0"
+                    <span key={t} className="inline-flex items-center gap-1.5 text-xs bg-signal-cyan/10 text-signal-cyan border border-signal-cyan/25 px-2 py-0.5 rounded-full">
+                        <span className="w-3 h-3 rounded-full border border-white/20 shrink-0"
                             style={{ backgroundColor: getColorCss(t) }} />
                         {t}
                         <button type="button" title={`Remove ${t}`} aria-label={`Remove ${t}`}
-                            onClick={() => onChange(tags.filter(x => x !== t))} className="hover:text-red-500 transition-colors">
+                            onClick={() => onChange(tags.filter(x => x !== t))} className="hover:text-signal-red transition-colors">
                             <svg viewBox="0 0 12 12" fill="currentColor" className="w-3 h-3"><path d="M4.586 6L1.293 2.707 2.707 1.293 6 4.586l3.293-3.293 1.414 1.414L7.414 6l3.293 3.293-1.414 1.414L6 7.414l-3.293 3.293-1.414-1.414L4.586 6z"/></svg>
                         </button>
                     </span>
                 ))}
-                {tags.length === 0 && <span className="text-xs text-slate-300 italic">None added yet</span>}
+                {tags.length === 0 && <span className="text-xs text-graphite-300 italic">None added yet</span>}
             </div>
             <div className="flex gap-2">
                 <div className="relative flex-1">
                     {input && (
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border border-black/15 pointer-events-none"
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border border-white/20 pointer-events-none"
                             style={{ backgroundColor: getColorCss(input) }} />
                     )}
                     <input type="text" value={input} onChange={e => setInput(e.target.value)}
                         onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); add(); } }}
                         placeholder={placeholder ?? "Black, White, Navy…"}
-                        className={`w-full ${input ? "pl-8" : "pl-3"} pr-3 py-1.5 text-sm border border-slate-200 rounded-xl outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all`} />
+                        className={`w-full ${input ? "pl-8" : "pl-3"} pr-3 py-1.5 text-sm bg-white/[0.03] border border-white/10 hover:border-white/20 rounded-md text-white placeholder:text-graphite-500 outline-none focus:border-signal-cyan/60 focus:ring-2 focus:ring-signal-cyan/30 transition-all`} />
                 </div>
                 <button type="button" onClick={add}
-                    className="px-3 py-1.5 text-sm border border-slate-200 rounded-xl text-slate-600 hover:bg-brand-50 hover:border-brand-300 hover:text-brand-700 transition-all">
+                    className="px-3 py-1.5 text-sm border border-white/10 rounded-md text-graphite-200 hover:bg-white/[0.06] hover:border-signal-cyan/40 hover:text-signal-cyan transition-all">
                     Add
                 </button>
             </div>
@@ -134,8 +136,8 @@ function DescriptionField({ value, onChange }: { value:string; onChange:(v:strin
             <textarea ref={ref} value={value} onChange={e => onChange(e.target.value)}
                 placeholder="Product description…"
                 style={{ resize: "vertical", minHeight: "84px" }}
-                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all" />
-            <p className="text-xs text-slate-300 mt-1">Drag the bottom-right corner to resize — it also grows automatically as you type.</p>
+                className="w-full px-3 py-2 text-sm bg-white/[0.03] border border-white/10 hover:border-white/20 rounded-md text-white placeholder:text-graphite-500 outline-none focus:border-signal-cyan/60 focus:ring-2 focus:ring-signal-cyan/30 transition-all" />
+            <p className="text-xs text-graphite-300 mt-1">Drag the bottom-right corner to resize — it also grows automatically as you type.</p>
         </div>
     );
 }
@@ -149,7 +151,7 @@ function ShopMultiSelect({ shops, selected, onChange }: { shops:Shop[]; selected
         <div>
             <label className="field-label">Assign to Shop(s)</label>
             {shops.length === 0 ? (
-                <p className="text-xs text-slate-400 bg-slate-50 border border-dashed border-slate-200 rounded-xl px-3 py-2.5">
+                <p className="text-xs text-graphite-300 bg-white/[0.04] border border-dashed border-white/10 rounded-lg px-3 py-2.5">
                     No group shops yet — you can create one under Group Shops, or assign this product to a shop later.
                 </p>
             ) : (
@@ -158,7 +160,7 @@ function ShopMultiSelect({ shops, selected, onChange }: { shops:Shop[]; selected
                         const checked = selected.includes(s.id);
                         return (
                             <button key={s.id} type="button" onClick={() => toggle(s.id)}
-                                className={`text-xs font-medium px-3 py-1.5 rounded-xl border transition-all ${checked ? "bg-brand-600 text-white border-brand-600" : "border-slate-200 text-slate-600 hover:border-brand-300 hover:bg-brand-50"}`}>
+                                className={`text-xs font-medium px-3 py-1.5 rounded-md border transition-all ${checked ? "bg-signal-cyan text-graphite-950 border-signal-cyan" : "border-white/10 text-graphite-300 hover:border-signal-cyan/40 hover:bg-signal-cyan/[0.06] hover:text-signal-cyan"}`}>
                                 {s.name}
                             </button>
                         );
@@ -206,8 +208,8 @@ function ImageManager({ images, onChange }: { images:string[]; onChange:(images:
         <div>
             <label className="field-label">Product Images</label>
             {images.length === 0 ? (
-                <div className="w-16 h-16 rounded-xl border-2 border-dashed border-slate-200 flex items-center justify-center mb-3">
-                    <svg className="w-5 h-5 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                <div className="w-16 h-16 rounded-md border-2 border-dashed border-white/10 flex items-center justify-center mb-3">
+                    <svg className="w-5 h-5 text-graphite-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
                 </div>
             ) : (
                 <Reorder.Group as="div" axis="x" values={images} onReorder={onChange}
@@ -216,21 +218,21 @@ function ImageManager({ images, onChange }: { images:string[]; onChange:(images:
                         <Reorder.Item key={url} value={url} as="div"
                             className="relative group shrink-0 cursor-grab active:cursor-grabbing">
                             <img src={imgUrl(url)} alt={`Product ${i+1}`} draggable={false}
-                                className="w-16 h-16 object-cover rounded-xl border border-slate-200 ring-2 ring-transparent group-hover:ring-brand-300 transition-all pointer-events-none" />
+                                className="w-16 h-16 object-cover rounded-md border border-white/10 ring-2 ring-transparent group-hover:ring-signal-cyan/40 transition-all pointer-events-none" />
                             {i === 0 && (
-                                <span className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 text-[9px] font-bold bg-brand-600 text-white px-1.5 py-0.5 rounded-full shadow-sm">Main</span>
+                                <span className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 text-[9px] font-bold bg-signal-cyan text-graphite-950 px-1.5 py-0.5 rounded-full">Main</span>
                             )}
                             <button type="button" title="Remove image" aria-label="Remove image"
                                 onClick={() => handleRemove(url)}
-                                className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-white border border-slate-200 shadow-sm flex items-center justify-center text-slate-400 opacity-0 group-hover:opacity-100 hover:text-red-500 hover:border-red-300 transition-all">
+                                className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-graphite-800 border border-white/15 flex items-center justify-center text-graphite-400 opacity-0 group-hover:opacity-100 hover:text-signal-red hover:border-signal-red/40 transition-all">
                                 <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
                             </button>
                         </Reorder.Item>
                     ))}
                 </Reorder.Group>
             )}
-            {images.length > 1 && <p className="text-xs text-slate-300 mb-2">Drag to reorder — the first photo is used as the main image.</p>}
-            <label className={`inline-flex items-center gap-2 text-sm cursor-pointer px-3 py-2 border border-dashed rounded-xl transition-all ${uploading ? "opacity-50 pointer-events-none border-slate-200 text-slate-400" : "border-brand-300 text-brand-600 hover:bg-brand-50"}`}>
+            {images.length > 1 && <p className="text-xs text-graphite-300 mb-2">Drag to reorder — the first photo is used as the main image.</p>}
+            <label className={`inline-flex items-center gap-2 text-sm cursor-pointer px-3 py-2 border border-dashed rounded-md transition-all ${uploading ? "opacity-50 pointer-events-none border-white/10 text-graphite-500" : "border-signal-cyan/30 text-signal-cyan hover:bg-signal-cyan/[0.06]"}`}>
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
                 {uploading ? "Uploading…" : "Upload image(s)"}
                 <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple className="sr-only" onChange={handleFiles} />
@@ -269,21 +271,21 @@ function SizeChartUploader({ url, onChange }: { url:string; onChange:(url:string
             {url ? (
                 <div className="flex items-center gap-2 mb-2">
                     <a href={imgUrl(url)} target="_blank" rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 text-sm text-brand-600 hover:text-brand-700 hover:underline">
+                        className="inline-flex items-center gap-1.5 text-sm text-signal-cyan hover:text-signal-cyan-bright hover:underline">
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                         View current size chart
                     </a>
-                    <button type="button" onClick={() => onChange("")} className="text-xs text-slate-400 hover:text-red-500 transition-colors">Remove</button>
+                    <button type="button" onClick={() => onChange("")} className="text-xs text-graphite-400 hover:text-signal-red transition-colors">Remove</button>
                 </div>
             ) : (
-                <p className="text-xs text-slate-300 italic mb-2">No size chart uploaded yet</p>
+                <p className="text-xs text-graphite-300 italic mb-2">No size chart uploaded yet</p>
             )}
-            <label className={`inline-flex items-center gap-2 text-sm cursor-pointer px-3 py-2 border border-dashed rounded-xl transition-all ${uploading ? "opacity-50 pointer-events-none border-slate-200 text-slate-400" : "border-brand-300 text-brand-600 hover:bg-brand-50"}`}>
+            <label className={`inline-flex items-center gap-2 text-sm cursor-pointer px-3 py-2 border border-dashed rounded-md transition-all ${uploading ? "opacity-50 pointer-events-none border-white/10 text-graphite-500" : "border-signal-cyan/30 text-signal-cyan hover:bg-signal-cyan/[0.06]"}`}>
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
                 {uploading ? "Uploading…" : url ? "Replace PDF" : "Upload PDF"}
                 <input type="file" accept="application/pdf" className="sr-only" onChange={handleFile} />
             </label>
-            <p className="text-xs text-slate-400 mt-1">Customers can view this from the product page — handy for sizing guides from the vendor.</p>
+            <p className="text-xs text-graphite-300 mt-1">Customers can view this from the product page — handy for sizing guides from the vendor.</p>
         </div>
     );
 }
@@ -409,67 +411,66 @@ function VendorSearchPanel({ source, onSelect }: { source: "SANMAR"|"SS"; onSele
             <div className="space-y-3">
                 <div className="flex items-start justify-between gap-3">
                     <div>
-                        <p className="text-sm font-bold text-slate-900">{detail.title}</p>
-                        <p className="text-xs text-slate-400">{detail.brand} · Style {detail.style}{detail.weightOz != null ? ` · ~${detail.weightOz} oz` : ""}</p>
+                        <p className="text-sm font-bold text-white">{detail.title}</p>
+                        <p className="text-xs text-graphite-300">{detail.brand} · Style {detail.style}{detail.weightOz != null ? ` · ~${detail.weightOz} oz` : ""}</p>
                     </div>
                     <button type="button" onClick={() => { setDetail(null); setSelectedColors(new Set()); }}
-                        className="text-xs text-slate-500 hover:text-slate-700 underline shrink-0">
+                        className="text-xs text-graphite-300 hover:text-graphite-100 underline shrink-0">
                         ← Back to search
                     </button>
                 </div>
 
                 {detail.upchargeDetected && (
-                    <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5">
-                        <svg className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                        <p className="text-xs text-amber-800">This vendor charges more for larger sizes — the &quot;Upcharge for bigger sizes&quot; toggle below has been turned on automatically.</p>
+                    <div className="flex items-start gap-2 bg-signal-amber/10 border border-signal-amber/25 rounded-md px-3 py-2.5">
+                        <svg className="w-4 h-4 text-signal-amber mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        <p className="text-xs text-signal-amber-bright">This vendor charges more for larger sizes — the &quot;Upcharge for bigger sizes&quot; toggle below has been turned on automatically.</p>
                     </div>
                 )}
 
                 {detail.colors.length === 0 ? (
-                    <p className="text-xs text-slate-400">This style has no color options — click Confirm to add it.</p>
+                    <p className="text-xs text-graphite-300">This style has no color options — click Confirm to add it.</p>
                 ) : (
                     <div>
                         <div className="flex items-center justify-between mb-2">
                             <label className="field-label mb-0">Which colors do you want to offer?</label>
                             <div className="flex gap-2">
                                 <button type="button" onClick={() => setSelectedColors(new Set(detail.colors))}
-                                    className="text-xs font-semibold text-brand-600 hover:text-brand-700">Select all</button>
+                                    className="text-xs font-semibold text-signal-cyan hover:text-signal-cyan-bright">Select all</button>
                                 <button type="button" onClick={() => setSelectedColors(new Set())}
-                                    className="text-xs font-semibold text-slate-400 hover:text-slate-600">Clear</button>
+                                    className="text-xs font-semibold text-graphite-400 hover:text-graphite-200">Clear</button>
                             </div>
                         </div>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-64 overflow-y-auto border border-slate-200 rounded-xl p-2.5">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-64 overflow-y-auto border border-white/10 rounded-lg p-2.5">
                             {detail.colors.map(c => {
                                 const checked = selectedColors.has(c);
                                 const thumb = detail.colorImages?.[c];
                                 return (
-                                    <label key={c} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition-colors ${checked ? "bg-brand-50 ring-1 ring-brand-200" : "hover:bg-slate-50"}`}>
-                                        <input type="checkbox" checked={checked} className="accent-brand-600 w-3.5 h-3.5 shrink-0"
+                                    <label key={c} className={`flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer transition-colors ${checked ? "bg-signal-cyan/10 ring-1 ring-signal-cyan/25" : "hover:bg-white/[0.04]"}`}>
+                                        <input type="checkbox" checked={checked} className="accent-signal-cyan w-3.5 h-3.5 shrink-0"
                                             onChange={() => setSelectedColors(prev => {
                                                 const next = new Set(prev);
                                                 next.has(c) ? next.delete(c) : next.add(c);
                                                 return next;
                                             })} />
                                         {thumb ? (
-                                            <img src={thumb} alt={c} className="w-6 h-6 rounded object-cover border border-slate-200 shrink-0" />
+                                            <img src={thumb} alt={c} className="w-6 h-6 rounded object-cover border border-white/10 shrink-0" />
                                         ) : (
-                                            <span className="w-3.5 h-3.5 rounded-full border border-black/15 shrink-0" style={{ backgroundColor: getColorCss(c) }} />
+                                            <span className="w-3.5 h-3.5 rounded-full border border-white/20 shrink-0" style={{ backgroundColor: getColorCss(c) }} />
                                         )}
-                                        <span className="text-xs text-slate-700 truncate">{c}</span>
+                                        <span className="text-xs text-graphite-200 truncate">{c}</span>
                                     </label>
                                 );
                             })}
                         </div>
-                        <p className="text-xs text-slate-400 mt-1.5">{selectedColors.size} of {detail.colors.length} selected · all {detail.sizes.length} sizes will be added for the colors you pick</p>
+                        <p className="text-xs text-graphite-300 mt-1.5">{selectedColors.size} of {detail.colors.length} selected · all {detail.sizes.length} sizes will be added for the colors you pick</p>
                     </div>
                 )}
 
-                <button type="button" onClick={confirmColors}
+                <Button type="button" onClick={confirmColors}
                     disabled={detail.colors.length > 0 && selectedColors.size === 0}
-                    className="w-full py-2.5 text-sm font-bold rounded-xl text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all active:scale-95"
-                    style={{ background:"linear-gradient(135deg,#8b5cf6 0%,#7c3aed 100%)" }}>
+                    className="w-full">
                     Confirm &amp; Add to Product
-                </button>
+                </Button>
             </div>
         );
     }
@@ -478,53 +479,53 @@ function VendorSearchPanel({ source, onSelect }: { source: "SANMAR"|"SS"; onSele
     return (
         <div className="space-y-2">
             <div className="relative">
-                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-graphite-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                 <input value={query} onChange={handleChange}
                     placeholder={source === "SS" ? `Search S&S by style # or keyword (e.g. G200, hoodie…)` : `Search ${label} by style # or name…`}
-                    className="w-full pl-9 pr-8 py-2.5 text-sm border border-slate-200 rounded-xl outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 bg-white transition-all" />
+                    className="w-full pl-9 pr-8 py-2.5 text-sm bg-white/[0.03] border border-white/10 hover:border-white/20 rounded-md text-white placeholder:text-graphite-500 outline-none focus:border-signal-cyan/60 focus:ring-2 focus:ring-signal-cyan/30 transition-all" />
                 {(loading || selecting) && (
                     <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                        <div className="w-4 h-4 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+                        <div className="w-4 h-4 border-2 border-signal-cyan border-t-transparent rounded-full animate-spin" />
                     </div>
                 )}
             </div>
             {error && (
-                <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl px-3 py-2.5">
-                    <svg className="w-4 h-4 text-red-400 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
-                    <p className="text-xs text-red-700">{error}</p>
+                <div className="flex items-start gap-2 bg-signal-red/10 border border-signal-red/25 rounded-md px-3 py-2.5">
+                    <svg className="w-4 h-4 text-signal-red mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                    <p className="text-xs text-signal-red-bright">{error}</p>
                 </div>
             )}
             {notice && !error && results.length === 0 && (
-                <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5">
-                    <svg className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                    <p className="text-xs text-amber-800">{notice}</p>
+                <div className="flex items-start gap-2 bg-signal-amber/10 border border-signal-amber/25 rounded-md px-3 py-2.5">
+                    <svg className="w-4 h-4 text-signal-amber mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    <p className="text-xs text-signal-amber-bright">{notice}</p>
                 </div>
             )}
             {results.length > 0 && (
-                <div className="border border-slate-200 rounded-xl overflow-hidden max-h-64 overflow-y-auto divide-y divide-slate-100 bg-white shadow-sm">
+                <div className="border border-white/10 rounded-lg overflow-hidden max-h-64 overflow-y-auto divide-y divide-white/[0.06] bg-white/[0.02]">
                     {results.map((r, i) => (
                         <button key={i} type="button" onClick={() => handlePick(r)}
-                            className="w-full text-left px-4 py-2.5 hover:bg-brand-50 transition-colors flex items-center gap-3">
+                            className="w-full text-left px-4 py-2.5 hover:bg-white/[0.05] transition-colors flex items-center gap-3">
                             {r.image ? (
-                                <img src={r.image} alt="" className="w-8 h-8 rounded-lg object-cover border border-slate-200 shrink-0" />
+                                <img src={r.image} alt="" className="w-8 h-8 rounded-md object-cover border border-white/10 shrink-0" />
                             ) : null}
                             <div className="min-w-0 flex-1">
-                                <p className="text-sm font-semibold text-slate-800 truncate">{r.title ?? r.name ?? r.style}</p>
-                                <p className="text-xs text-slate-400 truncate">{r.brand ?? ""} {r.brand ? "·" : ""} Style {r.style}</p>
+                                <p className="text-sm font-semibold text-graphite-100 truncate">{r.title ?? r.name ?? r.style}</p>
+                                <p className="text-xs text-graphite-300 truncate">{r.brand ?? ""} {r.brand ? "·" : ""} Style {r.style}</p>
                             </div>
-                            <span className="text-xs text-brand-600 font-semibold shrink-0">Select →</span>
+                            <span className="text-xs text-signal-cyan font-semibold shrink-0">Select →</span>
                         </button>
                     ))}
                 </div>
             )}
             {query && !loading && !selecting && results.length === 0 && !error && !notice && (
-                <p className="text-xs text-slate-400 text-center py-2">No results for &ldquo;{query}&rdquo;</p>
+                <p className="text-xs text-graphite-300 text-center py-2">No results for &ldquo;{query}&rdquo;</p>
             )}
             {source === "SANMAR" && !query && (
-                <p className="text-xs text-slate-400 px-1">Searches your synced SanMar catalog. Run a catalog sync in the SanMar tab if results are missing.</p>
+                <p className="text-xs text-graphite-300 px-1">Searches your synced SanMar catalog. Run a catalog sync in the SanMar tab if results are missing.</p>
             )}
             {source === "SS" && !query && (
-                <p className="text-xs text-slate-400 px-1">Search S&amp;S by style number or keyword (e.g. G200, hoodie, Gildan). Requires SS_USER and SS_API_KEY in server env.</p>
+                <p className="text-xs text-graphite-300 px-1">Search S&amp;S by style number or keyword (e.g. G200, hoodie, Gildan). Requires SS_USER and SS_API_KEY in server env.</p>
             )}
         </div>
     );
@@ -667,25 +668,27 @@ export default function ProductsPage() {
     return (
         <div className="space-y-6">
             {/* Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <motion.div
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, ease: EASE }}
+                className="flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+            >
                 <div>
                     <h1 className="page-title">Products</h1>
                     <p className="page-subtitle">Manage your product catalog</p>
                 </div>
-                <motion.button whileHover={{ y:-1 }} whileTap={{ scale:0.97 }}
-                    onClick={openAdd}
-                    className="btn-shine flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white transition-all duration-200"
-                    style={{ background:"linear-gradient(135deg,#8b5cf6 0%,#7c3aed 100%)", boxShadow:"0 4px 16px rgba(124,58,237,0.35)" }}
-                >
+                <Button onClick={openAdd} icon={
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg>
+                }>
                     Add Product
-                </motion.button>
-            </div>
+                </Button>
+            </motion.div>
 
             <div className="flex items-center gap-3 flex-wrap">
-                <div className="relative flex-1 max-w-xs">
-                    <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-                    <input className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-xl outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 bg-white shadow-sm transition-all"
+                <div className="flex-1 max-w-xs">
+                    <Input
+                        leftIcon={<svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>}
                         placeholder="Search products…" value={search} onChange={e => setSearch(e.target.value)} />
                 </div>
                 <Select value={filterShop} onChange={e => setFilterShop(e.target.value)} className="w-full sm:w-44">
@@ -700,32 +703,37 @@ export default function ProductsPage() {
                 </Select>
                 {(search || filterShop || filterVendor) && (
                     <button type="button" onClick={() => { setSearch(""); setFilterShop(""); setFilterVendor(""); }}
-                        className="text-xs font-medium text-slate-500 hover:text-slate-700 transition-colors">
+                        className="text-xs font-medium text-graphite-300 hover:text-graphite-100 transition-colors">
                         Clear filters
                     </button>
                 )}
             </div>
 
-            <div className="bg-white rounded-2xl ring-1 ring-black/5 shadow-card overflow-hidden">
+            <motion.div
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1, duration: 0.4, ease: EASE }}
+                className="console-panel rounded-lg overflow-hidden"
+            >
                 {loading ? (
                     <div className="p-8 space-y-3">
                         {[1,2,3,4].map(i => (
                             <div key={i} className="animate-pulse flex items-center gap-4">
-                                <div className="w-8 h-8 bg-slate-100 rounded-lg" />
+                                <div className="w-8 h-8 bg-white/[0.06] rounded-lg" />
                                 <div className="flex-1 space-y-1.5">
-                                    <div className="h-3 w-36 bg-slate-200 rounded" />
-                                    <div className="h-2.5 w-20 bg-slate-100 rounded" />
+                                    <div className="h-3 w-36 bg-white/[0.08] rounded" />
+                                    <div className="h-2.5 w-20 bg-white/[0.06] rounded" />
                                 </div>
-                                <div className="h-5 w-16 bg-slate-100 rounded-full" />
-                                <div className="h-4 w-12 bg-slate-100 rounded" />
+                                <div className="h-5 w-16 bg-white/[0.06] rounded-full" />
+                                <div className="h-4 w-12 bg-white/[0.06] rounded" />
                             </div>
                         ))}
                     </div>
                 ) : filtered.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-16 text-slate-300">
+                    <div className="flex flex-col items-center justify-center py-16 text-graphite-600">
                         <svg className="w-12 h-12 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/></svg>
-                        <p className="text-sm text-slate-400 font-medium">No products found</p>
-                        <p className="text-xs text-slate-300 mt-0.5">{search ? "Try a different search" : "Click \"Add Product\" to get started"}</p>
+                        <p className="text-sm text-graphite-300 font-medium">No products found</p>
+                        <p className="text-xs text-graphite-300 mt-0.5">{search ? "Try a different search" : "Click \"Add Product\" to get started"}</p>
                     </div>
                 ) : (
                     <div className="overflow-x-auto">
@@ -738,29 +746,29 @@ export default function ProductsPage() {
                                             <div className="flex items-center gap-3">
                                                 {p.imagesJson && JSON.parse(p.imagesJson)[0] ? (
                                                     <ZoomableImage src={imgUrl(JSON.parse(p.imagesJson)[0])} alt={p.name}
-                                                        className="w-8 h-8 rounded-lg object-cover shrink-0 ring-1 ring-black/5" />
+                                                        className="w-8 h-8 rounded-lg object-cover shrink-0 ring-1 ring-white/10" />
                                                 ) : (
-                                                    <div className="w-8 h-8 rounded-lg bg-brand-50 flex items-center justify-center shrink-0">
-                                                        <svg className="w-4 h-4 text-brand-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14"/></svg>
+                                                    <div className="w-8 h-8 rounded-lg bg-white/[0.05] flex items-center justify-center shrink-0">
+                                                        <svg className="w-4 h-4 text-graphite-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14"/></svg>
                                                     </div>
                                                 )}
                                                 <div>
-                                                    <p className="font-semibold text-slate-800 text-sm">{p.name}</p>
-                                                    {p.brand && <p className="text-xs text-slate-400">{p.brand}</p>}
+                                                    <p className="font-semibold text-white text-sm">{p.name}</p>
+                                                    {p.brand && <p className="text-xs text-graphite-300">{p.brand}</p>}
                                                 </div>
                                             </div>
                                         </td>
-                                        <td><code className="text-xs font-mono bg-slate-100 px-1.5 py-0.5 rounded-md text-slate-600">{p.sku}</code></td>
+                                        <td><code className="text-xs font-mono bg-white/[0.06] px-1.5 py-0.5 rounded-md text-graphite-200">{p.sku}</code></td>
                                         <td>
                                             {(p.shops ?? []).length === 0 ? (
-                                                <span className="text-sm text-slate-300">—</span>
+                                                <span className="text-sm text-graphite-500">—</span>
                                             ) : (
                                                 <div className="flex flex-wrap gap-1">
                                                     {(p.shops ?? []).slice(0,2).map(s => (
                                                         <Badge key={s.id} variant="purple" size="sm">{s.name}</Badge>
                                                     ))}
                                                     {(p.shops ?? []).length > 2 && (
-                                                        <span className="text-xs text-slate-400">+{(p.shops ?? []).length - 2}</span>
+                                                        <span className="text-xs text-graphite-300">+{(p.shops ?? []).length - 2}</span>
                                                     )}
                                                 </div>
                                             )}
@@ -769,42 +777,42 @@ export default function ProductsPage() {
                                         <td>
                                             <div className="flex gap-1 flex-wrap items-center">
                                                 {p.sizesJson && JSON.parse(p.sizesJson).length > 0 && (
-                                                    <span className="text-xs bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">{JSON.parse(p.sizesJson).length} sizes</span>
+                                                    <span className="text-xs bg-white/[0.06] text-graphite-200 px-1.5 py-0.5 rounded">{JSON.parse(p.sizesJson).length} sizes</span>
                                                 )}
                                                 {p.colorsJson && JSON.parse(p.colorsJson).length > 0 && (
                                                     <span className="flex items-center gap-0.5">
                                                         {JSON.parse(p.colorsJson).slice(0,4).map((c: string) => (
-                                                            <span key={c} title={c} className="w-3 h-3 rounded-full border border-black/10 inline-block"
+                                                            <span key={c} title={c} className="w-3 h-3 rounded-full border border-white/15 inline-block"
                                                                 style={{ backgroundColor: getColorCss(c) }} />
                                                         ))}
                                                         {JSON.parse(p.colorsJson).length > 4 && (
-                                                            <span className="text-xs text-slate-400 ml-0.5">+{JSON.parse(p.colorsJson).length - 4}</span>
+                                                            <span className="text-xs text-graphite-300 ml-0.5">+{JSON.parse(p.colorsJson).length - 4}</span>
                                                         )}
                                                     </span>
                                                 )}
                                                 {(!p.sizesJson || JSON.parse(p.sizesJson).length === 0) && (!p.colorsJson || JSON.parse(p.colorsJson).length === 0) && (
-                                                    <span className="text-xs text-slate-300">—</span>
+                                                    <span className="text-xs text-graphite-500">—</span>
                                                 )}
                                             </div>
                                         </td>
                                         <td>
-                                            <span className="text-sm font-bold text-slate-900 tabular-nums">${(p.priceCents/100).toFixed(2)}</span>
+                                            <span className="text-sm font-bold text-white font-mono tabular-nums">${(p.priceCents/100).toFixed(2)}</span>
                                             {p.upchargeEnabled && (
-                                                <span title={`+$${((p.upchargeCents??0)/100).toFixed(2)} for 2XL and up`} className="ml-1 text-[10px] text-amber-600 font-semibold align-middle">+2XL</span>
+                                                <span title={`+$${((p.upchargeCents??0)/100).toFixed(2)} for 2XL and up`} className="ml-1 text-[10px] text-signal-amber font-semibold align-middle">+2XL</span>
                                             )}
                                         </td>
                                         <td className="text-right pr-5">
                                             <div className="flex items-center justify-end gap-1">
                                                 <button type="button" onClick={() => openEdit(p)}
-                                                    className="px-2.5 py-1 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors">
+                                                    className="px-2.5 py-1 rounded-md text-xs font-medium text-graphite-300 hover:bg-white/[0.06] hover:text-white transition-colors">
                                                     Edit
                                                 </button>
                                                 <button type="button" disabled={duplicatingId===p.id} onClick={() => duplicateProduct(p)}
-                                                    className="px-2.5 py-1 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors disabled:opacity-50">
+                                                    className="px-2.5 py-1 rounded-md text-xs font-medium text-graphite-300 hover:bg-white/[0.06] hover:text-white transition-colors disabled:opacity-50">
                                                     {duplicatingId===p.id ? "…" : "Duplicate"}
                                                 </button>
                                                 <button type="button" onClick={() => setDeleteTarget(p)}
-                                                    className="px-2.5 py-1 rounded-lg text-xs font-medium text-red-500 hover:bg-red-50 hover:text-red-700 transition-colors">
+                                                    className="px-2.5 py-1 rounded-md text-xs font-medium text-signal-red hover:bg-signal-red/10 hover:text-signal-red-bright transition-colors">
                                                     Delete
                                                 </button>
                                             </div>
@@ -815,7 +823,7 @@ export default function ProductsPage() {
                         </table></div>
                     </div>
                 )}
-            </div>
+            </motion.div>
 
             {/* ── Add/Edit Product Modal ── */}
             <Modal open={showAdd || !!editProduct}
@@ -827,13 +835,13 @@ export default function ProductsPage() {
                     {!editProduct && (
                         <div>
                             <label className="field-label mb-2 block">Product Source</label>
-                            <div className="flex rounded-xl border border-slate-200 overflow-hidden">
+                            <div className="flex rounded-md border border-white/10 overflow-hidden">
                                 {(["MANUAL","SANMAR","SS"] as const).map(src => {
                                     const labels = { MANUAL:"Manual Entry", SANMAR:"SanMar", SS:"S&S Activewear" };
                                     return (
                                         <button key={src} type="button"
                                             onClick={() => { setImportSource(src); setImportedFrom(""); }}
-                                            className={`flex-1 py-2 text-sm font-medium transition-all ${importSource===src ? "bg-brand-600 text-white" : "text-slate-600 hover:bg-slate-50"}`}>
+                                            className={`flex-1 py-2 text-sm font-medium transition-all ${importSource===src ? "bg-signal-cyan text-graphite-950" : "text-graphite-300 hover:bg-white/[0.05]"}`}>
                                             {labels[src]}
                                         </button>
                                     );
@@ -844,17 +852,17 @@ export default function ProductsPage() {
 
                     {/* Vendor search panel */}
                     {!editProduct && importSource !== "MANUAL" && (
-                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2">
+                        <div className="bg-white/[0.04] border border-white/10 rounded-lg p-4 space-y-2">
                             {importedFrom ? (
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-2">
-                                        <div className="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
-                                            <svg className="w-3 h-3 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>
+                                        <div className="w-5 h-5 rounded-full bg-signal-green/15 flex items-center justify-center shrink-0">
+                                            <svg className="w-3 h-3 text-signal-green" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>
                                         </div>
-                                        <span className="text-sm font-semibold text-slate-800">Imported: {importedFrom}</span>
+                                        <span className="text-sm font-semibold text-white">Imported: {importedFrom}</span>
                                     </div>
                                     <button type="button" onClick={() => setImportedFrom("")}
-                                        className="text-xs text-slate-500 hover:text-slate-700 underline">
+                                        className="text-xs text-graphite-300 hover:text-graphite-100 underline">
                                         Search again
                                     </button>
                                 </div>
@@ -889,7 +897,7 @@ export default function ProductsPage() {
                         <div>
                             <Input label="Weight (oz)" type="number" step="1" min="0" placeholder="e.g. 6"
                                 value={form.weightOz} onChange={e => setForm(p => ({ ...p, weightOz:e.target.value }))} />
-                            <p className="text-xs text-slate-400 mt-1">Used to estimate shipping cost at checkout. Leave blank to use a default estimate.</p>
+                            <p className="text-xs text-graphite-300 mt-1">Used to estimate shipping cost at checkout. Leave blank to use a default estimate.</p>
                         </div>
                     </div>
 
@@ -903,28 +911,28 @@ export default function ProductsPage() {
                     <ShopMultiSelect shops={shops} selected={form.shopIds} onChange={shopIds => setForm(p => ({ ...p, shopIds }))} />
 
                     {/* Upcharge toggle */}
-                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                    <div className="bg-white/[0.04] border border-white/10 rounded-lg p-4">
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="text-sm font-semibold text-slate-800">Upcharge for bigger sizes</p>
-                                <p className="text-xs text-slate-400 mt-0.5">Adds extra cost automatically for 2XL and larger sizes at checkout</p>
+                                <p className="text-sm font-semibold text-white">Upcharge for bigger sizes</p>
+                                <p className="text-xs text-graphite-300 mt-0.5">Adds extra cost automatically for 2XL and larger sizes at checkout</p>
                             </div>
                             <button type="button" role="switch" aria-checked={form.upchargeEnabled}
                                 onClick={() => setForm(p => ({ ...p, upchargeEnabled: !p.upchargeEnabled }))}
-                                className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${form.upchargeEnabled ? "bg-brand-600" : "bg-slate-300"}`}>
+                                className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${form.upchargeEnabled ? "bg-signal-cyan" : "bg-white/15"}`}>
                                 <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${form.upchargeEnabled ? "translate-x-5" : ""}`} />
                             </button>
                         </div>
                         {form.upchargeEnabled && (
                             <div className="mt-3 flex items-center gap-2">
-                                <span className="text-sm text-slate-500">Extra charge:</span>
+                                <span className="text-sm text-graphite-300">Extra charge:</span>
                                 <div className="relative w-28">
-                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">$</span>
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-graphite-400 text-sm">$</span>
                                     <input type="number" step="0.01" min="0" value={form.upchargeDollars}
                                         onChange={e => setForm(p => ({ ...p, upchargeDollars:e.target.value }))}
-                                        className="w-full pl-6 pr-2 py-1.5 text-sm border border-slate-200 rounded-lg outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" />
+                                        className="w-full pl-6 pr-2 py-1.5 text-sm bg-white/[0.03] border border-white/10 hover:border-white/20 rounded-md text-white outline-none focus:border-signal-cyan/60 focus:ring-2 focus:ring-signal-cyan/30" />
                                 </div>
-                                <span className="text-xs text-slate-400">for 2XL and up</span>
+                                <span className="text-xs text-graphite-300">for 2XL and up</span>
                             </div>
                         )}
                     </div>
@@ -945,10 +953,10 @@ export default function ProductsPage() {
 
             {/* ── Delete Confirmation Modal ── */}
             <Modal open={!!deleteTarget} onClose={() => setDeleteTarget(null)} title="Delete Product" size="sm">
-                <p className="text-sm text-slate-600 mb-1">
-                    Are you sure you want to delete <span className="font-semibold text-slate-900">{deleteTarget?.name}</span>?
+                <p className="text-sm text-graphite-300 mb-1">
+                    Are you sure you want to delete <span className="font-semibold text-white">{deleteTarget?.name}</span>?
                 </p>
-                <p className="text-xs text-slate-400 mb-4">This cannot be undone.</p>
+                <p className="text-xs text-graphite-300 mb-4">This cannot be undone.</p>
                 <ModalFooter>
                     <Button type="button" variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
                     <Button type="button" variant="danger" loading={deleting} onClick={deleteProduct}>Delete</Button>

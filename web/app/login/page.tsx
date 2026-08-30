@@ -4,6 +4,8 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import Image from "next/image";
 
+const EASE = [0.16, 1, 0.3, 1] as [number, number, number, number];
+
 export default function LoginPage() {
     const router = useRouter();
     const [email, setEmail] = useState("");
@@ -42,25 +44,21 @@ export default function LoginPage() {
     }
 
     return (
-        <div className="login-page min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
-            {/* Animated background orbs */}
-            <div className="login-orb-1 orb w-[500px] h-[500px] opacity-30" />
-            <div className="login-orb-2 orb w-[400px] h-[400px] opacity-20" />
-
+        <div className="console-canvas min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
             <motion.div
                 initial={{ opacity: 0, y: 24, scale: 0.97 }}
                 animate={{ opacity: 1, y: 0,  scale: 1    }}
-                transition={{ duration: 0.4, ease: [0.32, 0.72, 0, 1] }}
+                transition={{ duration: 0.45, ease: EASE }}
                 className="relative w-full max-w-sm z-10"
             >
                 {/* Card */}
-                <div className="login-card rounded-3xl p-8 shadow-modal ring-1 ring-white/20">
+                <div className="console-panel console-panel-glow-cyan rounded-lg p-8">
                     {/* Logo */}
                     <div className="flex flex-col items-center mb-8">
                         <motion.div
                             initial={{ scale: 0.8, opacity: 0 }}
                             animate={{ scale: 1, opacity: 1 }}
-                            transition={{ delay: 0.1, duration: 0.35, ease: [0.32, 0.72, 0, 1] }}
+                            transition={{ delay: 0.1, duration: 0.35, ease: EASE }}
                             className="mb-4 flex justify-center"
                         >
                             <Image
@@ -73,13 +71,16 @@ export default function LoginPage() {
                             />
                         </motion.div>
                         <h1 className="text-lg font-bold text-white text-center leading-snug">Crossroads Custom Apparel</h1>
-                        <p className="login-subtitle text-sm mt-1">Sign in to your dashboard</p>
+                        <p className="text-sm text-graphite-300 mt-1 flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-signal-green animate-signal-pulse" />
+                            Sign in to your dashboard
+                        </p>
                     </div>
 
                     <form onSubmit={handleSubmit} className="space-y-4">
                         {/* Email */}
                         <div>
-                            <label htmlFor="email" className="login-label block text-xs font-semibold mb-1.5">
+                            <label htmlFor="email" className="block text-xs font-semibold text-graphite-200 mb-1.5">
                                 Email address
                             </label>
                             <input
@@ -90,13 +91,13 @@ export default function LoginPage() {
                                 value={email}
                                 onChange={e => setEmail(e.target.value)}
                                 placeholder="you@example.com"
-                                className="login-input w-full rounded-xl px-3.5 py-3 text-sm transition-all duration-200 outline-none"
+                                className="w-full rounded-md px-3.5 py-3 text-sm text-white bg-white/[0.04] border border-white/10 placeholder:text-graphite-500 transition-all duration-200 outline-none focus:bg-white/[0.06] focus:border-signal-cyan/50 focus:ring-2 focus:ring-signal-cyan/15"
                             />
                         </div>
 
                         {/* Password */}
                         <div>
-                            <label htmlFor="password" className="login-label block text-xs font-semibold mb-1.5">
+                            <label htmlFor="password" className="block text-xs font-semibold text-graphite-200 mb-1.5">
                                 Password
                             </label>
                             <div className="relative">
@@ -108,13 +109,13 @@ export default function LoginPage() {
                                     value={password}
                                     onChange={e => setPassword(e.target.value)}
                                     placeholder="••••••••"
-                                    className="login-input w-full rounded-xl px-3.5 py-3 pr-10 text-sm transition-all duration-200 outline-none"
+                                    className="w-full rounded-md px-3.5 py-3 pr-10 text-sm text-white bg-white/[0.04] border border-white/10 placeholder:text-graphite-500 transition-all duration-200 outline-none focus:bg-white/[0.06] focus:border-signal-cyan/50 focus:ring-2 focus:ring-signal-cyan/15"
                                 />
                                 <button
                                     type="button"
                                     aria-label={showPass ? "Hide password" : "Show password"}
                                     onClick={() => setShowPass(v => !v)}
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 login-eye-btn transition-colors"
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-graphite-500 hover:text-graphite-200 transition-colors"
                                 >
                                     {showPass ? (
                                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -135,7 +136,7 @@ export default function LoginPage() {
                             <motion.div
                                 initial={{ opacity: 0, y: -4 }}
                                 animate={{ opacity: 1, y: 0 }}
-                                className="login-error rounded-xl px-4 py-3 text-sm font-medium"
+                                className="rounded-md px-4 py-3 text-sm font-medium bg-signal-red/10 border border-signal-red/25 text-signal-red"
                             >
                                 {error}
                             </motion.div>
@@ -147,7 +148,7 @@ export default function LoginPage() {
                             disabled={loading}
                             whileTap={{ scale: 0.97 }}
                             whileHover={{ y: -1 }}
-                            className="login-btn w-full py-3 rounded-xl text-white text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 mt-2 btn-shine disabled:opacity-60 disabled:cursor-not-allowed"
+                            className="console-sheen w-full py-3 rounded-md text-graphite-950 text-sm font-semibold transition-shadow duration-200 flex items-center justify-center gap-2 mt-2 bg-signal-cyan-gradient shadow-glow-cyan-sm hover:shadow-glow-cyan disabled:opacity-60 disabled:cursor-not-allowed"
                         >
                             {loading && (
                                 <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
@@ -160,7 +161,7 @@ export default function LoginPage() {
                     </form>
                 </div>
 
-                <p className="login-footer text-center text-xs mt-6">
+                <p className="text-center text-xs mt-6 text-graphite-500 font-mono">
                     Crossroads Custom Apparel &mdash; Admin Portal
                 </p>
             </motion.div>

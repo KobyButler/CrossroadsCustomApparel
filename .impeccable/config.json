@@ -1,0 +1,56 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "design-system-color",
+        "value": "rgba(255,255,255,0.08)",
+        "createdAt": "2026-08-30T06:19:56.092Z",
+        "reason": "Claude: intentional hairline border overlay on .console-panel, documented in DESIGN.md Elevation & Depth"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#eaf9ff",
+        "createdAt": "2026-08-30T06:19:56.184Z",
+        "reason": "Claude: intentional near-white cyan-tinted hover/selection text on the console canvas, a tint of signal-cyan not worth a separate named token"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "rgba(255,255,255,0.06)",
+        "createdAt": "2026-08-30T06:19:56.278Z",
+        "reason": "Claude: intentional faint sidebar/panel divider overlay, same white-alpha border language as the 0.08 hairline"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#fff",
+        "createdAt": "2026-08-30T07:04:09.082Z",
+        "reason": "Claude: @media print override forcing the console canvas to plain white paper — sanctioned print exception, documented in the CSS comment above it"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "rgba(255,255,255,0.10)",
+        "createdAt": "2026-08-30T07:04:09.181Z",
+        "reason": "Claude: skeleton-loader shimmer highlight step, part of the documented white-alpha overlay scale (.impeccable/design.json extensions.overlayScale)"
+      },
+      {
+        "rule": "design-system-radius",
+        "value": "9999px",
+        "createdAt": "2026-08-30T07:04:09.284Z",
+        "reason": "Claude: circular ambient glow-blob pseudo-elements (ellipse/radial-gradient orbs), not UI chrome radius; now documented as rounded.full in DESIGN.md"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "rgba(0,0,0,0.5)",
+        "createdAt": "2026-08-30T07:04:09.398Z",
+        "reason": "Claude: .console-panel's documented real two-layer shadow, now recorded as the 'console' shadow in .impeccable/design.json"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "rgba(0,0,0,0.6)",
+        "createdAt": "2026-08-30T07:04:09.499Z",
+        "reason": "Claude: .console-panel's documented real two-layer shadow, now recorded as the 'console' shadow in .impeccable/design.json"
+      }
+    ]
+  }
+}

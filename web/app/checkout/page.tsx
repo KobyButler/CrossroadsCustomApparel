@@ -9,6 +9,10 @@ import { useCart, CartItem } from "@/lib/cart";
 import { computeItemPriceCents } from "@/lib/pricing";
 import { getColorCss } from "@/lib/colors";
 import { StripePaymentForm } from "@/components/storefront/StripePaymentForm";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+
+const EASE = [0.16, 1, 0.3, 1] as [number, number, number, number];
 
 type PaymentMethod = "stripe" | "pickup" | "";
 type ShippingMethod = "SHIP" | "PICKUP" | "";
@@ -119,7 +123,7 @@ export default function CheckoutPage() {
     const grandTotal = subtotalCents + shippingCents;
     const shippingReady = shippingMethod === "PICKUP" || (shippingMethod === "SHIP" && shippingQuote !== null);
 
-    const inputCls = "w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all";
+    const inputCls = "w-full rounded-md border border-white/10 bg-white/[0.03] px-3 py-2.5 text-sm text-white placeholder:text-graphite-500 outline-none hover:border-white/20 focus:border-signal-cyan/60 focus:ring-2 focus:ring-signal-cyan/30 transition-all";
 
     async function handleContinue(e: React.FormEvent) {
         e.preventDefault();
@@ -165,16 +169,15 @@ export default function CheckoutPage() {
     /* ── Empty cart ── */
     if (cart.length === 0 && step === "review") {
         return (
-            <div className="min-h-screen bg-[#f8f7ff] flex items-center justify-center p-4">
-                <motion.div initial={{ opacity:0, scale:0.95 }} animate={{ opacity:1, scale:1 }} className="text-center max-w-md">
-                    <div className="w-16 h-16 bg-white rounded-2xl shadow-card flex items-center justify-center mx-auto mb-4 ring-1 ring-black/5">
-                        <svg className="w-8 h-8 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+            <div className="console-canvas min-h-screen flex items-center justify-center p-4">
+                <motion.div initial={{ opacity:0, scale:0.95 }} animate={{ opacity:1, scale:1 }} transition={{ duration:0.35, ease:EASE }} className="console-panel rounded-lg p-8 text-center max-w-md">
+                    <div className="w-16 h-16 bg-white/[0.05] rounded-lg flex items-center justify-center mx-auto mb-4">
+                        <svg className="w-8 h-8 text-graphite-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
                     </div>
-                    <h1 className="text-xl font-bold text-slate-900 mb-2">Your cart is empty</h1>
-                    <p className="text-sm text-slate-500 mb-5">Browse a group shop to add items to your cart.</p>
-                    <Link href="/shops" className="btn-shine inline-flex items-center gap-2 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-all"
-                        style={{ background:"linear-gradient(135deg,#8b5cf6 0%,#7c3aed 100%)" }}>
-                        Browse Shops
+                    <h1 className="text-xl font-bold text-white mb-2">Your cart is empty</h1>
+                    <p className="text-sm text-graphite-300 mb-5">Browse a group shop to add items to your cart.</p>
+                    <Link href="/shops">
+                        <Button type="button">Browse Shops</Button>
                     </Link>
                 </motion.div>
             </div>
@@ -188,22 +191,22 @@ export default function CheckoutPage() {
         const itemsTotal = submittedGroups.reduce((a, g) => a + g.subtotal, 0);
         const finalTotal = itemsTotal + submittedShipping.cents;
         return (
-            <div className="min-h-screen bg-[#f8f7ff] flex flex-col items-center justify-center p-4">
+            <div className="console-canvas min-h-screen flex flex-col items-center justify-center p-4">
                 <motion.div initial={{ opacity:0, scale:0.93, y:16 }} animate={{ opacity:1, scale:1, y:0 }}
-                    transition={{ duration:0.4, ease:[0.32,0.72,0,1] }}
-                    className="bg-white rounded-3xl shadow-xl ring-1 ring-black/5 p-8 sm:p-10 max-w-lg w-full text-center">
+                    transition={{ duration:0.4, ease:EASE }}
+                    className="console-panel rounded-lg shadow-console-hover p-8 sm:p-10 max-w-lg w-full text-center">
                     <motion.div initial={{ scale:0 }} animate={{ scale:1 }}
                         transition={{ delay:0.2, type:"spring", stiffness:260, damping:20 }}
-                        className={`w-16 h-16 ${isOffline ? "bg-amber-100" : "bg-emerald-100"} rounded-full flex items-center justify-center mx-auto mb-5`}>
+                        className={`w-16 h-16 ${isOffline ? "bg-signal-amber/15" : "bg-signal-green/15"} rounded-full flex items-center justify-center mx-auto mb-5`}>
                         {isOffline ? (
-                            <svg className="w-8 h-8 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+                            <svg className="w-8 h-8 text-signal-amber" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
                         ) : (
-                            <svg className="w-8 h-8 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>
+                            <svg className="w-8 h-8 text-signal-green" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>
                         )}
                     </motion.div>
-                    <h1 className="text-2xl font-bold text-slate-900 mb-2">{isOffline ? "Order confirmed!" : "Payment received!"}</h1>
-                    <p className="text-sm text-slate-500 mb-5">
-                        Thanks, <strong className="text-slate-700">{form.customerName}</strong>!{" "}
+                    <h1 className="text-2xl font-bold text-white mb-2">{isOffline ? "Order confirmed!" : "Payment received!"}</h1>
+                    <p className="text-sm text-graphite-300 mb-5">
+                        Thanks, <strong className="text-graphite-100">{form.customerName}</strong>!{" "}
                         {isPickup
                             ? `Your order will be ready for pickup from ${shopNames.join(" and ")}. ${isOffline ? `Please bring cash or a check for ${fmt(finalTotal)} when you pick it up.` : "We'll let you know when it's ready."}`
                             : isOffline
@@ -211,36 +214,36 @@ export default function CheckoutPage() {
                                 : "Your payment was successful and your order is being processed and shipped to you."}
                     </p>
 
-                    <div className="bg-slate-50 rounded-xl px-4 py-3 mb-5 text-left space-y-2">
+                    <div className="bg-white/[0.04] border border-white/[0.06] rounded-md px-4 py-3 mb-5 text-left space-y-2">
                         {submittedGroups.length > 1 && (
                             <>
-                                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Itemized by shop</p>
+                                <p className="text-xs font-bold text-graphite-300 uppercase tracking-wider">Itemized by shop</p>
                                 {submittedGroups.map(g => (
                                     <div key={g.shopSlug} className="flex justify-between text-sm">
-                                        <span className="text-slate-700 font-medium">{g.shopName}</span>
-                                        <span className="text-slate-900 font-bold">{fmt(g.subtotal)}</span>
+                                        <span className="text-graphite-100 font-medium">{g.shopName}</span>
+                                        <span className="text-white font-bold font-mono tabular-nums">{fmt(g.subtotal)}</span>
                                     </div>
                                 ))}
-                                <div className="border-t border-slate-200 my-1" />
+                                <div className="border-t border-white/[0.08] my-1" />
                             </>
                         )}
                         <div className="flex justify-between text-sm">
-                            <span className="text-slate-500">{isPickup ? "Pickup" : "Shipping"}</span>
-                            <span className="text-slate-900 font-semibold">{isPickup ? "Free" : fmt(submittedShipping.cents)}</span>
+                            <span className="text-graphite-300">{isPickup ? "Pickup" : "Shipping"}</span>
+                            <span className="text-white font-semibold font-mono tabular-nums">{isPickup ? "Free" : fmt(submittedShipping.cents)}</span>
                         </div>
-                        <div className="flex justify-between text-sm font-bold pt-1 border-t border-slate-200">
-                            <span className="text-slate-700">Total</span>
-                            <span className="text-slate-900">{fmt(finalTotal)}</span>
+                        <div className="flex justify-between text-sm font-bold pt-1 border-t border-white/[0.08]">
+                            <span className="text-graphite-100">Total</span>
+                            <span className="text-white font-mono tabular-nums">{fmt(finalTotal)}</span>
                         </div>
                     </div>
 
-                    <div className="bg-slate-50 rounded-xl px-4 py-3 text-sm text-slate-600 mb-5">
-                        Confirmation: <code className="font-mono font-bold text-slate-800">#{reference.slice(-8).toUpperCase()}</code>
+                    <div className="bg-white/[0.04] border border-white/[0.06] rounded-md px-4 py-3 text-sm text-graphite-300 mb-5">
+                        Confirmation: <code className="font-mono font-bold text-signal-cyan-bright">#{reference.slice(-8).toUpperCase()}</code>
                     </div>
-                    <p className="text-xs text-slate-400 mb-6">A confirmation email will be sent to {form.customerEmail}</p>
-                    <div className="border-t border-slate-100 pt-5 space-y-4">
+                    <p className="text-xs text-graphite-300 mb-6">A confirmation email will be sent to {form.customerEmail}</p>
+                    <div className="border-t border-white/[0.08] pt-5 space-y-4">
                         <Image src="/logo.png" alt="Crossroads Custom Apparel" width={120} height={48} className="mx-auto object-contain opacity-60" />
-                        <Link href="/shops" className="text-sm text-violet-600 hover:text-violet-800 font-semibold">← Back to all shops</Link>
+                        <Link href="/shops" className="text-sm text-signal-cyan hover:text-signal-cyan-bright font-semibold">← Back to all shops</Link>
                     </div>
                 </motion.div>
             </div>
@@ -248,11 +251,11 @@ export default function CheckoutPage() {
     }
 
     return (
-        <div className="min-h-screen flex flex-col" style={{ background: "#f4f3fb" }}>
+        <div className="console-canvas min-h-screen flex flex-col">
             {/* Header */}
-            <div className="sticky top-0 z-20 bg-white/90 backdrop-blur-sm border-b border-slate-200 shadow-sm">
+            <div className="sticky top-0 z-20 bg-graphite-950/85 backdrop-blur-md border-b border-white/[0.06]">
                 <div className="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-                    <Link href="/shops" className="text-sm font-medium text-slate-500 hover:text-slate-700 flex items-center gap-1 transition-colors">
+                    <Link href="/shops" className="text-sm font-medium text-graphite-300 hover:text-white flex items-center gap-1 transition-colors">
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/></svg>
                         {step === "payment" ? "Edit order" : "Continue shopping"}
                     </Link>
@@ -261,17 +264,19 @@ export default function CheckoutPage() {
             </div>
 
             <main className="flex-1 max-w-5xl mx-auto w-full px-4 sm:px-6 py-8">
-                <h1 className="text-2xl font-bold text-slate-900 mb-1">Checkout</h1>
-                <p className="text-sm text-slate-500 mb-6">
-                    {itemCount} item{itemCount !== 1 ? "s" : ""} {groups.length > 1 ? `across ${groups.length} shops` : `from ${groups[0]?.shopName ?? "your shop"}`}
-                </p>
+                <motion.div initial={{ opacity:0, y:-8 }} animate={{ opacity:1, y:0 }} transition={{ duration:0.4, ease:EASE }}>
+                    <h1 className="page-title">Checkout</h1>
+                    <p className="page-subtitle mb-6">
+                        {itemCount} item{itemCount !== 1 ? "s" : ""} {groups.length > 1 ? `across ${groups.length} shops` : `from ${groups[0]?.shopName ?? "your shop"}`}
+                    </p>
+                </motion.div>
 
                 {step === "review" && (
-                    <motion.div initial={{ opacity:0, x:16 }} animate={{ opacity:1, x:0 }} transition={{ duration:0.3, ease:[0.32,0.72,0,1] }}
+                    <motion.div initial={{ opacity:0, x:16 }} animate={{ opacity:1, x:0 }} transition={{ duration:0.3, ease:EASE }}
                         className="grid grid-cols-1 lg:grid-cols-5 gap-6">
                         <form onSubmit={handleContinue} className="lg:col-span-3 space-y-4">
-                            <div className="bg-white rounded-2xl ring-1 ring-black/5 p-5 space-y-4">
-                                <h2 className="text-sm font-bold text-slate-900">Contact information</h2>
+                            <Card className="p-5 space-y-4">
+                                <h2 className="text-sm font-bold text-white">Contact information</h2>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                     <div>
                                         <label className="field-label" htmlFor="cust-name">Full name</label>
@@ -284,162 +289,163 @@ export default function CheckoutPage() {
                                             value={form.customerEmail} onChange={e => setForm(p => ({ ...p, customerEmail:e.target.value }))} />
                                     </div>
                                 </div>
-                            </div>
+                            </Card>
 
-                            <div className="bg-white rounded-2xl ring-1 ring-black/5 p-5">
-                                <h2 className="text-sm font-bold text-slate-900 mb-3">How do you want to get your order?</h2>
+                            <Card className="p-5">
+                                <h2 className="text-sm font-bold text-white mb-3">How do you want to get your order?</h2>
                                 <div className="space-y-2">
-                                    <label className={`flex items-center gap-3 p-3.5 rounded-xl border-2 transition-all duration-150 ${!shippingAllowed ? "opacity-50 cursor-not-allowed border-slate-200" : shippingMethod === "SHIP" ? "border-violet-500 bg-violet-50 cursor-pointer" : "border-slate-200 hover:border-slate-300 cursor-pointer"}`}>
-                                        <input type="radio" name="shippingMethod" value="SHIP" className="accent-violet-600" disabled={!shippingAllowed}
+                                    <label className={`flex items-center gap-3 p-3.5 rounded-md border-2 transition-all duration-150 ${!shippingAllowed ? "opacity-50 cursor-not-allowed border-white/10" : shippingMethod === "SHIP" ? "border-signal-cyan bg-signal-cyan/10 cursor-pointer" : "border-white/10 hover:border-white/20 cursor-pointer"}`}>
+                                        <input type="radio" name="shippingMethod" value="SHIP" className="accent-signal-cyan" disabled={!shippingAllowed}
                                             checked={shippingMethod === "SHIP"} onChange={() => setShippingMethod("SHIP")} />
                                         <div className="flex-1">
-                                            <p className="text-sm font-semibold text-slate-900">Ship to you</p>
-                                            <p className="text-xs text-slate-400 mt-0.5">
+                                            <p className="text-sm font-semibold text-white">Ship to you</p>
+                                            <p className="text-xs text-graphite-300 mt-0.5">
                                                 {shippingAllowed ? "We'll calculate shipping based on your address" : `Not available — ${shopsWithoutShipping.join(", ")} ${shopsWithoutShipping.length === 1 ? "offers" : "offer"} pickup only`}
                                             </p>
                                         </div>
-                                        <span className="text-lg">📦</span>
+                                        <svg className="w-5 h-5 text-graphite-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/></svg>
                                     </label>
-                                    <label className={`flex items-center gap-3 p-3.5 rounded-xl border-2 cursor-pointer transition-all duration-150 ${shippingMethod === "PICKUP" ? "border-emerald-500 bg-emerald-50" : "border-slate-200 hover:border-slate-300"}`}>
-                                        <input type="radio" name="shippingMethod" value="PICKUP" className="accent-emerald-600"
+                                    <label className={`flex items-center gap-3 p-3.5 rounded-md border-2 cursor-pointer transition-all duration-150 ${shippingMethod === "PICKUP" ? "border-signal-green bg-signal-green/10" : "border-white/10 hover:border-white/20"}`}>
+                                        <input type="radio" name="shippingMethod" value="PICKUP" className="accent-signal-green"
                                             checked={shippingMethod === "PICKUP"} onChange={() => setShippingMethod("PICKUP")} />
                                         <div className="flex-1">
-                                            <p className="text-sm font-semibold text-slate-900">Pick up — Free</p>
-                                            <p className="text-xs text-slate-400 mt-0.5">Pick up from {shopNames.join(" / ")} once ready — no shipping cost</p>
+                                            <p className="text-sm font-semibold text-white">Pick up — Free</p>
+                                            <p className="text-xs text-graphite-300 mt-0.5">Pick up from {shopNames.join(" / ")} once ready — no shipping cost</p>
                                         </div>
-                                        <span className="text-lg">🤝</span>
+                                        <svg className="w-5 h-5 text-graphite-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
                                     </label>
                                 </div>
-                            </div>
+                            </Card>
 
                             {shippingMethod === "SHIP" && (
-                                <motion.div initial={{ opacity:0, height:0 }} animate={{ opacity:1, height:"auto" }}
-                                    className="bg-white rounded-2xl ring-1 ring-black/5 p-5 space-y-4">
-                                    <h2 className="text-sm font-bold text-slate-900">Shipping address</h2>
-                                    <div>
-                                        <label className="field-label" htmlFor="addr1">Street address</label>
-                                        <input id="addr1" required className={inputCls} placeholder="123 Main St"
-                                            value={form.shipAddress1} onChange={e => setForm(p => ({ ...p, shipAddress1:e.target.value }))} />
-                                    </div>
-                                    <div>
-                                        <label className="field-label" htmlFor="addr2">Apartment, suite, etc. (optional)</label>
-                                        <input id="addr2" className={inputCls} placeholder="Apt 4B"
-                                            value={form.shipAddress2} onChange={e => setForm(p => ({ ...p, shipAddress2:e.target.value }))} />
-                                    </div>
-                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                                        <div className="col-span-2 sm:col-span-1">
-                                            <label className="field-label" htmlFor="city">City</label>
-                                            <input id="city" required className={inputCls} placeholder="Springfield"
-                                                value={form.shipCity} onChange={e => setForm(p => ({ ...p, shipCity:e.target.value }))} />
+                                <motion.div initial={{ opacity:0, height:0 }} animate={{ opacity:1, height:"auto" }}>
+                                    <Card className="p-5 space-y-4">
+                                        <h2 className="text-sm font-bold text-white">Shipping address</h2>
+                                        <div>
+                                            <label className="field-label" htmlFor="addr1">Street address</label>
+                                            <input id="addr1" required className={inputCls} placeholder="123 Main St"
+                                                value={form.shipAddress1} onChange={e => setForm(p => ({ ...p, shipAddress1:e.target.value }))} />
                                         </div>
                                         <div>
-                                            <label className="field-label" htmlFor="state">State</label>
-                                            <input id="state" required maxLength={2} className={inputCls} placeholder="IL"
-                                                value={form.shipState} onChange={e => setForm(p => ({ ...p, shipState:e.target.value.toUpperCase() }))} />
+                                            <label className="field-label" htmlFor="addr2">Apartment, suite, etc. (optional)</label>
+                                            <input id="addr2" className={inputCls} placeholder="Apt 4B"
+                                                value={form.shipAddress2} onChange={e => setForm(p => ({ ...p, shipAddress2:e.target.value }))} />
                                         </div>
-                                        <div>
-                                            <label className="field-label" htmlFor="zip">ZIP</label>
-                                            <input id="zip" required className={inputCls} placeholder="62701"
-                                                value={form.shipZip} onChange={e => setForm(p => ({ ...p, shipZip:e.target.value }))} />
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                            <div className="col-span-2 sm:col-span-1">
+                                                <label className="field-label" htmlFor="city">City</label>
+                                                <input id="city" required className={inputCls} placeholder="Springfield"
+                                                    value={form.shipCity} onChange={e => setForm(p => ({ ...p, shipCity:e.target.value }))} />
+                                            </div>
+                                            <div>
+                                                <label className="field-label" htmlFor="state">State</label>
+                                                <input id="state" required maxLength={2} className={inputCls} placeholder="IL"
+                                                    value={form.shipState} onChange={e => setForm(p => ({ ...p, shipState:e.target.value.toUpperCase() }))} />
+                                            </div>
+                                            <div>
+                                                <label className="field-label" htmlFor="zip">ZIP</label>
+                                                <input id="zip" required className={inputCls} placeholder="62701"
+                                                    value={form.shipZip} onChange={e => setForm(p => ({ ...p, shipZip:e.target.value }))} />
+                                            </div>
                                         </div>
-                                    </div>
-                                    {shippingLoading && (
-                                        <p className="text-xs text-slate-400 flex items-center gap-1.5">
-                                            <span className="w-3 h-3 border-2 border-slate-300 border-t-transparent rounded-full animate-spin inline-block" />
-                                            Calculating shipping…
-                                        </p>
-                                    )}
-                                    {!shippingLoading && shippingQuote && (
-                                        <p className="text-xs text-emerald-600 font-medium">
-                                            ✓ Shipping: {fmt(shippingQuote.cents)}{shippingQuote.service ? ` via ${shippingQuote.service}` : ""}{shippingQuote.estimated ? " (estimate)" : ""}
-                                        </p>
-                                    )}
+                                        {shippingLoading && (
+                                            <p className="text-xs text-graphite-300 flex items-center gap-1.5">
+                                                <span className="w-3 h-3 border-2 border-white/20 border-t-transparent rounded-full animate-spin inline-block" />
+                                                Calculating shipping…
+                                            </p>
+                                        )}
+                                        {!shippingLoading && shippingQuote && (
+                                            <p className="text-xs text-signal-green font-medium flex items-center gap-1.5">
+                                                <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>
+                                                Shipping: {fmt(shippingQuote.cents)}{shippingQuote.service ? ` via ${shippingQuote.service}` : ""}{shippingQuote.estimated ? " (estimate)" : ""}
+                                            </p>
+                                        )}
+                                    </Card>
                                 </motion.div>
                             )}
 
                             {shippingMethod === "PICKUP" && (
-                                <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
-                                    <p className="text-xs text-emerald-800">You'll pick up your order from <strong>{shopNames.join(", ")}</strong> — we'll email you when it's ready.</p>
+                                <div className="bg-signal-green/10 border border-signal-green/25 rounded-md px-4 py-3">
+                                    <p className="text-xs text-graphite-100">You'll pick up your order from <strong className="text-signal-green">{shopNames.join(", ")}</strong> — we'll email you when it's ready.</p>
                                 </div>
                             )}
 
                             {shippingMethod && (
-                                <div className="bg-white rounded-2xl ring-1 ring-black/5 p-5">
-                                    <h2 className="text-sm font-bold text-slate-900 mb-3">Payment method</h2>
+                                <Card className="p-5">
+                                    <h2 className="text-sm font-bold text-white mb-3">Payment method</h2>
                                     <div className="space-y-2">
-                                        <label className={`flex items-center gap-3 p-3.5 rounded-xl border-2 cursor-pointer transition-all duration-150 ${paymentMethod === "stripe" ? "border-violet-500 bg-violet-50" : "border-slate-200 hover:border-slate-300"}`}>
-                                            <input type="radio" name="paymentMethod" value="stripe" className="accent-violet-600"
+                                        <label className={`flex items-center gap-3 p-3.5 rounded-md border-2 cursor-pointer transition-all duration-150 ${paymentMethod === "stripe" ? "border-signal-cyan bg-signal-cyan/10" : "border-white/10 hover:border-white/20"}`}>
+                                            <input type="radio" name="paymentMethod" value="stripe" className="accent-signal-cyan"
                                                 checked={paymentMethod === "stripe"} onChange={() => setPaymentMethod("stripe")} />
                                             <div className="flex-1">
-                                                <p className="text-sm font-semibold text-slate-900">Card / Apple Pay / Google Pay</p>
-                                                <p className="text-xs text-slate-400 mt-0.5">Pay securely online with card or digital wallet</p>
+                                                <p className="text-sm font-semibold text-white">Card / Apple Pay / Google Pay</p>
+                                                <p className="text-xs text-graphite-300 mt-0.5">Pay securely online with card or digital wallet</p>
                                             </div>
                                         </label>
                                         {shippingMethod === "PICKUP" && (
-                                            <label className={`flex items-center gap-3 p-3.5 rounded-xl border-2 cursor-pointer transition-all duration-150 ${paymentMethod === "pickup" ? "border-emerald-500 bg-emerald-50" : "border-slate-200 hover:border-slate-300"}`}>
-                                                <input type="radio" name="paymentMethod" value="pickup" className="accent-emerald-600"
+                                            <label className={`flex items-center gap-3 p-3.5 rounded-md border-2 cursor-pointer transition-all duration-150 ${paymentMethod === "pickup" ? "border-signal-green bg-signal-green/10" : "border-white/10 hover:border-white/20"}`}>
+                                                <input type="radio" name="paymentMethod" value="pickup" className="accent-signal-green"
                                                     checked={paymentMethod === "pickup"} onChange={() => setPaymentMethod("pickup")} />
                                                 <div className="flex-1">
-                                                    <p className="text-sm font-semibold text-slate-900">Pay at pickup</p>
-                                                    <p className="text-xs text-slate-400 mt-0.5">Pay with cash or check when you collect your order</p>
+                                                    <p className="text-sm font-semibold text-white">Pay at pickup</p>
+                                                    <p className="text-xs text-graphite-300 mt-0.5">Pay with cash or check when you collect your order</p>
                                                 </div>
-                                                <span className="text-lg">💵</span>
+                                                <svg className="w-5 h-5 text-graphite-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V6m0 10v2m9-6a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                                             </label>
                                         )}
                                     </div>
-                                </div>
+                                </Card>
                             )}
 
-                            <div className="bg-white rounded-2xl ring-1 ring-black/5 p-5">
-                                <h2 className="text-sm font-bold text-slate-900 mb-3">Special Instructions / Comments</h2>
+                            <Card className="p-5">
+                                <h2 className="text-sm font-bold text-white mb-3">Special Instructions / Comments</h2>
                                 <textarea aria-label="Special instructions or comments" rows={3}
                                     placeholder="Anything we should know? e.g. delivery notes, group leader name, design requests…"
                                     value={form.specialInstructions}
                                     onChange={e => setForm(p => ({ ...p, specialInstructions:e.target.value }))}
                                     className={`${inputCls} resize-none`} />
-                            </div>
+                            </Card>
 
-                            <div className="bg-white rounded-2xl ring-1 ring-black/5 p-5">
-                                <h2 className="text-sm font-bold text-slate-900 mb-3">Discount code</h2>
+                            <Card className="p-5">
+                                <h2 className="text-sm font-bold text-white mb-3">Discount code</h2>
                                 <input aria-label="Discount code" className={`${inputCls} uppercase`} placeholder="Enter code"
                                     value={discountCode} onChange={e => setDiscountCode(e.target.value.toUpperCase())} />
-                            </div>
+                            </Card>
 
                             {error && (
                                 <motion.div initial={{ opacity:0, y:-4 }} animate={{ opacity:1, y:0 }}
-                                    className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm font-medium text-red-700">
+                                    className="bg-signal-red/10 border border-signal-red/25 rounded-md px-4 py-3 text-sm font-medium text-signal-red">
                                     {error}
                                 </motion.div>
                             )}
 
-                            <motion.button type="submit" disabled={placing || !paymentMethod || !shippingMethod || !shippingReady} whileHover={{ y:-1 }} whileTap={{ scale:0.98 }}
-                                className="btn-shine w-full text-white font-semibold py-3.5 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-60"
-                                style={{ background:"linear-gradient(135deg,#8b5cf6 0%,#7c3aed 100%)", boxShadow:"0 6px 24px rgba(124,58,237,0.4)" }}>
+                            <Button type="submit" disabled={placing || !paymentMethod || !shippingMethod || !shippingReady}
+                                loading={placing} size="lg" className="w-full">
                                 {placing ? (
-                                    <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"/>Working…</>
+                                    "Working…"
                                 ) : !shippingMethod ? (
-                                    <>Select how you'll get your order</>
+                                    "Select how you'll get your order"
                                 ) : !shippingReady ? (
-                                    <>Enter your address to calculate shipping</>
+                                    "Enter your address to calculate shipping"
                                 ) : paymentMethod === "stripe" ? (
-                                    <>Continue to payment · {fmt(grandTotal)}</>
+                                    `Continue to payment · ${fmt(grandTotal)}`
                                 ) : paymentMethod ? (
-                                    <>Place order · {fmt(grandTotal)}</>
-                                ) : <>Select a payment method</>}
-                            </motion.button>
+                                    `Place order · ${fmt(grandTotal)}`
+                                ) : "Select a payment method"}
+                            </Button>
                         </form>
 
                         {/* Order summary — itemized by shop */}
                         <div className="lg:col-span-2">
-                            <div className="bg-white rounded-2xl ring-1 ring-black/5 p-5 sticky top-20 space-y-5">
-                                <h2 className="text-sm font-bold text-slate-900">
-                                    Order summary <span className="font-normal text-slate-400">({itemCount} item{itemCount!==1?"s":""})</span>
+                            <Card className="p-5 sticky top-20 space-y-5">
+                                <h2 className="text-sm font-bold text-white">
+                                    Order summary <span className="font-normal text-graphite-300">({itemCount} item{itemCount!==1?"s":""})</span>
                                 </h2>
                                 {groups.map(g => (
                                     <div key={g.shopSlug}>
                                         <div className="flex items-center justify-between mb-2">
-                                            <p className="text-xs font-bold text-brand-600 uppercase tracking-wider">{g.shopName}</p>
-                                            <p className="text-xs font-semibold text-slate-500">{fmt(g.subtotal)}</p>
+                                            <p className="text-xs font-bold text-signal-cyan uppercase tracking-wider">{g.shopName}</p>
+                                            <p className="text-xs font-semibold text-graphite-300 font-mono tabular-nums">{fmt(g.subtotal)}</p>
                                         </div>
                                         <div className="space-y-3">
                                             {g.items.map((item) => {
@@ -447,10 +453,10 @@ export default function CheckoutPage() {
                                                 return (
                                                     <div key={idx} className="flex items-start gap-3">
                                                         <div className="flex-1 min-w-0">
-                                                            <p className="text-sm font-semibold text-slate-900 truncate">{item.name}</p>
-                                                            <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-1">
+                                                            <p className="text-sm font-semibold text-white truncate">{item.name}</p>
+                                                            <p className="text-xs text-graphite-300 mt-0.5 flex items-center gap-1">
                                                                 {item.color && (
-                                                                    <span className="w-2.5 h-2.5 rounded-full border border-black/10 inline-block"
+                                                                    <span className="w-2.5 h-2.5 rounded-full border border-white/15 inline-block"
                                                                         style={{ backgroundColor: getColorCss(item.color) }} />
                                                                 )}
                                                                 {[item.size, item.color].filter(Boolean).join(" · ")}
@@ -458,13 +464,13 @@ export default function CheckoutPage() {
                                                         </div>
                                                         <div className="flex items-center gap-1.5 shrink-0">
                                                             <button type="button" onClick={() => updateQty(idx, item.quantity-1)}
-                                                                className="w-6 h-6 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center text-sm font-bold transition-colors">−</button>
-                                                            <span className="text-sm font-semibold text-slate-900 w-4 text-center">{item.quantity}</span>
+                                                                className="w-6 h-6 rounded-md bg-white/[0.06] hover:bg-white/[0.10] text-graphite-100 flex items-center justify-center text-sm font-bold transition-colors">−</button>
+                                                            <span className="text-sm font-semibold text-white w-4 text-center font-mono tabular-nums">{item.quantity}</span>
                                                             <button type="button" onClick={() => updateQty(idx, item.quantity+1)}
-                                                                className="w-6 h-6 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center text-sm font-bold transition-colors">+</button>
+                                                                className="w-6 h-6 rounded-md bg-white/[0.06] hover:bg-white/[0.10] text-graphite-100 flex items-center justify-center text-sm font-bold transition-colors">+</button>
                                                         </div>
                                                         <button type="button" title="Remove" aria-label="Remove item" onClick={() => removeItem(idx)}
-                                                            className="text-slate-300 hover:text-red-500 transition-colors shrink-0">
+                                                            className="text-graphite-500 hover:text-signal-red transition-colors shrink-0">
                                                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
                                                         </button>
                                                     </div>
@@ -473,31 +479,31 @@ export default function CheckoutPage() {
                                         </div>
                                     </div>
                                 ))}
-                                <div className="border-t border-slate-100 pt-4 space-y-2">
-                                    <div className="flex justify-between text-sm text-slate-500">
-                                        <span>Subtotal</span><span className="font-medium text-slate-900">{fmt(subtotalCents)}</span>
+                                <div className="border-t border-white/[0.08] pt-4 space-y-2">
+                                    <div className="flex justify-between text-sm text-graphite-300">
+                                        <span>Subtotal</span><span className="font-medium text-white font-mono tabular-nums">{fmt(subtotalCents)}</span>
                                     </div>
-                                    <div className="flex justify-between text-sm text-slate-500">
+                                    <div className="flex justify-between text-sm text-graphite-300">
                                         <span>{shippingMethod === "PICKUP" ? "Pickup" : "Shipping"}</span>
                                         {shippingMethod === "PICKUP" ? (
-                                            <span className="text-emerald-600 font-semibold">Free</span>
+                                            <span className="text-signal-green font-semibold">Free</span>
                                         ) : shippingMethod === "SHIP" ? (
                                             shippingLoading ? (
-                                                <span className="text-slate-400 text-xs">Calculating…</span>
+                                                <span className="text-graphite-300 text-xs">Calculating…</span>
                                             ) : shippingQuote ? (
-                                                <span className="font-medium text-slate-900">{fmt(shippingQuote.cents)}</span>
+                                                <span className="font-medium text-white font-mono tabular-nums">{fmt(shippingQuote.cents)}</span>
                                             ) : (
-                                                <span className="text-slate-400 text-xs">Enter address</span>
+                                                <span className="text-graphite-300 text-xs">Enter address</span>
                                             )
                                         ) : (
-                                            <span className="text-slate-400 text-xs">Select an option</span>
+                                            <span className="text-graphite-300 text-xs">Select an option</span>
                                         )}
                                     </div>
-                                    <div className="flex justify-between font-bold text-slate-900 pt-2 border-t border-slate-100 text-base">
-                                        <span>Total</span><span>{fmt(grandTotal)}</span>
+                                    <div className="flex justify-between font-bold text-white pt-2 border-t border-white/[0.08] text-base">
+                                        <span>Total</span><span className="font-mono tabular-nums">{fmt(grandTotal)}</span>
                                     </div>
                                 </div>
-                            </div>
+                            </Card>
                         </div>
                     </motion.div>
                 )}
@@ -505,8 +511,22 @@ export default function CheckoutPage() {
                 {step === "payment" && stripeClientSecret && (
                     <motion.div initial={{ opacity:0, x:16 }} animate={{ opacity:1, x:0 }} transition={{ duration:0.3 }}
                         className="max-w-lg mx-auto">
-                        <h2 className="text-lg font-bold text-slate-900 mb-4">Complete your payment</h2>
-                        <Elements stripe={stripePromise} options={{ clientSecret: stripeClientSecret, appearance: { theme:"stripe", variables: { colorPrimary:"#7c3aed" } } }}>
+                        <h2 className="text-lg font-bold text-white mb-4">Complete your payment</h2>
+                        <Elements stripe={stripePromise} options={{
+                            clientSecret: stripeClientSecret,
+                            appearance: {
+                                theme: "night",
+                                variables: {
+                                    colorPrimary: "#33e1ff",
+                                    colorBackground: "#12151b",
+                                    colorText: "#e3e5e9",
+                                    colorTextSecondary: "#9aa0ac",
+                                    colorDanger: "#ff5c5c",
+                                    fontFamily: "IBM Plex Sans, system-ui, sans-serif",
+                                    borderRadius: "8px",
+                                }
+                            }
+                        }}>
                             <StripePaymentForm totalCents={grandTotal}
                                 onSuccess={() => { clearAll(); setStep("done"); }}
                                 onBack={() => setStep("review")} />

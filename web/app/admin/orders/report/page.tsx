@@ -10,6 +10,8 @@ import { ZoomableImage } from "@/components/ui/zoomable-image";
 import { motion } from "framer-motion";
 import { getColorCss } from "@/lib/colors";
 
+const EASE = [0.16, 1, 0.3, 1] as [number, number, number, number];
+
 type Shop = { id: string; name: string };
 type ReportLine = {
     vendor: string; vendorStyle: string; image: string | null;
@@ -189,7 +191,10 @@ export default function OrderReportPage() {
 
     return (
         <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 no-print">
+            <motion.div
+                initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease: EASE }}
+                className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 no-print"
+            >
                 <div>
                     <h1 className="page-title">Order Report</h1>
                     <p className="page-subtitle">See how many of each product you need to order, and place vendor orders directly</p>
@@ -197,12 +202,12 @@ export default function OrderReportPage() {
                 <div className="flex gap-2.5">
                     <Button variant="outline" onClick={printReport}>Print</Button>
                 </div>
-            </div>
+            </motion.div>
 
-            <div className="flex items-center gap-1 border-b border-slate-200 no-print">
+            <div className="flex items-center gap-1 border-b border-white/[0.06] no-print">
                 {(["place", "history"] as const).map(v => (
                     <button key={v} type="button" onClick={() => setView(v)}
-                        className={`relative px-4 py-2.5 text-sm font-medium transition-colors -mb-px ${view === v ? "text-brand-700 border-b-2 border-brand-600" : "text-slate-500 hover:text-slate-700 border-b-2 border-transparent"}`}>
+                        className={`relative px-4 py-2.5 text-sm font-medium transition-colors -mb-px ${view === v ? "text-signal-cyan border-b-2 border-signal-cyan" : "text-graphite-300 hover:text-graphite-100 border-b-2 border-transparent"}`}>
                         {v === "place" ? "Place Orders" : "SanMar Order History"}
                     </button>
                 ))}
@@ -221,9 +226,9 @@ export default function OrderReportPage() {
             </div>
 
             {shipTo && !shipTo.configured && (
-                <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 no-print">
-                    <svg className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
-                    <p className="text-xs text-amber-800">Ship-to address isn&apos;t set yet — placing a real vendor order is disabled until <code className="font-mono">BUSINESS_ADDRESS1/CITY/STATE/ZIP</code> are set in the server environment.</p>
+                <div className="flex items-start gap-2 bg-signal-amber/[0.08] border border-signal-amber/25 rounded-lg px-4 py-3 no-print">
+                    <svg className="w-4 h-4 text-signal-amber mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                    <p className="text-xs text-graphite-100">Ship-to address isn&apos;t set yet — placing a real vendor order is disabled until <code className="font-mono text-graphite-300">BUSINESS_ADDRESS1/CITY/STATE/ZIP</code> are set in the server environment.</p>
                 </div>
             )}
 
@@ -236,22 +241,22 @@ export default function OrderReportPage() {
             </div>
 
             {loading ? (
-                <div className="bg-white rounded-2xl ring-1 ring-black/5 shadow-card p-8 space-y-3">
-                    {[1,2,3].map(i => <div key={i} className="animate-pulse h-4 bg-slate-100 rounded" />)}
+                <div className="console-panel rounded-lg p-8 space-y-3 print:hidden">
+                    {[1,2,3].map(i => <div key={i} className="skeleton h-4" />)}
                 </div>
             ) : !report || report.lines.length === 0 ? (
-                <div className="bg-white rounded-2xl ring-1 ring-black/5 shadow-card flex flex-col items-center justify-center py-16 text-slate-300">
+                <div className="console-panel rounded-lg flex flex-col items-center justify-center py-16 text-graphite-500 print:hidden">
                     <svg className="w-12 h-12 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17V7a2 2 0 012-2h6.5L21 9v8a2 2 0 01-2 2H11a2 2 0 01-2-2z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 7v10a2 2 0 002 2h9"/></svg>
-                    <p className="text-sm text-slate-400 font-medium">Nothing to order</p>
-                    <p className="text-xs text-slate-300 mt-0.5">No {status.toLowerCase()} orders match this selection</p>
+                    <p className="text-sm text-graphite-300 font-medium">Nothing to order</p>
+                    <p className="text-xs text-graphite-500 mt-0.5">No {status.toLowerCase()} orders match this selection</p>
                 </div>
             ) : (
                 <div className="space-y-6">
-                    <p className="text-sm text-slate-500 no-print">
+                    <p className="text-sm text-graphite-300 no-print">
                         {report.orderCount} order{report.orderCount !== 1 ? "s" : ""} · generated {new Date(report.generatedAt).toLocaleString()}
                     </p>
 
-                    {vendors.map(vendor => {
+                    {vendors.map((vendor, vIdx) => {
                         const lines = report.byVendor[vendor];
                         const totalQty = lines.reduce((a, l) => a + l.quantity, 0);
                         const alreadyOrderedCount = report.alreadyOrdered[vendor]?.length ?? 0;
@@ -264,11 +269,12 @@ export default function OrderReportPage() {
 
                         return (
                             <motion.div key={vendor} initial={{ opacity:0, y:8 }} animate={{ opacity:1, y:0 }}
-                                className="bg-white rounded-2xl ring-1 ring-black/5 shadow-card overflow-hidden">
-                                <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+                                transition={{ duration: 0.35, ease: EASE, delay: vIdx * 0.05 }}
+                                className="console-panel rounded-lg overflow-hidden print:bg-white print:border print:border-slate-200 print:shadow-none print:rounded-none">
+                                <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06] print:border-slate-100">
                                     <div>
-                                        <h2 className="text-sm font-bold text-slate-900">{VENDOR_LABELS[vendor] ?? vendor}</h2>
-                                        <p className="text-xs text-slate-400">{lines.length} line item{lines.length !== 1 ? "s" : ""} · {totalQty} unit{totalQty !== 1 ? "s" : ""} total</p>
+                                        <h2 className="text-sm font-bold text-white print:text-slate-900">{VENDOR_LABELS[vendor] ?? vendor}</h2>
+                                        <p className="text-xs text-graphite-300 print:text-slate-400">{lines.length} line item{lines.length !== 1 ? "s" : ""} · {totalQty} unit{totalQty !== 1 ? "s" : ""} total</p>
                                     </div>
                                     {canPlaceOrders ? (
                                         <div className="flex items-center gap-2 no-print">
@@ -282,7 +288,7 @@ export default function OrderReportPage() {
                                             </Button>
                                         </div>
                                     ) : isRealVendor ? (
-                                        <p className="text-xs text-slate-400 no-print">Ordering is only available for Unfulfilled orders</p>
+                                        <p className="text-xs text-graphite-300 no-print">Ordering is only available for Unfulfilled orders</p>
                                     ) : null}
                                 </div>
                                 <div className="overflow-x-auto">
@@ -292,7 +298,7 @@ export default function OrderReportPage() {
                                                 <th className="w-10 pl-5 no-print">
                                                     <input type="checkbox" title="Select all" aria-label={`Select all ${VENDOR_LABELS[vendor]} lines`}
                                                         checked={allChecked} onChange={() => toggleVendorAll(lines)}
-                                                        className="rounded border-slate-300 accent-brand-600" />
+                                                        className="rounded border-white/20 accent-signal-cyan" />
                                                 </th>
                                             )}
                                             <th>Vendor Style</th><th>Your Product(s)</th><th>Color</th><th>Size</th><th className="text-right pr-5">Qty Needed</th>
@@ -302,12 +308,12 @@ export default function OrderReportPage() {
                                                 const key = lineKey(l);
                                                 const checked = selected.has(key);
                                                 return (
-                                                    <tr key={key} className={checked ? "bg-brand-50/40" : undefined}>
+                                                    <tr key={key} className={checked ? "bg-signal-cyan/[0.06]" : undefined}>
                                                         {canPlaceOrders && (
                                                             <td className="pl-5 no-print">
                                                                 <input type="checkbox" checked={checked} onChange={() => toggleLine(key)}
                                                                     title={`Select ${l.vendorStyle}`} aria-label={`Select ${l.vendorStyle} ${l.color ?? ""} ${l.size ?? ""}`}
-                                                                    className="rounded border-slate-300 accent-brand-600" />
+                                                                    className="rounded border-white/20 accent-signal-cyan" />
                                                             </td>
                                                         )}
                                                         <td>
@@ -315,30 +321,30 @@ export default function OrderReportPage() {
                                                                 {l.image ? (
                                                                     <ZoomableImage src={imgUrl(l.image)} alt={l.vendorStyle}
                                                                         wrapperClassName="no-print"
-                                                                        className="w-8 h-8 rounded-lg object-cover ring-1 ring-black/5" />
+                                                                        className="w-8 h-8 rounded-md object-cover ring-1 ring-white/10" />
                                                                 ) : null}
-                                                                <code className="text-sm font-mono font-bold text-slate-800">{l.vendorStyle}</code>
+                                                                <code className="text-sm font-mono font-bold text-white print:text-slate-800">{l.vendorStyle}</code>
                                                             </div>
                                                         </td>
                                                         <td>
                                                             <div className="flex flex-col gap-0.5">
                                                                 {l.productNames.map((name, i) => (
-                                                                    <span key={name} className="text-xs text-slate-600">
-                                                                        {name} <code className="text-slate-400">({l.skus[i]})</code>
+                                                                    <span key={name} className="text-xs text-graphite-300 print:text-slate-600">
+                                                                        {name} <code className="text-graphite-400 print:text-slate-400">({l.skus[i]})</code>
                                                                     </span>
                                                                 ))}
                                                             </div>
                                                         </td>
                                                         <td>
                                                             {l.color ? (
-                                                                <span className="flex items-center gap-1.5 text-sm text-slate-600">
-                                                                    <span className="w-3 h-3 rounded-full border border-black/10 inline-block no-print" style={{ backgroundColor: getColorCss(l.color) }} />
+                                                                <span className="flex items-center gap-1.5 text-sm text-graphite-300 print:text-slate-600">
+                                                                    <span className="w-3 h-3 rounded-full border border-white/10 inline-block no-print" style={{ backgroundColor: getColorCss(l.color) }} />
                                                                     {l.color}
                                                                 </span>
-                                                            ) : <span className="text-slate-300">—</span>}
+                                                            ) : <span className="text-graphite-500 print:text-slate-300">—</span>}
                                                         </td>
-                                                        <td><span className="text-sm text-slate-600">{l.size ?? "—"}</span></td>
-                                                        <td className="text-right pr-5"><span className="text-sm font-bold text-slate-900 tabular-nums">{l.quantity}</span></td>
+                                                        <td><span className="text-sm text-graphite-300 print:text-slate-600">{l.size ?? "—"}</span></td>
+                                                        <td className="text-right pr-5"><span className="text-sm font-bold font-mono text-white tabular-nums print:text-slate-900">{l.quantity}</span></td>
                                                     </tr>
                                                 );
                                             })}
@@ -354,20 +360,20 @@ export default function OrderReportPage() {
             )}
 
             {view === "history" && (
-                <div className="bg-white rounded-2xl ring-1 ring-black/5 shadow-card overflow-hidden">
+                <div className="console-panel rounded-lg overflow-hidden print:bg-white print:border print:border-slate-200 print:shadow-none print:rounded-none">
                     {loadingHistory ? (
-                        <div className="p-8 space-y-3">
-                            {[1,2,3].map(i => <div key={i} className="animate-pulse h-4 bg-slate-100 rounded" />)}
+                        <div className="p-8 space-y-3 print:hidden">
+                            {[1,2,3].map(i => <div key={i} className="skeleton h-4" />)}
                         </div>
                     ) : history.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-16 text-slate-300">
+                        <div className="flex flex-col items-center justify-center py-16 text-graphite-500 print:hidden">
                             <svg className="w-12 h-12 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17V7a2 2 0 012-2h6.5L21 9v8a2 2 0 01-2 2H11a2 2 0 01-2-2z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 7v10a2 2 0 002 2h9"/></svg>
-                            <p className="text-sm text-slate-400 font-medium">No SanMar orders placed yet</p>
-                            <p className="text-xs text-slate-300 mt-0.5">Purchase orders you submit will show up here</p>
+                            <p className="text-sm text-graphite-300 font-medium">No SanMar orders placed yet</p>
+                            <p className="text-xs text-graphite-500 mt-0.5">Purchase orders you submit will show up here</p>
                         </div>
                     ) : (
-                        <div className="divide-y divide-slate-100">
-                            {history.map(h => {
+                        <div className="divide-y divide-white/[0.05] print:divide-slate-100">
+                            {history.map((h, hIdx) => {
                                 const isExpanded = expandedHistory === h.id;
                                 const isError = h.status.toLowerCase() === "error";
                                 const isNotSent = h.status.toLowerCase() === "notsent";
@@ -379,15 +385,15 @@ export default function OrderReportPage() {
                                     catch { errorMessage = h.rawResponse; }
                                 }
                                 return (
-                                    <div key={h.id}>
-                                        <div className="flex items-center justify-between px-5 py-3.5 cursor-pointer hover:bg-slate-50 transition-colors"
+                                    <motion.div key={h.id} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: hIdx * 0.03, duration: 0.2 }}>
+                                        <div className="flex items-center justify-between px-5 py-3.5 cursor-pointer hover:bg-white/[0.03] transition-colors print:hover:bg-transparent"
                                             onClick={() => setExpandedHistory(isExpanded ? null : h.id)}>
                                             <div className="min-w-0">
                                                 <div className="flex items-center gap-2 flex-wrap">
-                                                    <code className="text-sm font-mono font-bold text-slate-800">{h.poNumber}</code>
+                                                    <code className="text-sm font-mono font-bold text-white print:text-slate-800">{h.poNumber}</code>
                                                     <Badge variant={badgeVariant} size="sm">{badgeLabel}</Badge>
                                                 </div>
-                                                <p className="text-xs text-slate-400 mt-0.5">
+                                                <p className="text-xs text-graphite-300 mt-0.5 print:text-slate-400">
                                                     {h.shopName ?? "Multiple / all shops"} · {new Date(h.createdAt).toLocaleString()}
                                                     {h.totalUnits != null && ` · ${h.totalUnits} unit${h.totalUnits !== 1 ? "s" : ""}`}
                                                     {h.contributingOrderCount > 1 && ` · ${h.contributingOrderCount} customer orders`}
@@ -396,58 +402,58 @@ export default function OrderReportPage() {
                                             <div className="flex items-center gap-3 shrink-0">
                                                 <button type="button" title="Export this order to CSV" aria-label="Export this order to CSV"
                                                     onClick={e => { e.stopPropagation(); exportHistoryEntryCSV(h); }}
-                                                    className="text-xs font-semibold text-brand-600 hover:text-brand-700 transition-colors">
+                                                    className="text-xs font-semibold text-signal-cyan hover:text-signal-cyan-bright transition-colors print:text-slate-700">
                                                     Export CSV
                                                 </button>
-                                                <svg className={`w-4 h-4 text-slate-400 shrink-0 transition-transform ${isExpanded ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7"/></svg>
+                                                <svg className={`w-4 h-4 text-graphite-500 shrink-0 transition-transform print:hidden ${isExpanded ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7"/></svg>
                                             </div>
                                         </div>
                                         {isExpanded && (
                                             <div className="px-5 pb-4 -mt-1 space-y-3">
                                                 {isError && errorMessage && (
-                                                    <p className="text-xs text-red-700 bg-red-50 border border-red-100 rounded-lg px-3 py-2 font-mono whitespace-pre-wrap break-words">
+                                                    <p className="text-xs text-signal-red bg-signal-red/10 border border-signal-red/25 rounded-md px-3 py-2 font-mono whitespace-pre-wrap break-words print:text-red-700 print:bg-red-50 print:border-red-100">
                                                         {errorMessage}
                                                     </p>
                                                 )}
                                                 {h.lines && h.lines.length > 0 ? (
-                                                    <div className="border border-slate-200 rounded-xl overflow-hidden">
+                                                    <div className="border border-white/10 rounded-lg overflow-hidden print:border-slate-200 print:rounded-none">
                                                         <table className="w-full text-sm">
-                                                            <thead className="bg-slate-50"><tr>
-                                                                <th className="text-left px-3 py-2 font-semibold text-slate-500 text-xs">Style</th>
-                                                                <th className="text-left px-3 py-2 font-semibold text-slate-500 text-xs">Product</th>
-                                                                <th className="text-left px-3 py-2 font-semibold text-slate-500 text-xs">Type</th>
-                                                                <th className="text-left px-3 py-2 font-semibold text-slate-500 text-xs">Color</th>
-                                                                <th className="text-left px-3 py-2 font-semibold text-slate-500 text-xs">Size</th>
-                                                                <th className="text-right px-3 py-2 font-semibold text-slate-500 text-xs">Qty</th>
+                                                            <thead className="bg-white/[0.04] print:bg-slate-50"><tr>
+                                                                <th className="text-left px-3 py-2 font-semibold text-graphite-300 text-xs print:text-slate-500">Style</th>
+                                                                <th className="text-left px-3 py-2 font-semibold text-graphite-300 text-xs print:text-slate-500">Product</th>
+                                                                <th className="text-left px-3 py-2 font-semibold text-graphite-300 text-xs print:text-slate-500">Type</th>
+                                                                <th className="text-left px-3 py-2 font-semibold text-graphite-300 text-xs print:text-slate-500">Color</th>
+                                                                <th className="text-left px-3 py-2 font-semibold text-graphite-300 text-xs print:text-slate-500">Size</th>
+                                                                <th className="text-right px-3 py-2 font-semibold text-graphite-300 text-xs print:text-slate-500">Qty</th>
                                                             </tr></thead>
-                                                            <tbody className="divide-y divide-slate-100">
+                                                            <tbody className="divide-y divide-white/[0.05] print:divide-slate-100">
                                                                 {h.lines.map((l, i) => (
                                                                     <tr key={i}>
-                                                                        <td className="px-3 py-2 font-mono text-xs font-bold text-slate-800">{l.vendorStyle}</td>
-                                                                        <td className="px-3 py-2 text-slate-600 text-xs">{l.productNames.join(", ")}</td>
-                                                                        <td className="px-3 py-2 text-slate-600 text-xs">{formatCategory(l.category)}</td>
-                                                                        <td className="px-3 py-2 text-slate-600">{l.color ?? "—"}</td>
-                                                                        <td className="px-3 py-2 text-slate-600">{l.size ?? "—"}</td>
-                                                                        <td className="px-3 py-2 text-right font-bold text-slate-900">{l.quantity}</td>
+                                                                        <td className="px-3 py-2 font-mono text-xs font-bold text-white print:text-slate-800">{l.vendorStyle}</td>
+                                                                        <td className="px-3 py-2 text-graphite-300 text-xs print:text-slate-600">{l.productNames.join(", ")}</td>
+                                                                        <td className="px-3 py-2 text-graphite-300 text-xs print:text-slate-600">{formatCategory(l.category)}</td>
+                                                                        <td className="px-3 py-2 text-graphite-300 print:text-slate-600">{l.color ?? "—"}</td>
+                                                                        <td className="px-3 py-2 text-graphite-300 print:text-slate-600">{l.size ?? "—"}</td>
+                                                                        <td className="px-3 py-2 text-right font-bold text-white print:text-slate-900">{l.quantity}</td>
                                                                     </tr>
                                                                 ))}
                                                             </tbody>
                                                         </table>
                                                     </div>
                                                 ) : (
-                                                    <p className="text-xs text-slate-400 italic">Itemized details weren&apos;t recorded for this order (placed before order history tracking was added).</p>
+                                                    <p className="text-xs text-graphite-300 italic print:text-slate-400">Itemized details weren&apos;t recorded for this order (placed before order history tracking was added).</p>
                                                 )}
                                                 {h.rawResponse && (
                                                     <details>
-                                                        <summary className="text-[11px] text-slate-400 cursor-pointer hover:text-slate-600">Raw vendor response</summary>
-                                                        <p className="text-[11px] text-slate-500 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 font-mono whitespace-pre-wrap break-words mt-1 max-h-48 overflow-y-auto">
+                                                        <summary className="text-[11px] text-graphite-300 cursor-pointer hover:text-white print:text-slate-400">Raw vendor response</summary>
+                                                        <p className="text-[11px] text-graphite-300 bg-white/[0.04] border border-white/10 rounded-md px-3 py-2 font-mono whitespace-pre-wrap break-words mt-1 max-h-48 overflow-y-auto print:text-slate-500 print:bg-slate-50 print:border-slate-100">
                                                             {h.rawResponse}
                                                         </p>
                                                     </details>
                                                 )}
                                             </div>
                                         )}
-                                    </div>
+                                    </motion.div>
                                 );
                             })}
                         </div>
@@ -460,43 +466,43 @@ export default function OrderReportPage() {
                 title={`Review order — ${confirmVendor ? VENDOR_LABELS[confirmVendor] : ""}`} size="lg">
                 {confirmVendor && (
                     <div className="space-y-4">
-                        <p className="text-sm text-slate-600">
-                            You&apos;re about to submit a real purchase order to <strong>{VENDOR_LABELS[confirmVendor]}</strong> for
+                        <p className="text-sm text-graphite-300 print:text-slate-600">
+                            You&apos;re about to submit a real purchase order to <strong className="text-white print:text-slate-900">{VENDOR_LABELS[confirmVendor]}</strong> for
                             {confirmSelectedCount > 0 ? ` the ${confirmSelectedCount} item${confirmSelectedCount !== 1 ? "s" : ""} you selected` : ` everything currently shown (${confirmLines.length} item${confirmLines.length !== 1 ? "s" : ""})`}.
                             This cannot be undone from here — review carefully.
                         </p>
 
-                        <div className="border border-slate-200 rounded-xl overflow-hidden max-h-64 overflow-y-auto print:max-h-none print:overflow-visible">
+                        <div className="border border-white/10 rounded-lg overflow-hidden max-h-64 overflow-y-auto print:max-h-none print:overflow-visible print:border-slate-200 print:rounded-none">
                             <table className="w-full text-sm">
-                                <thead className="bg-slate-50 sticky top-0"><tr>
-                                    <th className="text-left px-3 py-2 font-semibold text-slate-500 text-xs">Style</th>
-                                    <th className="text-left px-3 py-2 font-semibold text-slate-500 text-xs">Color</th>
-                                    <th className="text-left px-3 py-2 font-semibold text-slate-500 text-xs">Size</th>
-                                    <th className="text-right px-3 py-2 font-semibold text-slate-500 text-xs">Qty</th>
+                                <thead className="bg-white/[0.04] sticky top-0 print:bg-slate-50"><tr>
+                                    <th className="text-left px-3 py-2 font-semibold text-graphite-300 text-xs print:text-slate-500">Style</th>
+                                    <th className="text-left px-3 py-2 font-semibold text-graphite-300 text-xs print:text-slate-500">Color</th>
+                                    <th className="text-left px-3 py-2 font-semibold text-graphite-300 text-xs print:text-slate-500">Size</th>
+                                    <th className="text-right px-3 py-2 font-semibold text-graphite-300 text-xs print:text-slate-500">Qty</th>
                                 </tr></thead>
-                                <tbody className="divide-y divide-slate-100">
+                                <tbody className="divide-y divide-white/[0.05] print:divide-slate-100">
                                     {confirmLines.map(l => (
                                         <tr key={lineKey(l)}>
-                                            <td className="px-3 py-2 font-mono text-xs font-bold text-slate-800">{l.vendorStyle}</td>
-                                            <td className="px-3 py-2 text-slate-600">{l.color ?? "—"}</td>
-                                            <td className="px-3 py-2 text-slate-600">{l.size ?? "—"}</td>
-                                            <td className="px-3 py-2 text-right font-bold text-slate-900">{l.quantity}</td>
+                                            <td className="px-3 py-2 font-mono text-xs font-bold text-white print:text-slate-800">{l.vendorStyle}</td>
+                                            <td className="px-3 py-2 text-graphite-300 print:text-slate-600">{l.color ?? "—"}</td>
+                                            <td className="px-3 py-2 text-graphite-300 print:text-slate-600">{l.size ?? "—"}</td>
+                                            <td className="px-3 py-2 text-right font-bold text-white print:text-slate-900">{l.quantity}</td>
                                         </tr>
                                     ))}
                                 </tbody>
-                                <tfoot><tr className="border-t border-slate-200">
-                                    <td colSpan={3} className="px-3 py-2 text-xs font-semibold text-slate-500">Total units</td>
-                                    <td className="px-3 py-2 text-right font-black text-slate-900">{confirmTotalUnits}</td>
+                                <tfoot><tr className="border-t border-white/10 print:border-slate-200">
+                                    <td colSpan={3} className="px-3 py-2 text-xs font-semibold text-graphite-300 print:text-slate-500">Total units</td>
+                                    <td className="px-3 py-2 text-right font-black text-white print:text-slate-900">{confirmTotalUnits}</td>
                                 </tr></tfoot>
                             </table>
                         </div>
 
                         {shipTo && (
-                            <div className="bg-slate-50 rounded-xl p-4">
-                                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Ships to</p>
-                                <p className="text-sm font-semibold text-slate-800">{shipTo.name}</p>
-                                <p className="text-sm text-slate-600">{shipTo.address1}{shipTo.address2 ? `, ${shipTo.address2}` : ""}</p>
-                                <p className="text-sm text-slate-600">{shipTo.city}, {shipTo.state} {shipTo.zip}</p>
+                            <div className="bg-white/[0.04] rounded-lg p-4 print:bg-slate-50">
+                                <p className="text-xs font-bold text-graphite-300 uppercase tracking-wider mb-1.5 print:text-slate-400">Ships to</p>
+                                <p className="text-sm font-semibold text-white print:text-slate-800">{shipTo.name}</p>
+                                <p className="text-sm text-graphite-300 print:text-slate-600">{shipTo.address1}{shipTo.address2 ? `, ${shipTo.address2}` : ""}</p>
+                                <p className="text-sm text-graphite-300 print:text-slate-600">{shipTo.city}, {shipTo.state} {shipTo.zip}</p>
                             </div>
                         )}
 
@@ -513,77 +519,77 @@ export default function OrderReportPage() {
                 {receipt && (
                     <div className="space-y-4">
                         {receipt.dryRun ? (
-                            <div className="flex items-start gap-3 bg-amber-50 border border-amber-300 rounded-xl px-4 py-3">
-                                <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
-                                    <svg className="w-4 h-4 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                            <div className="flex items-start gap-3 bg-signal-amber/10 border border-signal-amber/30 rounded-lg px-4 py-3 print:bg-amber-50 print:border-amber-300">
+                                <div className="w-8 h-8 rounded-full bg-signal-amber/15 flex items-center justify-center shrink-0 print:bg-amber-100">
+                                    <svg className="w-4 h-4 text-signal-amber print:text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
                                 </div>
                                 <div>
-                                    <p className="text-sm font-bold text-amber-900">NOT sent to {VENDOR_LABELS[receipt.vendor] ?? receipt.vendor} — test mode</p>
-                                    <p className="text-xs text-amber-800 mt-0.5">
+                                    <p className="text-sm font-bold text-white print:text-amber-900">NOT sent to {VENDOR_LABELS[receipt.vendor] ?? receipt.vendor} — test mode</p>
+                                    <p className="text-xs text-graphite-200 mt-0.5 print:text-amber-800">
                                         The {VENDOR_LABELS[receipt.vendor] ?? receipt.vendor} integration is switched off on the server ({receipt.dryRunNote || "vendor ordering disabled"}), so no real purchase order was placed. Nothing was charged and {VENDOR_LABELS[receipt.vendor] ?? receipt.vendor} has no record of this. Enable the integration server-side, then place this order again.
                                     </p>
                                 </div>
                             </div>
                         ) : (
-                            <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
-                                <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
-                                    <svg className="w-4 h-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>
+                            <div className="flex items-center gap-3 bg-signal-green/10 border border-signal-green/25 rounded-lg px-4 py-3 print:bg-emerald-50 print:border-emerald-200">
+                                <div className="w-8 h-8 rounded-full bg-signal-green/15 flex items-center justify-center shrink-0 print:bg-emerald-100">
+                                    <svg className="w-4 h-4 text-signal-green print:text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>
                                 </div>
                                 <div>
-                                    <p className="text-sm font-bold text-emerald-900">Submitted to {VENDOR_LABELS[receipt.vendor] ?? receipt.vendor}</p>
-                                    <p className="text-xs text-emerald-700">{new Date(receipt.placedAt).toLocaleString()}</p>
+                                    <p className="text-sm font-bold text-white print:text-emerald-900">Submitted to {VENDOR_LABELS[receipt.vendor] ?? receipt.vendor}</p>
+                                    <p className="text-xs text-graphite-300 print:text-emerald-700">{new Date(receipt.placedAt).toLocaleString()}</p>
                                 </div>
                             </div>
                         )}
 
-                        <div className="bg-slate-50 rounded-xl p-3">
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Your PO Reference</p>
-                            <code className="text-sm font-bold text-slate-800">{receipt.poNumber}</code>
+                        <div className="bg-white/[0.04] rounded-lg p-3 print:bg-slate-50">
+                            <p className="text-[10px] font-bold text-graphite-300 uppercase tracking-wider print:text-slate-400">Your PO Reference</p>
+                            <code className="text-sm font-bold text-white print:text-slate-800">{receipt.poNumber}</code>
                             {!receipt.dryRun && (
-                                <p className="text-xs text-slate-400 mt-1">Search for this exact reference in {VENDOR_LABELS[receipt.vendor] ?? receipt.vendor}&apos;s own purchase-history / order-status portal to confirm it was received.</p>
+                                <p className="text-xs text-graphite-300 mt-1 print:text-slate-400">Search for this exact reference in {VENDOR_LABELS[receipt.vendor] ?? receipt.vendor}&apos;s own purchase-history / order-status portal to confirm it was received.</p>
                             )}
                         </div>
 
                         {receipt.vendorMessage && !receipt.dryRun && (
-                            <div className="bg-slate-50 rounded-xl p-3">
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">{VENDOR_LABELS[receipt.vendor] ?? receipt.vendor}&apos;s response</p>
-                                <p className="text-sm text-slate-700">{receipt.vendorMessage}</p>
+                            <div className="bg-white/[0.04] rounded-lg p-3 print:bg-slate-50">
+                                <p className="text-[10px] font-bold text-graphite-300 uppercase tracking-wider mb-1 print:text-slate-400">{VENDOR_LABELS[receipt.vendor] ?? receipt.vendor}&apos;s response</p>
+                                <p className="text-sm text-graphite-200 print:text-slate-700">{receipt.vendorMessage}</p>
                             </div>
                         )}
 
-                        <div className="border border-slate-200 rounded-xl overflow-hidden max-h-56 overflow-y-auto print:max-h-none print:overflow-visible">
+                        <div className="border border-white/10 rounded-lg overflow-hidden max-h-56 overflow-y-auto print:max-h-none print:overflow-visible print:border-slate-200 print:rounded-none">
                             <table className="w-full text-sm">
-                                <thead className="bg-slate-50 sticky top-0"><tr>
-                                    <th className="text-left px-3 py-2 font-semibold text-slate-500 text-xs">Style</th>
-                                    <th className="text-left px-3 py-2 font-semibold text-slate-500 text-xs">Color</th>
-                                    <th className="text-left px-3 py-2 font-semibold text-slate-500 text-xs">Size</th>
-                                    <th className="text-right px-3 py-2 font-semibold text-slate-500 text-xs">Qty</th>
+                                <thead className="bg-white/[0.04] sticky top-0 print:bg-slate-50"><tr>
+                                    <th className="text-left px-3 py-2 font-semibold text-graphite-300 text-xs print:text-slate-500">Style</th>
+                                    <th className="text-left px-3 py-2 font-semibold text-graphite-300 text-xs print:text-slate-500">Color</th>
+                                    <th className="text-left px-3 py-2 font-semibold text-graphite-300 text-xs print:text-slate-500">Size</th>
+                                    <th className="text-right px-3 py-2 font-semibold text-graphite-300 text-xs print:text-slate-500">Qty</th>
                                 </tr></thead>
-                                <tbody className="divide-y divide-slate-100">
+                                <tbody className="divide-y divide-white/[0.05] print:divide-slate-100">
                                     {receipt.lines.map(l => (
                                         <tr key={lineKey(l)}>
-                                            <td className="px-3 py-2 font-mono text-xs font-bold text-slate-800">{l.vendorStyle}</td>
-                                            <td className="px-3 py-2 text-slate-600">{l.color ?? "—"}</td>
-                                            <td className="px-3 py-2 text-slate-600">{l.size ?? "—"}</td>
-                                            <td className="px-3 py-2 text-right font-bold text-slate-900">{l.quantity}</td>
+                                            <td className="px-3 py-2 font-mono text-xs font-bold text-white print:text-slate-800">{l.vendorStyle}</td>
+                                            <td className="px-3 py-2 text-graphite-300 print:text-slate-600">{l.color ?? "—"}</td>
+                                            <td className="px-3 py-2 text-graphite-300 print:text-slate-600">{l.size ?? "—"}</td>
+                                            <td className="px-3 py-2 text-right font-bold text-white print:text-slate-900">{l.quantity}</td>
                                         </tr>
                                     ))}
                                 </tbody>
-                                <tfoot><tr className="border-t border-slate-200">
-                                    <td colSpan={3} className="px-3 py-2 text-xs font-semibold text-slate-500">Total units · orders marked</td>
-                                    <td className="px-3 py-2 text-right font-black text-slate-900">{receipt.totalUnits} · {receipt.ordersMarked}</td>
+                                <tfoot><tr className="border-t border-white/10 print:border-slate-200">
+                                    <td colSpan={3} className="px-3 py-2 text-xs font-semibold text-graphite-300 print:text-slate-500">Total units · orders marked</td>
+                                    <td className="px-3 py-2 text-right font-black text-white print:text-slate-900">{receipt.totalUnits} · {receipt.ordersMarked}</td>
                                 </tr></tfoot>
                             </table>
                         </div>
 
-                        <div className="bg-slate-50 rounded-xl p-4">
-                            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Shipped to</p>
-                            <p className="text-sm font-semibold text-slate-800">{receipt.shipTo.name}</p>
-                            <p className="text-sm text-slate-600">{receipt.shipTo.address1}{receipt.shipTo.address2 ? `, ${receipt.shipTo.address2}` : ""}</p>
-                            <p className="text-sm text-slate-600">{receipt.shipTo.city}, {receipt.shipTo.state} {receipt.shipTo.zip}</p>
+                        <div className="bg-white/[0.04] rounded-lg p-4 print:bg-slate-50">
+                            <p className="text-xs font-bold text-graphite-300 uppercase tracking-wider mb-1.5 print:text-slate-400">Shipped to</p>
+                            <p className="text-sm font-semibold text-white print:text-slate-800">{receipt.shipTo.name}</p>
+                            <p className="text-sm text-graphite-300 print:text-slate-600">{receipt.shipTo.address1}{receipt.shipTo.address2 ? `, ${receipt.shipTo.address2}` : ""}</p>
+                            <p className="text-sm text-graphite-300 print:text-slate-600">{receipt.shipTo.city}, {receipt.shipTo.state} {receipt.shipTo.zip}</p>
                         </div>
 
-                        <p className="text-xs text-slate-400">
+                        <p className="text-xs text-graphite-300 print:text-slate-400">
                             {receipt.dryRun
                                 ? `The ${receipt.ordersMarked} contributing order${receipt.ordersMarked !== 1 ? "s" : ""} were marked with a vendor order record for tracking, but since nothing was actually sent, don't rely on this — place the order again once vendor ordering is enabled.`
                                 : `The ${receipt.ordersMarked} contributing order${receipt.ordersMarked !== 1 ? "s" : ""} now show this vendor order under their details. Track shipment status from ${VENDOR_LABELS[receipt.vendor] ?? receipt.vendor} directly using the reference above.`}

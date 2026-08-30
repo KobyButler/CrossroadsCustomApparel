@@ -61,7 +61,7 @@ export function ZoomableImage({ src, alt = "", className, wrapperClassName }: Zo
                             <motion.div
                                 initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                                 transition={{ duration: 0.15 }}
-                                className="absolute inset-0 bg-ink-950/80 backdrop-blur-sm"
+                                className="absolute inset-0 bg-graphite-950/85 backdrop-blur-sm"
                                 onClick={() => setOpen(false)}
                             />
                             <motion.img
@@ -72,7 +72,7 @@ export function ZoomableImage({ src, alt = "", className, wrapperClassName }: Zo
                                 animate={{ opacity: 1, scale: 1 }}
                                 exit={{ opacity: 0, scale: 0.96 }}
                                 transition={{ duration: 0.18, ease: [0.32, 0.72, 0, 1] }}
-                                className="relative max-w-[90vw] max-h-[85vh] object-contain rounded-2xl shadow-2xl"
+                                className="relative max-w-[90vw] max-h-[85vh] object-contain rounded-lg shadow-console-hover"
                             />
                             <button
                                 type="button"

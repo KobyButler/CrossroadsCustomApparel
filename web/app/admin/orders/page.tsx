@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Modal, ModalFooter } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
+import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 
 type VendorOrder = {
@@ -60,6 +61,50 @@ const TABS = [
 
 const fmt = (cents: number) =>
     new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
+
+const EASE = [0.16, 1, 0.3, 1] as [number, number, number, number];
+
+/* ─── Status → signal lamp ────────────────────────────────────────────────
+   Reserved strictly for real order/payment state, never decoration — see
+   DESIGN.md's "locked palette" rule. Order.status is one of UNFULFILLED |
+   FULFILLED | CANCELLED | DRAFT (server/prisma/schema.prisma). */
+const STATUS_LAMP: Record<string, { label: string; dot: string; text: string }> = {
+    UNFULFILLED: { label: "Unfulfilled", dot: "bg-signal-amber", text: "text-signal-amber" },
+    FULFILLED:   { label: "Fulfilled",   dot: "bg-signal-green", text: "text-signal-green" },
+    CANCELLED:   { label: "Cancelled",   dot: "bg-signal-red",   text: "text-signal-red"   },
+    DRAFT:       { label: "Draft",       dot: "bg-graphite-500", text: "text-graphite-300" },
+};
+
+function SignalLamp({ status }: { status: string }) {
+    const meta = STATUS_LAMP[status?.toUpperCase()] ?? STATUS_LAMP.DRAFT;
+    return (
+        <span className={cn("inline-flex items-center gap-1.5 text-xs font-medium", meta.text)}>
+            <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", meta.dot)} />
+            {meta.label}
+        </span>
+    );
+}
+
+const PAYMENT_LAMP: Record<string, { label: string; dot: string; text: string }> = {
+    PAID:            { label: "Paid",           dot: "bg-signal-green", text: "text-signal-green" },
+    OFFLINE_PENDING: { label: "Due at pickup",  dot: "bg-signal-amber", text: "text-signal-amber" },
+    UNPAID:          { label: "Unpaid",         dot: "bg-graphite-500", text: "text-graphite-300" },
+};
+
+function PaymentLamp({ status }: { status?: string }) {
+    const meta = PAYMENT_LAMP[status?.toUpperCase() ?? ""] ?? PAYMENT_LAMP.UNPAID;
+    return (
+        <span className={cn("inline-flex items-center gap-1.5 text-xs font-medium", meta.text)}>
+            <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", meta.dot)} />
+            {meta.label}
+        </span>
+    );
+}
+
+const darkFieldClass =
+    "w-full rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white " +
+    "placeholder:text-graphite-500 outline-none transition-all duration-200 " +
+    "focus:border-signal-cyan/60 focus:ring-2 focus:ring-signal-cyan/30";
 
 export default function OrdersPage() {
     const { toast } = useToast();
@@ -261,49 +306,53 @@ export default function OrdersPage() {
     return (
         <div className="space-y-6">
             {/* Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <motion.div
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, ease: EASE }}
+                className="flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+            >
                 <div>
                     <h1 className="page-title">Orders</h1>
                     <p className="page-subtitle">Manage and fulfill customer orders · {totalOrders} total</p>
                 </div>
                 <div className="flex gap-2.5 flex-wrap">
-                    <motion.button whileHover={{ y:-1 }} whileTap={{ scale:0.97 }}
+                    <Button
+                        variant="secondary"
                         onClick={() => setShowExport(true)}
-                        className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-slate-700 bg-white ring-1 ring-black/8 shadow-sm hover:shadow-md transition-all duration-200"
+                        icon={<svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>}
                     >
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
                         Export
-                    </motion.button>
-                    <motion.button whileHover={{ y:-1 }} whileTap={{ scale:0.97 }}
+                    </Button>
+                    <Button
+                        variant="secondary"
                         onClick={printOrders}
                         title={selectedIds.size > 0 ? `Print ${selectedIds.size} selected order(s) to PDF` : "Print all currently shown orders to PDF"}
-                        className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-slate-700 bg-white ring-1 ring-black/8 shadow-sm hover:shadow-md transition-all duration-200"
+                        icon={<svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m0 0v3a1 1 0 001 1h8a1 1 0 001-1v-3m0 0H7m10-11V4a1 1 0 00-1-1H8a1 1 0 00-1 1v3"/></svg>}
                     >
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m0 0v3a1 1 0 001 1h8a1 1 0 001-1v-3m0 0H7m10-11V4a1 1 0 00-1-1H8a1 1 0 00-1 1v3"/></svg>
                         Print PDF{selectedIds.size > 0 ? ` (${selectedIds.size})` : ""}
-                    </motion.button>
-                    <motion.button whileHover={{ y:-1 }} whileTap={{ scale:0.97 }}
+                    </Button>
+                    <Button
+                        variant="primary"
                         onClick={() => setShowCreate(true)}
-                        className="btn-shine flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white transition-all duration-200"
-                        style={{ background:"linear-gradient(135deg,#8b5cf6 0%,#7c3aed 100%)", boxShadow:"0 4px 16px rgba(124,58,237,0.35)" }}
+                        icon={<svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg>}
                     >
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg>
                         New Order
-                    </motion.button>
+                    </Button>
                 </div>
-            </div>
+            </motion.div>
 
             {/* Tabs */}
-            <div className="flex items-center gap-1 border-b border-slate-200">
+            <div className="flex items-center gap-1 border-b border-white/[0.06]">
                 {TABS.map(t => (
                     <button key={t.key} type="button" onClick={() => setTab(t.key)}
                         className={`relative px-4 py-2.5 text-sm font-medium transition-colors -mb-px ${
-                            tab === t.key ? "text-brand-700" : "text-slate-500 hover:text-slate-700"
+                            tab === t.key ? "text-signal-cyan" : "text-graphite-300 hover:text-white"
                         }`}
                     >
                         {tab === t.key && (
                             <motion.div layoutId="orders-tab-indicator"
-                                className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand-600 rounded-full"
+                                className="absolute bottom-0 left-0 right-0 h-0.5 bg-signal-cyan rounded-full"
                                 transition={{ duration: 0.2 }}
                             />
                         )}
@@ -314,12 +363,11 @@ export default function OrdersPage() {
 
             {/* Toolbar */}
             <div className="flex items-center gap-3">
-                <div className="relative flex-1 max-w-xs">
-                    <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-                    <input
-                        className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-xl outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 bg-white shadow-sm transition-all duration-200"
+                <div className="flex-1 max-w-xs">
+                    <Input
                         placeholder="Search orders…"
                         value={search} onChange={e => setSearch(e.target.value)}
+                        leftIcon={<svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>}
                     />
                 </div>
                 <Select value={filterShop} onChange={e => setFilterShop(e.target.value)} className="w-full sm:w-44">
@@ -329,11 +377,11 @@ export default function OrdersPage() {
                 <AnimatePresence>
                     {selectedIds.size > 0 && (
                         <motion.div initial={{ opacity:0, scale:0.92 }} animate={{ opacity:1, scale:1 }} exit={{ opacity:0, scale:0.92 }}
-                            className="flex items-center gap-2 ml-auto bg-brand-50 border border-brand-200 rounded-xl px-3 py-1.5"
+                            className="flex items-center gap-2 ml-auto bg-signal-cyan/10 border border-signal-cyan/25 rounded-md px-3 py-1.5"
                         >
-                            <span className="text-sm text-brand-700 font-medium">{selectedIds.size} selected</span>
+                            <span className="text-sm text-signal-cyan-bright font-medium">{selectedIds.size} selected</span>
                             <button type="button" onClick={bulkFulfill}
-                                className="text-xs font-semibold text-brand-700 hover:text-brand-900 underline underline-offset-2 transition-colors">
+                                className="text-xs font-semibold text-signal-cyan hover:text-signal-cyan-bright underline underline-offset-2 transition-colors">
                                 Mark fulfilled
                             </button>
                         </motion.div>
@@ -342,27 +390,27 @@ export default function OrdersPage() {
             </div>
 
             {/* Table */}
-            <div className="bg-white rounded-2xl ring-1 ring-black/5 shadow-card overflow-hidden">
+            <div className="console-panel rounded-lg overflow-hidden">
                 {loading ? (
                     <div className="p-8 space-y-3">
                         {[1,2,3,4,5].map(i => (
                             <div key={i} className="animate-pulse flex items-center gap-4">
-                                <div className="w-4 h-4 bg-slate-100 rounded" />
-                                <div className="w-8 h-8 bg-slate-100 rounded-full" />
+                                <div className="w-4 h-4 bg-white/[0.06] rounded" />
+                                <div className="w-8 h-8 bg-white/[0.05] rounded-full" />
                                 <div className="flex-1 space-y-1.5">
-                                    <div className="h-3 w-36 bg-slate-200 rounded" />
-                                    <div className="h-2.5 w-44 bg-slate-100 rounded" />
+                                    <div className="h-3 w-36 bg-white/[0.08] rounded" />
+                                    <div className="h-2.5 w-44 bg-white/[0.05] rounded" />
                                 </div>
-                                <div className="h-5 w-20 bg-slate-100 rounded-full" />
-                                <div className="h-4 w-16 bg-slate-100 rounded" />
+                                <div className="h-5 w-20 bg-white/[0.05] rounded-full" />
+                                <div className="h-4 w-16 bg-white/[0.06] rounded" />
                             </div>
                         ))}
                     </div>
                 ) : filtered.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-16 text-slate-300">
+                    <div className="flex flex-col items-center justify-center py-16 text-graphite-600">
                         <svg className="w-12 h-12 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/></svg>
-                        <p className="text-sm text-slate-400 font-medium">No orders found</p>
-                        <p className="text-xs text-slate-300 mt-0.5">{search ? "Try a different search" : "Orders will appear here"}</p>
+                        <p className="text-sm text-graphite-300 font-medium">No orders found</p>
+                        <p className="text-xs text-graphite-300 mt-0.5">{search ? "Try a different search" : "Orders will appear here"}</p>
                     </div>
                 ) : (
                     <div className="overflow-x-auto">
@@ -372,7 +420,7 @@ export default function OrdersPage() {
                                     <th className="w-10 pl-5">
                                         <input type="checkbox" title="Select all" aria-label="Select all"
                                             checked={selectedIds.size === filtered.length && filtered.length > 0}
-                                            onChange={toggleAll} className="rounded border-slate-300 accent-brand-600" />
+                                            onChange={toggleAll} className="rounded border-white/20 bg-white/[0.03] accent-signal-cyan" />
                                     </th>
                                     <th>Order</th><th>Customer</th><th>Shop</th>
                                     <th>Items</th><th>Total</th><th>Status</th><th>Payment</th>
@@ -391,78 +439,68 @@ export default function OrdersPage() {
                                                 title={`Select order ${order.id.slice(-8).toUpperCase()}`}
                                                 aria-label={`Select order ${order.id.slice(-8).toUpperCase()}`}
                                                 checked={selectedIds.has(order.id)} onChange={() => toggleSelect(order.id)}
-                                                className="rounded border-slate-300 accent-brand-600" />
+                                                className="rounded border-white/20 bg-white/[0.03] accent-signal-cyan" />
                                         </td>
                                         <td>
-                                            <span className="font-mono text-xs font-medium text-brand-600 hover:text-brand-700 cursor-pointer inline-flex items-center gap-1.5"
+                                            <span className="font-mono text-xs font-medium text-signal-cyan hover:text-signal-cyan-bright cursor-pointer inline-flex items-center gap-1.5"
                                                 onClick={() => setDetailOrder(order)}>
                                                 #{order.id.slice(-8).toUpperCase()}
                                                 {order.specialInstructions && (
-                                                    <svg className="w-3.5 h-3.5 text-violet-400" fill="currentColor" viewBox="0 0 20 20"><title>Has special instructions</title><path fillRule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" clipRule="evenodd"/></svg>
+                                                    <svg className="w-3.5 h-3.5 text-graphite-400" fill="currentColor" viewBox="0 0 20 20"><title>Has special instructions</title><path fillRule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" clipRule="evenodd"/></svg>
                                                 )}
                                             </span>
                                         </td>
                                         <td>
                                             <div className="flex items-center gap-2.5">
-                                                <div className="w-7 h-7 rounded-full bg-brand-100 flex items-center justify-center shrink-0">
-                                                    <span className="text-[10px] font-bold text-brand-600">
+                                                <div className="w-7 h-7 rounded-full bg-white/[0.05] ring-1 ring-white/10 flex items-center justify-center shrink-0">
+                                                    <span className="text-[10px] font-bold text-signal-cyan font-mono">
                                                         {(order.customerName ?? "?")[0].toUpperCase()}
                                                     </span>
                                                 </div>
                                                 <div>
-                                                    <p className="font-semibold text-slate-800 text-sm leading-none">{order.customerName}</p>
-                                                    <p className="text-xs text-slate-400 mt-0.5">{order.customerEmail}</p>
+                                                    <p className="font-semibold text-graphite-100 text-sm leading-none">{order.customerName}</p>
+                                                    <p className="text-xs text-graphite-300 mt-0.5">{order.customerEmail}</p>
                                                 </div>
                                             </div>
                                         </td>
                                         <td>
-                                            <span className="text-sm text-slate-500">{order.shop?.name || "—"}</span>
+                                            <span className="text-sm text-graphite-300">{order.shop?.name || "—"}</span>
                                         </td>
                                         <td>
-                                            <span className="text-sm text-slate-600 font-medium">{order.items?.length ?? 0}</span>
+                                            <span className="text-sm text-graphite-200 font-medium font-mono tabular-nums">{order.items?.length ?? 0}</span>
                                         </td>
                                         <td>
-                                            <span className="text-sm font-bold text-slate-900 tabular-nums">{fmt(order.totalCents)}</span>
+                                            <span className="text-sm font-semibold text-white font-mono tabular-nums">{fmt(order.totalCents)}</span>
                                         </td>
                                         <td>
-                                            <Badge variant={statusVariant(order.status)} size="sm">
-                                                {order.status.charAt(0) + order.status.slice(1).toLowerCase()}
-                                            </Badge>
+                                            <SignalLamp status={order.status} />
                                         </td>
                                         <td>
-                                            {order.paymentStatus === "PAID" ? (
-                                                <Badge variant="success" size="sm">Paid</Badge>
-                                            ) : order.paymentStatus === "OFFLINE_PENDING" ? (
-                                                <Badge variant="warning" size="sm" dot>
-                                                    Due at pickup
-                                                </Badge>
-                                            ) : (
-                                                <Badge variant="neutral" size="sm">Unpaid</Badge>
-                                            )}
+                                            <PaymentLamp status={order.paymentStatus} />
                                         </td>
                                         <td>
-                                            <span className="text-xs text-slate-400">
+                                            <span className="text-xs text-graphite-300 font-mono">
                                                 {new Date(order.createdAt).toLocaleDateString("en-US", { month:"short", day:"numeric" })}
                                             </span>
                                         </td>
                                         <td className="text-right pr-5">
                                             <div className="flex items-center justify-end gap-1.5">
                                                 <button type="button" onClick={() => setDetailOrder(order)}
-                                                    className="px-2.5 py-1 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors">
+                                                    className="px-2.5 py-1 rounded-md text-xs font-medium text-graphite-300 hover:bg-white/[0.06] hover:text-white transition-colors">
                                                     View
                                                 </button>
                                                 <button type="button" onClick={() => openEditOrder(order)}
-                                                    className="px-2.5 py-1 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors">
+                                                    className="px-2.5 py-1 rounded-md text-xs font-medium text-graphite-300 hover:bg-white/[0.06] hover:text-white transition-colors">
                                                     Edit
                                                 </button>
                                                 {order.status === "UNFULFILLED" && (
                                                     <>
                                                         <button type="button" onClick={() => markFulfilled(order.id)}
-                                                            className="px-2.5 py-1 rounded-lg text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-colors">
+                                                            className="px-2.5 py-1 rounded-md text-xs font-semibold text-signal-green bg-signal-green/10 hover:bg-signal-green/20 transition-colors">
                                                             Fulfill
                                                         </button>
                                                         <button type="button" onClick={() => cancelOrder(order.id)}
-                                                            className="px-2.5 py-1 rounded-lg text-xs font-medium text-red-500 hover:bg-red-50 hover:text-red-700 transition-colors">
+                                                            className="px-2.5 py-1 rounded-md text-xs font-medium text-signal-red hover:bg-signal-red/10 transition-colors">
                                                             Cancel
                                                         </button>
                                                     </>
@@ -479,16 +517,16 @@ export default function OrdersPage() {
 
             {/* Pagination */}
             {totalPages > 1 && (
-                <div className="flex items-center justify-between text-sm text-slate-500">
-                    <span>{totalOrders} total orders</span>
+                <div className="flex items-center justify-between text-sm text-graphite-300">
+                    <span className="font-mono tabular-nums">{totalOrders} total orders</span>
                     <div className="flex items-center gap-1">
                         <button type="button" disabled={page <= 1} onClick={() => setPage(p => p - 1)}
-                            className="px-3 py-1.5 rounded-lg text-sm font-medium border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                            className="px-3 py-1.5 rounded-md text-sm font-medium border border-white/10 text-graphite-200 hover:bg-white/[0.06] disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
                             ← Prev
                         </button>
-                        <span className="px-3 py-1.5 text-xs text-slate-400">Page {page} of {totalPages}</span>
+                        <span className="px-3 py-1.5 text-xs text-graphite-300 font-mono">Page {page} of {totalPages}</span>
                         <button type="button" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}
-                            className="px-3 py-1.5 rounded-lg text-sm font-medium border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                            className="px-3 py-1.5 rounded-md text-sm font-medium border border-white/10 text-graphite-200 hover:bg-white/[0.06] disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
                             Next →
                         </button>
                     </div>
@@ -502,53 +540,56 @@ export default function OrdersPage() {
                 {detailOrder && (
                     <div className="space-y-5">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div className="bg-slate-50 rounded-xl p-4">
-                                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Customer</p>
-                                <p className="text-sm font-semibold text-slate-900">{detailOrder.customerName}</p>
-                                <p className="text-sm text-slate-500 mt-0.5">{detailOrder.customerEmail}</p>
+                            <div className="bg-white/[0.04] rounded-lg p-4">
+                                <p className="console-label mb-2">Customer</p>
+                                <p className="text-sm font-semibold text-white">{detailOrder.customerName}</p>
+                                <p className="text-sm text-graphite-300 mt-0.5">{detailOrder.customerEmail}</p>
                             </div>
-                            <div className="bg-slate-50 rounded-xl p-4">
-                                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                            <div className="bg-white/[0.04] rounded-lg p-4">
+                                <p className="console-label mb-2">
                                     {detailOrder.shippingMethod === "SHIP" ? "Ship To" : "Fulfillment"}
                                 </p>
                                 {detailOrder.shippingMethod === "SHIP" ? (
                                     <>
-                                        <p className="text-sm text-slate-700">{detailOrder.shipAddress1 || "—"}{detailOrder.shipAddress2 ? `, ${detailOrder.shipAddress2}` : ""}</p>
-                                        {detailOrder.shipCity && <p className="text-sm text-slate-500">{detailOrder.shipCity}, {detailOrder.shipState} {detailOrder.shipZip}</p>}
-                                        <p className="text-xs text-slate-400 mt-1.5">Shipping: {fmt(detailOrder.shippingCents ?? 0)}</p>
+                                        <p className="text-sm text-graphite-200">{detailOrder.shipAddress1 || "—"}{detailOrder.shipAddress2 ? `, ${detailOrder.shipAddress2}` : ""}</p>
+                                        {detailOrder.shipCity && <p className="text-sm text-graphite-300">{detailOrder.shipCity}, {detailOrder.shipState} {detailOrder.shipZip}</p>}
+                                        <p className="text-xs text-graphite-300 mt-1.5 font-mono">Shipping: {fmt(detailOrder.shippingCents ?? 0)}</p>
                                     </>
                                 ) : (
                                     <>
-                                        <p className="text-sm font-semibold text-emerald-700">🤝 Customer pickup</p>
-                                        <p className="text-xs text-slate-400 mt-1">No shipping — collected from {detailOrder.shop?.name ?? "the group shop"}</p>
+                                        <p className="text-sm font-semibold text-white inline-flex items-center gap-1.5">
+                                            <svg className="w-4 h-4 text-graphite-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                            Customer pickup
+                                        </p>
+                                        <p className="text-xs text-graphite-300 mt-1">No shipping — collected from {detailOrder.shop?.name ?? "the group shop"}</p>
                                     </>
                                 )}
                             </div>
                         </div>
                         {detailOrder.specialInstructions && (
-                            <div className="bg-violet-50 border border-violet-200 rounded-xl p-4">
-                                <p className="text-xs font-bold text-violet-500 uppercase tracking-wider mb-1.5">Special Instructions</p>
-                                <p className="text-sm text-violet-900 whitespace-pre-wrap">{detailOrder.specialInstructions}</p>
+                            <div className="bg-white/[0.05] border border-white/10 rounded-lg p-4">
+                                <p className="console-label mb-1.5">Special Instructions</p>
+                                <p className="text-sm text-graphite-100 whitespace-pre-wrap">{detailOrder.specialInstructions}</p>
                             </div>
                         )}
                         <div>
-                            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                            <p className="console-label mb-2">
                                 Items ({detailOrder.items?.length})
                             </p>
-                            <div className="rounded-xl overflow-hidden border border-slate-100">
+                            <div className="rounded-lg overflow-hidden border border-white/10">
                                 {detailOrder.items?.map((item: any, i: number) => (
-                                    <div key={i} className="flex justify-between items-center px-4 py-3 border-b border-slate-50 last:border-0 hover:bg-slate-50/60 transition-colors text-sm">
-                                        <span className="text-slate-800 font-medium">{item.product?.name ?? "Item"} {item.size && <span className="text-slate-400 font-normal">({item.size})</span>}</span>
-                                        <span className="text-slate-400 mx-4">×{item.quantity}</span>
-                                        <span className="font-bold text-slate-900 tabular-nums">{fmt(item.priceCents * item.quantity)}</span>
+                                    <div key={i} className="flex justify-between items-center px-4 py-3 border-b border-white/[0.05] last:border-0 hover:bg-white/[0.03] transition-colors text-sm">
+                                        <span className="text-graphite-100 font-medium">{item.product?.name ?? "Item"} {item.size && <span className="text-graphite-300 font-normal">({item.size})</span>}</span>
+                                        <span className="text-graphite-300 mx-4 font-mono">×{item.quantity}</span>
+                                        <span className="font-semibold text-white tabular-nums font-mono">{fmt(item.priceCents * item.quantity)}</span>
                                     </div>
                                 ))}
                             </div>
                         </div>
                         {detailOrder.vendorOrders && detailOrder.vendorOrders.length > 0 && (
                             <div>
-                                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Vendor Orders</p>
-                                <div className="rounded-xl overflow-hidden border border-slate-100 divide-y divide-slate-50">
+                                <p className="console-label mb-2">Vendor Orders</p>
+                                <div className="rounded-lg overflow-hidden border border-white/10 divide-y divide-white/[0.05]">
                                     {detailOrder.vendorOrders.map(vo => {
                                         const isError = vo.status.toLowerCase() === "error";
                                         const isSubmitted = vo.status.toLowerCase() === "submitted";
@@ -570,32 +611,32 @@ export default function OrdersPage() {
                                         const expandable = Boolean(vo.rawResponse);
                                         return (
                                             <div key={vo.id}>
-                                                <div className={`flex items-center justify-between px-4 py-3 text-sm ${expandable ? "cursor-pointer hover:bg-slate-50" : ""}`}
+                                                <div className={`flex items-center justify-between px-4 py-3 text-sm ${expandable ? "cursor-pointer hover:bg-white/[0.03]" : ""}`}
                                                     onClick={() => expandable && setExpandedVendorOrder(isExpanded ? null : vo.id)}>
                                                     <div>
-                                                        <span className="font-medium text-slate-800">{vo.vendor}</span>
-                                                        {vo.externalOrderNumber && <span className="ml-2 text-xs text-slate-400 font-mono">#{vo.externalOrderNumber}</span>}
-                                                        {wasDryRun && <span className="ml-2 text-[10px] font-bold text-amber-600 uppercase">Not actually sent</span>}
+                                                        <span className="font-medium text-graphite-100">{vo.vendor}</span>
+                                                        {vo.externalOrderNumber && <span className="ml-2 text-xs text-graphite-300 font-mono">#{vo.externalOrderNumber}</span>}
+                                                        {wasDryRun && <span className="ml-2 text-[10px] font-bold text-signal-amber uppercase">Not actually sent</span>}
                                                     </div>
                                                     <div className="flex items-center gap-2">
                                                         <Badge variant={wasDryRun ? "warning" : isSubmitted ? "success" : isError ? "danger" : "default"}>
                                                             {wasDryRun && isSubmitted ? "Submitted (test mode)" : vo.status}
                                                         </Badge>
                                                         {expandable && (
-                                                            <svg className={`w-3.5 h-3.5 text-slate-400 transition-transform ${isExpanded ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7"/></svg>
+                                                            <svg className={`w-3.5 h-3.5 text-graphite-400 transition-transform ${isExpanded ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7"/></svg>
                                                         )}
                                                     </div>
                                                 </div>
                                                 {expandable && isExpanded && (
                                                     <div className="px-4 pb-3 -mt-1 space-y-1.5">
                                                         {detailText && (
-                                                            <p className={`text-xs rounded-lg px-3 py-2 font-mono whitespace-pre-wrap break-words ${isError ? "text-red-700 bg-red-50 border border-red-100" : wasDryRun ? "text-amber-800 bg-amber-50 border border-amber-100" : "text-slate-600 bg-slate-50 border border-slate-100"}`}>
+                                                            <p className={`text-xs rounded-md px-3 py-2 font-mono whitespace-pre-wrap break-words ${isError ? "text-signal-red bg-signal-red/10 border border-signal-red/20" : wasDryRun ? "text-signal-amber bg-signal-amber/10 border border-signal-amber/20" : "text-graphite-300 bg-white/[0.04] border border-white/10"}`}>
                                                                 {detailText}
                                                             </p>
                                                         )}
                                                         <details>
-                                                            <summary className="text-[11px] text-slate-400 cursor-pointer hover:text-slate-600">Raw vendor response</summary>
-                                                            <p className="text-[11px] text-slate-500 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 font-mono whitespace-pre-wrap break-words mt-1 max-h-48 overflow-y-auto print:max-h-none print:overflow-visible">
+                                                            <summary className="text-[11px] text-graphite-300 cursor-pointer hover:text-graphite-100">Raw vendor response</summary>
+                                                            <p className="text-[11px] text-graphite-300 bg-white/[0.04] border border-white/10 rounded-md px-3 py-2 font-mono whitespace-pre-wrap break-words mt-1 max-h-48 overflow-y-auto print:max-h-none print:overflow-visible">
                                                                 {vo.rawResponse}
                                                             </p>
                                                         </details>
@@ -608,32 +649,32 @@ export default function OrdersPage() {
                             </div>
                         )}
                         <div>
-                            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">History</p>
+                            <p className="console-label mb-2">History</p>
                             {loadingHistory ? (
-                                <p className="text-xs text-slate-300 italic">Loading…</p>
+                                <p className="text-xs text-graphite-300 italic">Loading…</p>
                             ) : historyEntries.length === 0 ? (
-                                <p className="text-xs text-slate-300 italic">No edits recorded yet.</p>
+                                <p className="text-xs text-graphite-300 italic">No edits recorded yet.</p>
                             ) : (
-                                <div className="rounded-xl border border-slate-100 divide-y divide-slate-50 max-h-56 overflow-y-auto">
+                                <div className="rounded-lg border border-white/10 divide-y divide-white/[0.05] max-h-56 overflow-y-auto">
                                     {historyEntries.map(entry => (
                                         <div key={entry.id} className="px-4 py-2.5 text-xs">
                                             <div className="flex items-center justify-between mb-1">
-                                                <span className="font-semibold text-slate-600">{entry.userEmail ?? "System"}</span>
-                                                <span className="text-slate-400">{new Date(entry.createdAt).toLocaleString()}</span>
+                                                <span className="font-semibold text-graphite-200">{entry.userEmail ?? "System"}</span>
+                                                <span className="text-graphite-300 font-mono">{new Date(entry.createdAt).toLocaleString()}</span>
                                             </div>
                                             <ul className="space-y-0.5">
                                                 {entry.changes.map((c, i) => (
-                                                    <li key={i} className="text-slate-600">
+                                                    <li key={i} className="text-graphite-300">
                                                         <span className="font-medium">{c.label}:</span>{" "}
                                                         {c.oldValue === null ? (
-                                                            <span className="text-emerald-600">{c.newValue}</span>
+                                                            <span className="text-graphite-100 font-medium">{c.newValue}</span>
                                                         ) : c.newValue === null ? (
-                                                            <span className="text-red-500 line-through">{c.oldValue}</span>
+                                                            <span className="text-graphite-300 line-through">{c.oldValue}</span>
                                                         ) : (
                                                             <>
-                                                                <span className="text-slate-400">{c.oldValue}</span>
-                                                                <span className="mx-1 text-slate-300">→</span>
-                                                                <span className="text-slate-800 font-medium">{c.newValue}</span>
+                                                                <span className="text-graphite-300">{c.oldValue}</span>
+                                                                <span className="mx-1 text-graphite-500">→</span>
+                                                                <span className="text-graphite-100 font-medium">{c.newValue}</span>
                                                             </>
                                                         )}
                                                     </li>
@@ -645,11 +686,11 @@ export default function OrdersPage() {
                             )}
                         </div>
                         <div className="flex justify-between items-center pt-1">
-                            <div className="flex items-center gap-2">
-                                <Badge variant={statusVariant(detailOrder.status)}>{detailOrder.status}</Badge>
-                                {detailOrder.shop && <span className="text-xs text-slate-400">via {detailOrder.shop.name}</span>}
+                            <div className="flex items-center gap-3">
+                                <SignalLamp status={detailOrder.status} />
+                                {detailOrder.shop && <span className="text-xs text-graphite-300">via {detailOrder.shop.name}</span>}
                             </div>
-                            <p className="text-lg font-bold text-slate-900">{fmt(detailOrder.totalCents)}</p>
+                            <p className="text-lg font-semibold text-white font-mono tabular-nums">{fmt(detailOrder.totalCents)}</p>
                         </div>
                         <ModalFooter>
                             <Button variant="outline" onClick={() => setDetailOrder(null)}>Close</Button>
@@ -706,7 +747,7 @@ export default function OrdersPage() {
                             </div>
                         </div>
 
-                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+                        <div className="bg-white/[0.04] border border-white/10 rounded-lg p-4 space-y-3">
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div>
                                     <label className="field-label">Fulfillment</label>
@@ -732,8 +773,8 @@ export default function OrdersPage() {
                                         <Input label="ZIP" value={editForm.shipZip}
                                             onChange={e => setEditForm(p => ({ ...p, shipZip: e.target.value }))} />
                                     </div>
-                                    <label className="flex items-center gap-2 text-sm text-slate-600">
-                                        <input type="checkbox" className="accent-brand-600" checked={editForm.residential}
+                                    <label className="flex items-center gap-2 text-sm text-graphite-300">
+                                        <input type="checkbox" className="accent-signal-cyan" checked={editForm.residential}
                                             onChange={e => setEditForm(p => ({ ...p, residential: e.target.checked }))} />
                                         Residential address
                                     </label>
@@ -746,23 +787,23 @@ export default function OrdersPage() {
                             <textarea rows={2} placeholder="Notes, comments, or requests for this order…"
                                 value={editForm.specialInstructions}
                                 onChange={e => setEditForm(p => ({ ...p, specialInstructions: e.target.value }))}
-                                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 resize-none transition-all" />
+                                className={cn(darkFieldClass, "resize-none")} />
                         </div>
 
                         <div>
                             <div className="flex items-center justify-between mb-2">
                                 <label className="field-label mb-0">Items</label>
                                 <button type="button" onClick={addEditItem}
-                                    className="text-xs font-semibold text-brand-600 hover:text-brand-700 transition-colors">
+                                    className="text-xs font-semibold text-signal-cyan hover:text-signal-cyan-bright transition-colors">
                                     + Add item
                                 </button>
                             </div>
                             {editItems.length === 0 ? (
-                                <p className="text-sm text-slate-400 italic py-3 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200">No items — click "Add item"</p>
+                                <p className="text-sm text-graphite-300 italic py-3 text-center bg-white/[0.03] rounded-md border border-dashed border-white/15">No items — click "Add item"</p>
                             ) : (
                                 <div className="space-y-2">
                                     {editItems.map((item, i) => (
-                                        <div key={i} className="flex flex-wrap gap-2 items-center bg-slate-50 rounded-xl p-2">
+                                        <div key={i} className="flex flex-wrap gap-2 items-center bg-white/[0.04] rounded-md p-2">
                                             <Select className="flex-1 min-w-[10rem]" value={item.productId}
                                                 onChange={e => updateEditItem(i, { productId: e.target.value })}>
                                                 <option value="">Select product</option>
@@ -770,22 +811,22 @@ export default function OrdersPage() {
                                             </Select>
                                             <input type="text" placeholder="Size" value={item.size} title="Size" aria-label="Size"
                                                 onChange={e => updateEditItem(i, { size: e.target.value })}
-                                                className="w-20 rounded-xl border border-slate-200 px-2 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" />
+                                                className={cn(darkFieldClass, "w-20 py-2")} />
                                             <input type="text" placeholder="Color" value={item.color} title="Color" aria-label="Color"
                                                 onChange={e => updateEditItem(i, { color: e.target.value })}
-                                                className="w-24 rounded-xl border border-slate-200 px-2 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" />
+                                                className={cn(darkFieldClass, "w-24 py-2")} />
                                             <input type="number" min={1} value={item.quantity} title="Quantity" aria-label="Quantity"
                                                 onChange={e => updateEditItem(i, { quantity: +e.target.value })}
-                                                className="w-16 rounded-xl border border-slate-200 px-2 py-2 text-sm text-center outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" />
+                                                className={cn(darkFieldClass, "w-16 py-2 text-center")} />
                                             <div className="relative w-24">
-                                                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm">$</span>
+                                                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-graphite-500 text-sm">$</span>
                                                 <input type="number" step="0.01" min="0" value={item.priceDollars} title="Unit price" aria-label="Unit price"
                                                     onChange={e => updateEditItem(i, { priceDollars: e.target.value })}
-                                                    className="w-full pl-5 pr-2 py-2 rounded-xl border border-slate-200 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" />
+                                                    className={cn(darkFieldClass, "pl-5 pr-2 py-2")} />
                                             </div>
                                             <button type="button" title="Remove" aria-label="Remove item"
                                                 onClick={() => removeEditItem(i)}
-                                                className="p-1.5 text-slate-300 hover:text-red-500 transition-colors rounded-lg hover:bg-red-50">
+                                                className="p-1.5 text-graphite-500 hover:text-signal-red transition-colors rounded-md hover:bg-signal-red/10">
                                                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
                                             </button>
                                         </div>
@@ -794,11 +835,11 @@ export default function OrdersPage() {
                             )}
                         </div>
 
-                        <div className="flex justify-between items-center pt-2 border-t border-slate-100">
-                            <div className="text-xs text-slate-400">
+                        <div className="flex justify-between items-center pt-2 border-t border-white/[0.06]">
+                            <div className="text-xs text-graphite-300 font-mono">
                                 Subtotal {fmt(editSubtotalCents)} + Shipping {fmt(editShippingCents)}
                             </div>
-                            <p className="text-lg font-bold text-slate-900">{fmt(editTotalCents)}</p>
+                            <p className="text-lg font-semibold text-white font-mono tabular-nums">{fmt(editTotalCents)}</p>
                         </div>
 
                         <ModalFooter>
@@ -835,18 +876,18 @@ export default function OrdersPage() {
                         <textarea rows={2} placeholder="Notes, comments, or requests for this order…"
                             value={createForm.specialInstructions}
                             onChange={e => setCreateForm(p => ({ ...p, specialInstructions: e.target.value }))}
-                            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 resize-none transition-all" />
+                            className={cn(darkFieldClass, "resize-none")} />
                     </div>
                     <div>
                         <div className="flex items-center justify-between mb-2">
                             <label className="field-label mb-0">Items</label>
                             <button type="button" onClick={() => setCartItems(p => [...p, { productId:"", quantity:1 }])}
-                                className="text-xs font-semibold text-brand-600 hover:text-brand-700 transition-colors">
+                                className="text-xs font-semibold text-signal-cyan hover:text-signal-cyan-bright transition-colors">
                                 + Add item
                             </button>
                         </div>
                         {cartItems.length === 0 ? (
-                            <p className="text-sm text-slate-400 italic py-3 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200">No items yet — click "Add item"</p>
+                            <p className="text-sm text-graphite-300 italic py-3 text-center bg-white/[0.03] rounded-md border border-dashed border-white/15">No items yet — click "Add item"</p>
                         ) : (
                             <div className="space-y-2">
                                 {cartItems.map((item, i) => (
@@ -858,10 +899,10 @@ export default function OrdersPage() {
                                         </Select>
                                         <input type="number" min={1} value={item.quantity} title="Quantity" aria-label="Quantity" placeholder="1"
                                             onChange={e => setCartItems(p => p.map((it,idx) => idx===i ? {...it, quantity:+e.target.value} : it))}
-                                            className="w-20 rounded-xl border border-slate-200 px-2 py-2 text-sm text-center outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" />
+                                            className={cn(darkFieldClass, "w-20 py-2 text-center")} />
                                         <button type="button" title="Remove" aria-label="Remove item"
                                             onClick={() => setCartItems(p => p.filter((_,idx) => idx!==i))}
-                                            className="p-1.5 text-slate-300 hover:text-red-500 transition-colors rounded-lg hover:bg-red-50">
+                                            className="p-1.5 text-graphite-500 hover:text-signal-red transition-colors rounded-md hover:bg-signal-red/10">
                                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
                                         </button>
                                     </div>
@@ -878,8 +919,8 @@ export default function OrdersPage() {
 
             {/* Export Modal */}
             <Modal open={showExport} onClose={() => setShowExport(false)} title="Export Orders" size="sm">
-                <p className="text-sm text-slate-600 mb-4">
-                    Export <strong className="text-slate-900">{filtered.length}</strong> order{filtered.length !== 1 ? "s" : ""} based on current filters.
+                <p className="text-sm text-graphite-300 mb-4">
+                    Export <strong className="text-white">{filtered.length}</strong> order{filtered.length !== 1 ? "s" : ""} based on current filters.
                 </p>
                 <ModalFooter>
                     <Button variant="outline" onClick={() => setShowExport(false)}>Cancel</Button>

@@ -41,10 +41,10 @@ const icons: Record<ToastType, React.ReactNode> = {
 };
 
 const styles: Record<ToastType, { wrap: string; icon: string }> = {
-    success: { wrap: "border-emerald-200 bg-emerald-50",  icon: "bg-emerald-100 text-emerald-600" },
-    error:   { wrap: "border-red-200   bg-red-50",        icon: "bg-red-100    text-red-600"     },
-    warning: { wrap: "border-amber-200 bg-amber-50",      icon: "bg-amber-100  text-amber-600"   },
-    info:    { wrap: "border-violet-200 bg-violet-50",    icon: "bg-violet-100 text-violet-600"  },
+    success: { wrap: "border-signal-green/25 bg-graphite-900/95", icon: "bg-signal-green/15 text-signal-green" },
+    error:   { wrap: "border-signal-red/25   bg-graphite-900/95", icon: "bg-signal-red/15   text-signal-red"   },
+    warning: { wrap: "border-signal-amber/25 bg-graphite-900/95", icon: "bg-signal-amber/15 text-signal-amber" },
+    info:    { wrap: "border-signal-cyan/25  bg-graphite-900/95", icon: "bg-signal-cyan/15  text-signal-cyan"  },
 };
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
@@ -72,17 +72,17 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                             className={cn(
                                 "pointer-events-auto flex items-start gap-3",
                                 "min-w-[260px] max-w-sm px-4 py-3",
-                                "rounded-xl border shadow-lg ring-1 ring-black/5",
+                                "rounded-lg border shadow-console-hover backdrop-blur-sm",
                                 styles[t.type].wrap
                             )}
                         >
                             <span className={cn(
-                                "flex items-center justify-center w-6 h-6 rounded-lg shrink-0 mt-0.5",
+                                "flex items-center justify-center w-6 h-6 rounded-md shrink-0 mt-0.5",
                                 styles[t.type].icon
                             )}>
                                 {icons[t.type]}
                             </span>
-                            <p className="text-sm font-medium text-slate-800 leading-snug pt-0.5">
+                            <p className="text-sm font-medium text-graphite-100 leading-snug pt-0.5">
                                 {t.message}
                             </p>
                         </motion.div>

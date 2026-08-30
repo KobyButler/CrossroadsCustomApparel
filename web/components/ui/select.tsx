@@ -12,7 +12,7 @@ export function Select({ label, error, className, id, children, ...props }: Sele
     return (
         <div className={cn("w-full", className)}>
             {label && (
-                <label htmlFor={selectId} className="field-label">
+                <label htmlFor={selectId} className="mb-1.5 block text-xs font-semibold text-graphite-200">
                     {label}
                 </label>
             )}
@@ -20,26 +20,26 @@ export function Select({ label, error, className, id, children, ...props }: Sele
                 <select
                     id={selectId}
                     className={cn(
-                        "w-full appearance-none rounded-xl border bg-white text-sm text-slate-900",
+                        "w-full appearance-none rounded-md border bg-white/[0.03] text-sm text-white",
                         "pr-9 px-3 py-2.5 transition-all duration-200 cursor-pointer",
-                        "focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400",
-                        "disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-slate-50",
+                        "focus:outline-none focus:ring-2 focus:ring-signal-cyan/30 focus:border-signal-cyan/60",
+                        "disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-white/[0.02]",
                         error
-                            ? "border-red-300"
-                            : "border-slate-200 hover:border-slate-300"
+                            ? "border-signal-red/40"
+                            : "border-white/10 hover:border-white/20"
                     )}
                     {...props}
                 >
                     {children}
                 </select>
                 {/* chevron */}
-                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-graphite-500">
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                     </svg>
                 </span>
             </div>
-            {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+            {error && <p className="mt-1 text-xs text-signal-red">{error}</p>}
         </div>
     );
 }

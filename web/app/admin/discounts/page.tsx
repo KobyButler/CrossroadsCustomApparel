@@ -9,6 +9,8 @@ import { Modal, ModalFooter } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
 import { motion } from "framer-motion";
 
+const EASE = [0.16, 1, 0.3, 1] as [number, number, number, number];
+
 type DiscountCode = {
     id:string; code:string; type:"PERCENT"|"AMOUNT";
     value:number; active:boolean; usedCount:number;
@@ -58,38 +60,35 @@ export default function DiscountsPage() {
 
     return (
         <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <motion.div initial={{ opacity:0, y:-8 }} animate={{ opacity:1, y:0 }} transition={{ duration:0.4, ease:EASE }}
+                className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                     <h1 className="page-title">Discount Codes</h1>
                     <p className="page-subtitle">Create codes customers can apply at checkout</p>
                 </div>
-                <motion.button whileHover={{ y:-1 }} whileTap={{ scale:0.97 }}
-                    onClick={() => { setForm({ ...EMPTY }); setShowCreate(true); }}
-                    className="btn-shine flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white transition-all duration-200"
-                    style={{ background:"linear-gradient(135deg,#8b5cf6 0%,#7c3aed 100%)", boxShadow:"0 4px 16px rgba(124,58,237,0.35)" }}
-                >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg>
+                <Button variant="primary" onClick={() => { setForm({ ...EMPTY }); setShowCreate(true); }}
+                    icon={<svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg>}>
                     Create Code
-                </motion.button>
-            </div>
+                </Button>
+            </motion.div>
 
-            <div className="bg-white rounded-2xl ring-1 ring-black/5 shadow-card overflow-hidden">
+            <div className="console-panel rounded-lg overflow-hidden">
                 {loading ? (
                     <div className="p-8 space-y-3">
                         {[1,2,3].map(i => (
-                            <div key={i} className="animate-pulse flex items-center gap-4">
-                                <div className="h-6 w-24 bg-slate-100 rounded-lg"/>
-                                <div className="h-4 w-20 bg-slate-100 rounded"/>
+                            <div key={i} className="flex items-center gap-4">
+                                <div className="h-6 w-24 skeleton rounded-md"/>
+                                <div className="h-4 w-20 skeleton rounded"/>
                                 <div className="flex-1"/>
-                                <div className="h-5 w-14 bg-slate-100 rounded-full"/>
+                                <div className="h-5 w-14 skeleton rounded-full"/>
                             </div>
                         ))}
                     </div>
                 ) : codes.length === 0 ? (
-                    <div className="flex flex-col items-center py-16 text-slate-300">
+                    <div className="flex flex-col items-center justify-center py-16 text-graphite-600">
                         <svg className="w-12 h-12 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/></svg>
-                        <p className="text-sm text-slate-400 font-medium">No discount codes yet</p>
-                        <p className="text-xs text-slate-300 mt-0.5">Create a code to offer discounts at checkout</p>
+                        <p className="text-sm text-graphite-300 font-medium">No discount codes yet</p>
+                        <p className="text-xs text-graphite-300 mt-0.5">Create a code to offer discounts at checkout</p>
                     </div>
                 ) : (
                     <div className="overflow-x-auto">
@@ -104,22 +103,22 @@ export default function DiscountsPage() {
                                         <motion.tr key={c.id} initial={{ opacity:0, y:4 }} animate={{ opacity:1, y:0 }} transition={{ delay:idx*0.03, duration:0.2 }}>
                                             <td>
                                                 <span className="inline-flex items-center gap-1.5">
-                                                    <code className="text-sm font-mono font-bold tracking-widest text-slate-800 bg-slate-100 px-2.5 py-1 rounded-lg">
+                                                    <code className="text-sm font-mono font-bold tracking-widest text-graphite-100 bg-white/[0.06] px-2.5 py-1 rounded-md">
                                                         {c.code}
                                                     </code>
                                                     <button type="button" title="Copy code" aria-label="Copy code"
                                                         onClick={() => navigator.clipboard.writeText(c.code)}
-                                                        className="p-1 text-slate-300 hover:text-brand-500 transition-colors">
+                                                        className="p-1 text-graphite-500 hover:text-signal-cyan transition-colors">
                                                         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
                                                     </button>
                                                 </span>
                                             </td>
                                             <td>
-                                                <span className="text-sm font-semibold text-brand-600">{formatValue(c)}</span>
+                                                <span className="text-sm font-semibold font-mono text-signal-cyan">{formatValue(c)}</span>
                                             </td>
                                             <td>
-                                                <span className="text-sm text-slate-600 tabular-nums">
-                                                    {c.usedCount}{c.maxUses ? <span className="text-slate-400"> / {c.maxUses}</span> : ""}
+                                                <span className="text-sm font-mono text-graphite-200 tabular-nums">
+                                                    {c.usedCount}{c.maxUses ? <span className="text-graphite-300"> / {c.maxUses}</span> : ""}
                                                 </span>
                                             </td>
                                             <td>
@@ -129,14 +128,14 @@ export default function DiscountsPage() {
                                             </td>
                                             <td>
                                                 {c.expiresAt ? (
-                                                    <span className={`text-xs ${expired ? "text-red-500 font-medium" : "text-slate-400"}`}>
+                                                    <span className={`text-xs font-mono ${expired ? "text-signal-red font-medium" : "text-graphite-300"}`}>
                                                         {new Date(c.expiresAt).toLocaleDateString("en-US", { month:"short", day:"numeric", year:"numeric", timeZone:"UTC" })}
                                                     </span>
-                                                ) : <span className="text-xs text-slate-300">Never</span>}
+                                                ) : <span className="text-xs text-graphite-500">Never</span>}
                                             </td>
                                             <td className="text-right pr-5">
                                                 <button type="button" onClick={() => toggleCode(c.id, c.active)}
-                                                    className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${c.active ? "text-red-500 hover:bg-red-50 hover:text-red-700" : "text-emerald-600 bg-emerald-50 hover:bg-emerald-100"}`}>
+                                                    className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${c.active ? "text-signal-red hover:bg-signal-red/10" : "text-signal-green bg-signal-green/10 hover:bg-signal-green/15"}`}>
                                                     {c.active ? "Deactivate" : "Activate"}
                                                 </button>
                                             </td>
