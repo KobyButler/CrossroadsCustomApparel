@@ -98,7 +98,7 @@ function SidebarContent({ onNav }: { onNav?: () => void }) {
                 />
                 <div className="flex items-center gap-1.5 text-[10px] font-medium tracking-wide text-graphite-300">
                     <span className="w-1.5 h-1.5 rounded-full bg-signal-green animate-signal-pulse" />
-                    Dispatch Console
+                    Admin Console
                 </div>
             </div>
 
