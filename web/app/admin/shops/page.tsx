@@ -6,6 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Modal, ModalFooter } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
+import { IconButton, IconButtonRow } from "@/components/ui/icon-button";
+import { EditIcon, PowerIcon, CheckIcon, ArchiveIcon, RestoreIcon } from "@/components/ui/icons";
 import { motion } from "framer-motion";
 
 const EASE = [0.16, 1, 0.3, 1] as [number, number, number, number];
@@ -21,7 +23,7 @@ const item = {
 
 type Shop = {
     id: string; name: string; slug: string;
-    active: boolean; shippingEnabled: boolean; expiresAt?: string; notes?: string; createdAt: string;
+    active: boolean; archived: boolean; shippingEnabled: boolean; expiresAt?: string; notes?: string; createdAt: string;
     _count?: { products: number };
 };
 
@@ -31,11 +33,13 @@ export default function ShopsPage() {
     const { toast } = useToast();
     const [shops, setShops]           = useState<Shop[]>([]);
     const [loading, setLoading]       = useState(true);
+    const [tab, setTab]               = useState<"active"|"archived">("active");
     const [showCreate, setShowCreate] = useState(false);
     const [editShop, setEditShop]     = useState<Shop | null>(null);
     const [form, setForm]             = useState({ ...EMPTY });
     const [saving, setSaving]         = useState(false);
     const [search, setSearch]         = useState("");
+    const [archiveTarget, setArchiveTarget] = useState<Shop | null>(null);
 
     useEffect(() => {
         api("/shops")
@@ -44,8 +48,11 @@ export default function ShopsPage() {
             .finally(() => setLoading(false));
     }, []);
 
-    const filtered = shops.filter(s => !search || s.name.toLowerCase().includes(search.toLowerCase()));
-    const activeCount = shops.filter(s => s.active).length;
+    const liveShops = shops.filter(s => !s.archived);
+    const archivedShops = shops.filter(s => s.archived);
+    const tabShops = tab === "active" ? liveShops : archivedShops;
+    const filtered = tabShops.filter(s => !search || s.name.toLowerCase().includes(search.toLowerCase()));
+    const activeCount = liveShops.filter(s => s.active).length;
 
     async function createShop(e: React.FormEvent) {
         e.preventDefault(); setSaving(true);
@@ -92,6 +99,23 @@ export default function ShopsPage() {
         } catch (err: any) { toast(err.message || "Failed", "error"); }
     }
 
+    async function archiveShop(shop: Shop) {
+        try {
+            const u = await api(`/shops/${shop.id}`, { method:"PATCH", body:JSON.stringify({ archived:true }) });
+            setShops(p => p.map(s => s.id===shop.id ? { ...s, archived:true, active:u.active } : s));
+            setArchiveTarget(null);
+            toast(`${shop.name} archived`);
+        } catch (err: any) { toast(err.message || "Failed to archive shop", "error"); }
+    }
+
+    async function unarchiveShop(shop: Shop) {
+        try {
+            const u = await api(`/shops/${shop.id}`, { method:"PATCH", body:JSON.stringify({ archived:false }) });
+            setShops(p => p.map(s => s.id===shop.id ? { ...s, archived:false } : s));
+            toast(`${shop.name} restored — reactivate it from the Shops tab when ready`);
+        } catch (err: any) { toast(err.message || "Failed to restore shop", "error"); }
+    }
+
     function copyLink(slug: string) {
         navigator.clipboard.writeText(`${window.location.origin}/shop/${slug}`).then(() => toast("Link copied!"));
     }
@@ -128,9 +152,9 @@ export default function ShopsPage() {
             {/* Stats */}
             <motion.div variants={container} initial="hidden" animate="show" className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                 {[
-                    { label:"Total Shops", value:shops.length, color:"text-white" },
+                    { label:"Total Shops", value:liveShops.length, color:"text-white" },
                     { label:"Active", value:activeCount, color:"text-signal-green" },
-                    { label:"Inactive", value:shops.length-activeCount, color:"text-graphite-300" }
+                    { label:"Inactive", value:liveShops.length-activeCount, color:"text-graphite-300" }
                 ].map((s) => (
                     <motion.div key={s.label} variants={item} whileHover={{ y:-2 }} transition={{ duration:0.2, ease:EASE }}
                         className="stat-card">
@@ -139,6 +163,28 @@ export default function ShopsPage() {
                     </motion.div>
                 ))}
             </motion.div>
+
+            {/* Tabs */}
+            <div className="flex items-center gap-1 border-b border-white/[0.08]">
+                {([
+                    { key:"active" as const,   label:`Shops (${liveShops.length})` },
+                    { key:"archived" as const, label:`Archived (${archivedShops.length})` },
+                ]).map(t => (
+                    <button key={t.key} type="button" onClick={() => setTab(t.key)}
+                        className={`relative px-4 py-2.5 text-sm font-medium transition-colors -mb-px ${
+                            tab === t.key ? "text-signal-cyan" : "text-graphite-300 hover:text-white"
+                        }`}
+                    >
+                        {tab === t.key && (
+                            <motion.div layoutId="shops-tab-indicator"
+                                className="absolute bottom-0 left-0 right-0 h-0.5 bg-signal-cyan rounded-full shadow-glow-cyan-sm"
+                                transition={{ duration: 0.2 }}
+                            />
+                        )}
+                        {t.label}
+                    </button>
+                ))}
+            </div>
 
             {/* Search */}
             <div className="max-w-xs">
@@ -165,8 +211,8 @@ export default function ShopsPage() {
                 ) : filtered.length === 0 ? (
                     <div className="flex flex-col items-center py-16 text-graphite-500">
                         <svg className="w-12 h-12 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
-                        <p className="text-sm text-graphite-300 font-medium">No shops yet</p>
-                        <p className="text-xs text-graphite-500 mt-0.5">Create a shop to generate a shareable link</p>
+                        <p className="text-sm text-graphite-300 font-medium">{tab === "active" ? "No shops yet" : "No archived shops"}</p>
+                        <p className="text-xs text-graphite-300 mt-0.5">{tab === "active" ? "Create a shop to generate a shareable link" : "Shops you archive will show up here"}</p>
                     </div>
                 ) : (
                     <div className="overflow-x-auto">
@@ -202,8 +248,8 @@ export default function ShopsPage() {
                                                 </div>
                                             </td>
                                             <td>
-                                                <Badge variant={shop.active && !expired ? "success" : "danger"} size="sm">
-                                                    {expired ? "Expired" : shop.active ? "Active" : "Inactive"}
+                                                <Badge variant={shop.archived ? "neutral" : shop.active && !expired ? "success" : "danger"} size="sm">
+                                                    {shop.archived ? "Archived" : expired ? "Expired" : shop.active ? "Active" : "Inactive"}
                                                 </Badge>
                                             </td>
                                             <td>
@@ -226,16 +272,25 @@ export default function ShopsPage() {
                                                 ) : <span className="text-xs text-graphite-500">No expiry</span>}
                                             </td>
                                             <td className="text-right pr-5">
-                                                <div className="flex items-center justify-end gap-1.5">
-                                                    <button type="button" onClick={() => openEdit(shop)}
-                                                        className="px-2.5 py-1 rounded-md text-xs font-medium text-graphite-300 hover:bg-white/[0.06] hover:text-white transition-colors">
-                                                        Edit
-                                                    </button>
-                                                    <button type="button" onClick={() => toggleActive(shop)}
-                                                        className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${shop.active ? "text-signal-red hover:bg-signal-red/10" : "text-signal-green bg-signal-green/10 hover:bg-signal-green/20"}`}>
-                                                        {shop.active ? "Deactivate" : "Activate"}
-                                                    </button>
-                                                </div>
+                                                <IconButtonRow>
+                                                    {shop.archived ? (
+                                                        <IconButton title="Restore from archive" tone="emerald" onClick={() => unarchiveShop(shop)}>
+                                                            <RestoreIcon />
+                                                        </IconButton>
+                                                    ) : (
+                                                        <>
+                                                            <IconButton title="Edit shop" onClick={() => openEdit(shop)}>
+                                                                <EditIcon />
+                                                            </IconButton>
+                                                            <IconButton title={shop.active ? "Deactivate" : "Activate"} tone={shop.active ? "amber" : "emerald"} onClick={() => toggleActive(shop)}>
+                                                                {shop.active ? <PowerIcon /> : <CheckIcon />}
+                                                            </IconButton>
+                                                            <IconButton title="Archive shop" tone="red" onClick={() => setArchiveTarget(shop)}>
+                                                                <ArchiveIcon />
+                                                            </IconButton>
+                                                        </>
+                                                    )}
+                                                </IconButtonRow>
                                             </td>
                                         </motion.tr>
                                     );
@@ -277,6 +332,20 @@ export default function ShopsPage() {
                         <Button type="submit" loading={saving}>{editShop ? "Save Changes" : "Create Shop"}</Button>
                     </ModalFooter>
                 </form>
+            </Modal>
+
+            {/* Archive Confirmation Modal */}
+            <Modal open={!!archiveTarget} onClose={() => setArchiveTarget(null)} title="Archive Shop" size="sm">
+                <p className="text-sm text-graphite-200 mb-1">
+                    Archive <span className="font-semibold text-white">{archiveTarget?.name}</span>?
+                </p>
+                <p className="text-xs text-graphite-300 mb-4">
+                    It's taken off the storefront and moved to the Archived tab. You can restore it any time — nothing is deleted.
+                </p>
+                <ModalFooter>
+                    <Button type="button" variant="outline" onClick={() => setArchiveTarget(null)}>Cancel</Button>
+                    <Button type="button" variant="danger" onClick={() => archiveTarget && archiveShop(archiveTarget)}>Archive</Button>
+                </ModalFooter>
             </Modal>
         </div>
     );

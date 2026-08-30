@@ -8,7 +8,7 @@ import {
     syncCatalogEPDD,
     syncInventoryDip,
 } from '../vendors/sanmar-sftp.js';
-import { checkSanMarInventory, getSanMarProductInfo, getOrderStatus, getOrderShipmentNotification, getInvoiceByPO } from '../vendors/sanmar.js';
+import { checkSanMarInventory, getSanMarProductInfo, getOrderStatus, getOrderShipmentNotification, getInvoiceByPO, liveLookupAndCacheStyle } from '../vendors/sanmar.js';
 import { requireAuth } from '../middleware/auth.js';
 import { isUpchargeSize } from '../utils/pricing.js';
 
@@ -134,6 +134,14 @@ router.get('/sync-logs', async (req, res) => {
 
 /* ─── Browse catalog ──────────────────────────────────────────────────────── */
 
+// A real SanMar style code (PC78, PC78H, PC78ZH, DT6000, J317V…) is short,
+// has no spaces, and always includes a digit somewhere — unlike a plain
+// keyword search ("hoodie", "core fleece", "polo"), which is what most
+// characters typed into this box actually are. Used to decide when a local
+// search miss is worth a live SanMar lookup rather than just a keyword miss —
+// the digit requirement is what keeps ordinary typing from ever qualifying.
+const STYLE_CODE_RE = /^(?=[A-Za-z0-9]*\d)[A-Za-z0-9]{2,14}([.\-][A-Za-z0-9]{1,8})?$/;
+
 router.get('/catalog', async (req, res) => {
     const q           = (req.query.q as string ?? '').trim();
     const category    = req.query.category    as string | undefined;
@@ -187,10 +195,41 @@ router.get('/catalog', async (req, res) => {
     }
 
     try {
-        const [data, total] = await Promise.all([
+        let [data, total] = await Promise.all([
             prisma.sanmarCatalogProduct.findMany({ where, take: limit, skip, orderBy: [{ style: 'asc' }, { colorName: 'asc' }, { sizeName: 'asc' }] }),
             prisma.sanmarCatalogProduct.count({ where }),
         ]);
+
+        // If the query looks like an actual style code (not a keyword phrase),
+        // check SanMar live whenever the local cache doesn't have an EXACT style
+        // match — not just when it returned zero rows. `q` matches with `contains`
+        // against style/title/brand/description, so searching "PC78" can come
+        // back non-empty purely from other styles' description text mentioning
+        // "PC78H"/"PC78ZH" (companion-product copy) while PC78 itself is missing
+        // from last week's sync — a naive "only fall back when empty" check would
+        // never catch that. Only replaces the result set when SanMar actually has
+        // the style; otherwise the original (imperfect) local matches stand.
+        //
+        // The live lookup itself is a real SOAP round-trip to SanMar and routinely
+        // takes several seconds — far too slow to risk on every debounced
+        // keystroke while someone is still typing. The frontend only sets
+        // `live=true` on a second, longer-settled debounce after typing has
+        // actually paused, so this never runs mid-keystroke; every other search
+        // request (the fast, common case) skips this branch entirely.
+        const allowLive = req.query.live === 'true';
+        const candidate = style ?? (q && STYLE_CODE_RE.test(q) ? q : null);
+        const hasExactMatch = candidate ? data.some(r => r.style.toUpperCase() === candidate.toUpperCase()) : true;
+        if (allowLive && candidate && !hasExactMatch) {
+            const liveRows = await liveLookupAndCacheStyle(candidate.toUpperCase());
+            if (liveRows.length > 0) {
+                const liveWhere = { style: candidate.toUpperCase() };
+                [data, total] = await Promise.all([
+                    prisma.sanmarCatalogProduct.findMany({ where: liveWhere, take: limit, skip, orderBy: [{ style: 'asc' }, { colorName: 'asc' }, { sizeName: 'asc' }] }),
+                    prisma.sanmarCatalogProduct.count({ where: liveWhere }),
+                ]);
+            }
+        }
+
         res.json({ data, total, page, limit, pages: Math.ceil(total / limit) });
     } catch (err: any) {
         res.status(500).json({ error: err.message ?? 'Catalog query failed' });
@@ -234,11 +273,25 @@ router.get('/catalog/meta', async (_req, res) => {
 
 router.get('/catalog/:style', async (req, res) => {
     try {
-        const rows = await prisma.sanmarCatalogProduct.findMany({
+        let rows = await prisma.sanmarCatalogProduct.findMany({
             where:   { style: req.params.style },
             orderBy: [{ colorName: 'asc' }, { sizeName: 'asc' }],
         });
-        if (!rows.length) return res.status(404).json({ error: 'Style not found in catalog' });
+
+        // Not in the local cache — try SanMar live before giving up (see
+        // liveLookupAndCacheStyle for why the cache alone isn't reliable here).
+        if (!rows.length) {
+            const liveStyle = req.params.style.toUpperCase();
+            const liveRows = await liveLookupAndCacheStyle(liveStyle);
+            if (liveRows.length > 0) {
+                rows = await prisma.sanmarCatalogProduct.findMany({
+                    where:   { style: liveStyle },
+                    orderBy: [{ colorName: 'asc' }, { sizeName: 'asc' }],
+                });
+            }
+        }
+
+        if (!rows.length) return res.status(404).json({ error: 'Style not found in catalog or on SanMar' });
 
         const first    = rows[0];
         const colors   = [...new Set(rows.map(r => r.colorName).filter(Boolean))];
@@ -325,10 +378,11 @@ router.get('/product-info/:style', async (req, res) => {
 /* ─── Import catalog product into local Products ─────────────────────────── */
 
 router.post('/import', async (req, res) => {
-    const { style, shopIds, colors: colorSelection, priceCents } = req.body as {
+    const { style, shopIds, colors: colorSelection, sizes: sizeSelection, priceCents } = req.body as {
         style: string;
         shopIds?: string[];
         colors?: string[];
+        sizes?: string[];
         priceCents?: number;
     };
 
@@ -337,7 +391,11 @@ router.post('/import', async (req, res) => {
     }
 
     // Fetch all variants from catalog
-    const rows = await prisma.sanmarCatalogProduct.findMany({ where: { style } });
+    let rows = await prisma.sanmarCatalogProduct.findMany({ where: { style } });
+    if (!rows.length) {
+        const liveRows = await liveLookupAndCacheStyle(style.toUpperCase());
+        if (liveRows.length > 0) rows = await prisma.sanmarCatalogProduct.findMany({ where: { style: style.toUpperCase() } });
+    }
     if (!rows.length) return res.status(404).json({ error: 'Style not found in SanMar catalog' });
 
     const first     = rows[0];
@@ -348,7 +406,9 @@ router.post('/import', async (req, res) => {
         return res.status(400).json({ error: 'At least one color is required. Pick a color to offer, or add this product manually from the Products page.' });
     }
     const sizeRows  = colors.length ? rows.filter(r => colors.includes(r.colorName)) : rows;
-    const sizes     = [...new Set(sizeRows.map(r => r.sizeName).filter(Boolean))];
+    const allSizes  = [...new Set(sizeRows.map(r => r.sizeName).filter(Boolean))];
+    // Only the sizes explicitly picked (falls back to all available for the chosen colors)
+    const sizes     = Array.isArray(sizeSelection) && sizeSelection.length ? sizeSelection.filter(s => allSizes.includes(s)) : allSizes;
     const price     = priceCents ?? Math.min(...rows.map(r => r.priceCents).filter(p => p > 0)) ?? 0;
     // Prefer an image from one of the selected colors; fall back to the style's default image
     const colorImage = rows.find(r => colors.includes(r.colorName) && r.productImage)?.productImage;

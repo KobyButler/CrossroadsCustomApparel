@@ -5,6 +5,29 @@ import { vendorStyleCode } from '../utils/vendorGrouping.js';
 
 /* ─── Helpers ─────────────────────────────────────────────────────────────── */
 
+// soap.createClientAsync fetches and parses the target WSDL document from
+// scratch on every call (a few hundred ms, plus a network round-trip if the
+// WSDL is hosted remotely) — real cost on top of the SOAP call itself, and
+// pure waste since the same WSDL never changes between calls. Every SanMar
+// SOAP call in this file goes through this cache instead of calling
+// createClientAsync directly, keyed by WSDL URL. Credentials are passed as
+// method arguments per-call (not stored on the client), so a single client
+// instance is safe to reuse concurrently across unrelated requests. Caches
+// the in-flight promise (not just the resolved client) so concurrent calls
+// racing to create the same client share one creation instead of each
+// starting their own; a failed creation is evicted so the next call retries
+// fresh rather than being stuck permanently broken by one transient failure.
+const soapClientCache = new Map<string, Promise<soap.Client>>();
+function getSoapClient(wsdlUrl: string): Promise<soap.Client> {
+    let clientPromise = soapClientCache.get(wsdlUrl);
+    if (!clientPromise) {
+        clientPromise = soap.createClientAsync(wsdlUrl);
+        clientPromise.catch(() => soapClientCache.delete(wsdlUrl));
+        soapClientCache.set(wsdlUrl, clientPromise);
+    }
+    return clientPromise;
+}
+
 function asArray<T>(value: T | T[] | null | undefined): T[] {
     if (Array.isArray(value)) return value;
     return value == null ? [] : [value];
@@ -71,7 +94,7 @@ export async function submitOrderToSanMar(order: any, lines: LineGroup) {
     if (!config.sanmar.wsdlUrl) throw new Error('SANMAR_WSDL_URL is required');
     if (!config.sanmar.customerNumber) throw new Error('SANMAR_CUSTOMER_NUMBER is required');
 
-    const client = await soap.createClientAsync(config.sanmar.wsdlUrl);
+    const client = await getSoapClient(config.sanmar.wsdlUrl);
 
     const poEnvelope = await buildPOEnvelope(order, lines);
     const auth = poAuthArgs();
@@ -262,7 +285,7 @@ export async function checkSanMarInventory(
     if (!wsdlUrl) throw new Error('SANMAR_INVENTORY_WSDL_URL is required');
     if (!config.sanmar.customerNumber) throw new Error('SANMAR_CUSTOMER_NUMBER is required');
 
-    const client = await soap.createClientAsync(wsdlUrl);
+    const client = await getSoapClient(wsdlUrl);
 
     const [resp] = await client.getInventoryQtyForStyleColorSizeAsync({
         arg0: Number(config.sanmar.customerNumber),
@@ -311,7 +334,7 @@ export async function getSanMarProductInfo(
     if (!wsdlUrl) throw new Error('SANMAR_PRODUCTINFO_WSDL_URL is required');
     if (!config.sanmar.customerNumber) throw new Error('SANMAR_CUSTOMER_NUMBER is required');
 
-    const client = await soap.createClientAsync(wsdlUrl);
+    const client = await getSoapClient(wsdlUrl);
 
     const [resp] = await client.getProductInfoByStyleColorSizeAsync({
         arg0: {
@@ -349,6 +372,60 @@ export async function getSanMarProductInfo(
     };
 }
 
+/**
+ * Looks up a style directly against SanMar's live Product Info API, bypassing
+ * the local catalog entirely, and upserts every color/size variant it returns
+ * into SanmarCatalogProduct (the same cache table the weekly SFTP sync fills).
+ *
+ * Why this exists: catalog search (GET /sanmar/catalog) only ever queries that
+ * local cache, which is only as fresh as last week's sync file. A style SanMar
+ * already sells but that hasn't made it into a sync yet (brand new, or added
+ * mid-week) is invisible to search until the next sync — this is the same
+ * "missing until it self-heals" gap that PO submission already works around
+ * per-variant (see the mainframeColor live lookup above). This is that same
+ * fix applied to search/browse, so search never depends on sync freshness.
+ *
+ * Returns the freshly-cached rows, or [] if SanMar has no record of the style
+ * either (a typo, or it's simply not a real style code) — callers should treat
+ * that the same as "not found" rather than as an error.
+ */
+export async function liveLookupAndCacheStyle(style: string): Promise<any[]> {
+    let rows: any[];
+    try {
+        const info = await getSanMarProductInfo(style);
+        rows = asArray((info.raw as any)?.return?.listResponse);
+    } catch {
+        return [];
+    }
+    if (rows.length === 0) return [];
+
+    return Promise.all(rows.map((r: any) => {
+        const basic = r?.productBasicInfo ?? {};
+        const price = r?.productPriceInfo ?? {};
+        const img = r?.productImageInfo ?? {};
+        const colorName = basic.color ?? '';
+        const sizeName = basic.size ?? '';
+        const data = {
+            title: basic.productTitle ?? null,
+            description: basic.productDescription ?? null,
+            brand: basic.brandName ?? null,
+            category: basic.category ?? null,
+            subcategory: basic.subcategory ?? null,
+            priceCents: price.piecePrice ? Math.round(Number(price.piecePrice) * 100) : 0,
+            inventoryKey: basic.inventoryKey ? String(basic.inventoryKey) : null,
+            sizeIndex: basic.sizeIndex ? String(basic.sizeIndex) : null,
+            mainframeColor: basic.catalogColor ?? null,
+            colorSwatchImage: img.colorSwatchImage ?? null,
+            productImage: img.colorProductImage ?? img.productImage ?? null,
+        };
+        return prisma.sanmarCatalogProduct.upsert({
+            where: { style_colorName_sizeName: { style, colorName, sizeName } },
+            create: { style, colorName, sizeName, ...data },
+            update: data,
+        });
+    }));
+}
+
 /* ─── Order Status ────────────────────────────────────────────────────────── */
 
 /**
@@ -361,7 +438,7 @@ export async function getOrderStatus(poNumber: string) {
     const wsdlUrl = config.sanmar.orderStatusWsdlUrl;
     if (!wsdlUrl) throw new Error('SANMAR_ORDER_STATUS_WSDL_URL is required');
 
-    const client = await soap.createClientAsync(wsdlUrl);
+    const client = await getSoapClient(wsdlUrl);
     const [resp] = await client.getOrderStatusAsync({
         wsVersion: '2.0.0',
         id: config.sanmar.poUsername,
@@ -386,7 +463,7 @@ export async function getOrderShipmentNotification(poNumber: string) {
     const wsdlUrl = config.sanmar.shipmentWsdlUrl;
     if (!wsdlUrl) throw new Error('SANMAR_SHIPMENT_WSDL_URL is required');
 
-    const client = await soap.createClientAsync(wsdlUrl);
+    const client = await getSoapClient(wsdlUrl);
     const [resp] = await client.getOrderShipmentNotificationAsync({
         wsVersion: '1.0.0',
         id: config.sanmar.poUsername,
@@ -409,7 +486,7 @@ export async function getInvoiceByPO(poNumber: string) {
     const wsdlUrl = config.sanmar.invoiceWsdlUrl;
     if (!wsdlUrl) throw new Error('SANMAR_INVOICE_WSDL_URL is required');
 
-    const client = await soap.createClientAsync(wsdlUrl);
+    const client = await getSoapClient(wsdlUrl);
     const [resp] = await client.GetInvoicesByPurchaseOrderNoAsync({
         CustomerNo: config.sanmar.customerNumber,
         UserName: config.sanmar.poUsername,

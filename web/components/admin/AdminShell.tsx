@@ -13,7 +13,7 @@ type NavItem  = { href: string; label: string; icon: React.ReactNode; children?:
 
 const NAV: NavItem[] = [
     {
-        href: "/", label: "Dashboard",
+        href: "/admin", label: "Dashboard",
         icon: <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4"><path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" /></svg>
     },
     {
@@ -108,7 +108,7 @@ function SidebarContent({ onNav }: { onNav?: () => void }) {
             <nav className="flex-1 px-4 py-1 space-y-0.5 overflow-y-auto console-scroll">
                 {NAV.map(item => {
                     const isActive = pathname === item.href ||
-                        (item.href !== "/" && pathname?.startsWith(item.href));
+                        (item.href !== "/admin" && pathname?.startsWith(item.href));
                     const showSubs = isActive && item.children;
 
                     return (
@@ -189,10 +189,10 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
     const router = useRouter();
     const [mobileOpen, setMobileOpen] = useState(false);
 
-    const isPublic = pathname?.startsWith("/shop/") || pathname === "/shops" || pathname === "/checkout" || pathname === "/login";
-    // "The Manifest Line" console world is now the whole app's system — every
-    // admin route renders on the dark console shell below. Public routes
-    // (storefront, checkout, login) render their own console-styled root
+    const isPublic = pathname === "/" || pathname?.startsWith("/shop/") || pathname === "/shops" || pathname === "/checkout" || pathname === "/login";
+    // "The Manifest Line" console world is the whole admin app's system — every
+    // /admin/* route renders on the dark console shell below. Public routes
+    // (the landing page, storefront, checkout, login) render their own root
     // directly, since they skip this shell entirely (see isPublic above).
 
     // Auth guard

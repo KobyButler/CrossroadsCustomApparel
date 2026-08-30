@@ -8,18 +8,23 @@ import { Select } from "@/components/ui/select";
 import { Modal, ModalFooter } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
 import { ZoomableImage } from "@/components/ui/zoomable-image";
+import { IconButton, IconButtonRow } from "@/components/ui/icon-button";
+import { EditIcon, DuplicateIcon, TrashIcon } from "@/components/ui/icons";
 import { motion, Reorder } from "framer-motion";
 import { getColorCss } from "@/lib/colors";
 
 const EASE = [0.16, 1, 0.3, 1] as [number, number, number, number];
 
 type Shop = { id: string; name: string; slug: string };
+type YouthProductRef = { id: string; name: string; vendorIdentifier?: string | null; sizeChartUrl?: string | null };
 type Product = {
     id: string; name: string; sku: string; vendor: string;
     vendorIdentifier?: string; brand?: string; description?: string;
     priceCents: number; shops?: Shop[];
     sizesJson?: string; colorsJson?: string; imagesJson?: string; sizeChartUrl?: string | null;
     upchargeEnabled?: boolean; upchargeCents?: number; weightOz?: number | null;
+    youthProductId?: string | null;
+    youthProduct?: YouthProductRef | null;
 };
 
 const VENDOR_LABELS: Record<string, string> = { SANMAR:"SanMar", SSACTIVEWEAR:"S&S Activewear", OTHER:"Other" };
@@ -27,7 +32,7 @@ const VENDOR_COLORS: Record<string, string> = { SANMAR:"info", SSACTIVEWEAR:"suc
 const EMPTY = {
     name:"", sku:"", vendor:"OTHER", vendorIdentifier:"", brand:"", description:"", priceDollars:"",
     shopIds:[] as string[], sizes:[] as string[], colors:[] as string[], images:[] as string[],
-    sizeChartUrl:"",
+    sizeChartUrl:"", youthLink: null as YouthProductRef | null, youthSizeChartUrl:"",
     upchargeEnabled:false, upchargeDollars:"3.00", weightOz:""
 };
 
@@ -242,7 +247,7 @@ function ImageManager({ images, onChange }: { images:string[]; onChange:(images:
 }
 
 // ── SizeChartUploader ────────────────────────────────────────────────────────
-function SizeChartUploader({ url, onChange }: { url:string; onChange:(url:string)=>void }) {
+function SizeChartUploader({ url, onChange, label = "Size Chart (PDF)" }: { url:string; onChange:(url:string)=>void; label?:string }) {
     const { toast } = useToast();
     const [uploading, setUploading] = useState(false);
     const base = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:4000/api";
@@ -267,7 +272,7 @@ function SizeChartUploader({ url, onChange }: { url:string; onChange:(url:string
 
     return (
         <div>
-            <label className="field-label">Size Chart (PDF)</label>
+            <label className="field-label">{label}</label>
             {url ? (
                 <div className="flex items-center gap-2 mb-2">
                     <a href={imgUrl(url)} target="_blank" rel="noopener noreferrer"
@@ -275,7 +280,7 @@ function SizeChartUploader({ url, onChange }: { url:string; onChange:(url:string
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                         View current size chart
                     </a>
-                    <button type="button" onClick={() => onChange("")} className="text-xs text-graphite-400 hover:text-signal-red transition-colors">Remove</button>
+                    <button type="button" onClick={() => onChange("")} className="text-xs text-graphite-300 hover:text-signal-red transition-colors">Remove</button>
                 </div>
             ) : (
                 <p className="text-xs text-graphite-300 italic mb-2">No size chart uploaded yet</p>
@@ -286,6 +291,242 @@ function SizeChartUploader({ url, onChange }: { url:string; onChange:(url:string
                 <input type="file" accept="application/pdf" className="sr-only" onChange={handleFile} />
             </label>
             <p className="text-xs text-graphite-300 mt-1">Customers can view this from the product page — handy for sizing guides from the vendor.</p>
+        </div>
+    );
+}
+
+// ── YouthLinkPanel ────────────────────────────────────────────────────────────
+// SanMar sells youth sizing as a fully separate style/SKU (e.g. PC61 vs
+// PC61Y), so under the hood it's still a separate Product here too — but the
+// admin never has to build that second product by hand. Searching and picking
+// a SanMar style loads its colors/sizes for a quick confirm step (colors are
+// locked to whatever Adult already offers — no point stocking a youth color
+// Adult doesn't have; sizes are the admin's choice, since youth's size run is
+// its own thing), then calls /sanmar/import (same "find or create by vendor
+// style" the SanMar tab's bulk import uses) and links the result, unlisted
+// from any shop until the admin decides otherwise. The link is edited from
+// the adult side only; a product already linked as someone's youth shows
+// read-only info instead, so there's one place to manage each pair.
+function YouthLinkPanel({ products, editProductId, adultColors, value, onChange, sizeChartUrl, onSizeChartChange }: {
+    products: Product[]; editProductId: string | null; adultColors: string[];
+    value: YouthProductRef | null; onChange: (v: YouthProductRef | null) => void;
+    sizeChartUrl: string; onSizeChartChange: (url: string) => void;
+}) {
+    const { toast } = useToast();
+    const [query, setQuery] = useState("");
+    const [results, setResults] = useState<any[]>([]);
+    const [searching, setSearching] = useState(false);
+    const [loading, setLoading] = useState(false);
+    const [resolving, setResolving] = useState(false);
+    const [detail, setDetail] = useState<{ style: string; title: string; brand?: string; colors: string[]; sizes: string[] } | null>(null);
+    const [selectedSizes, setSelectedSizes] = useState<Set<string>>(new Set());
+    const timerRef = useRef<ReturnType<typeof setTimeout>>();
+    const liveTimerRef = useRef<ReturnType<typeof setTimeout>>();
+
+    const linkedFromAdult = editProductId ? products.find(y => y.youthProductId === editProductId) : undefined;
+
+    if (linkedFromAdult) {
+        return (
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                <p className="text-sm font-semibold text-slate-800">Linked as the youth version of &quot;{linkedFromAdult.name}&quot;</p>
+                <p className="text-xs text-slate-400 mt-0.5">Manage or remove this link from that product&apos;s edit form instead.</p>
+            </div>
+        );
+    }
+
+    // `live=true` lets the backend fall back to a live SanMar SOAP lookup when
+    // nothing local matches — routinely several seconds. Only ever set from
+    // the longer-settled timer in handleChange below, so normal typing never
+    // gets stuck waiting on it.
+    async function doSearch(q: string, live = false) {
+        if (!q.trim()) { setResults([]); return; }
+        setLoading(true);
+        try {
+            const data = await api(`/sanmar/catalog?q=${encodeURIComponent(q)}&limit=40${live ? "&live=true" : ""}`);
+            const seen = new Set<string>(); const unique: any[] = [];
+            for (const row of data.data ?? []) { if (!seen.has(row.style)) { seen.add(row.style); unique.push(row); } }
+            setResults(unique.slice(0, 12));
+        } catch { setResults([]); }
+        finally { setLoading(false); }
+    }
+
+    function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+        const q = e.target.value;
+        setQuery(q);
+        clearTimeout(timerRef.current);
+        clearTimeout(liveTimerRef.current);
+        timerRef.current = setTimeout(() => doSearch(q), 400);
+        liveTimerRef.current = setTimeout(() => doSearch(q, true), 900);
+    }
+
+    async function pickResult(result: any) {
+        setLoading(true);
+        try {
+            const d = await api(`/sanmar/catalog/${encodeURIComponent(result.style)}`);
+            setDetail({ style: result.style, title: d.title ?? result.style, brand: d.brand, colors: d.colors ?? [], sizes: d.sizes ?? [] });
+            setSelectedSizes(new Set(d.sizes ?? []));
+        } catch (err: any) { toast(err.message || "Failed to load style details", "error"); }
+        finally { setLoading(false); }
+    }
+
+    const colorIntersection = detail ? detail.colors.filter(c => adultColors.includes(c)) : [];
+
+    async function confirmLink() {
+        if (!detail) return;
+        setResolving(true);
+        try {
+            const res = await api("/sanmar/import", { method: "POST", body: JSON.stringify({
+                style: detail.style, colors: colorIntersection, sizes: [...selectedSizes]
+            }) });
+            let p = res.product;
+
+            if (res.action === "created") {
+                // {SanMar style}{product name}, spaces stripped so it reads as one clean token.
+                const youthSku = `${p.vendorIdentifier ?? detail.style}${p.name.replace(/\s+/g, "")}`;
+                try {
+                    p = await api(`/products/${p.id}`, { method: "PUT", body: JSON.stringify({
+                        name: p.name, sku: youthSku, vendor: p.vendor, vendorIdentifier: p.vendorIdentifier,
+                        brand: p.brand, description: p.description, priceCents: p.priceCents,
+                        images: p.imagesJson ? JSON.parse(p.imagesJson) : [],
+                        sizes: p.sizesJson ? JSON.parse(p.sizesJson) : [],
+                        colors: p.colorsJson ? JSON.parse(p.colorsJson) : [],
+                        sizeChartUrl: p.sizeChartUrl, upchargeEnabled: p.upchargeEnabled,
+                        upchargeCents: p.upchargeCents, weightOz: p.weightOz,
+                        shopIds: (p.shops ?? []).map((s: any) => s.id),
+                    }) });
+                } catch (err: any) {
+                    toast(`Linked, but couldn't set its SKU (${err.message || "unknown error"}) — it kept the default one.`, "error");
+                }
+            }
+
+            onChange({ id: p.id, name: p.name, vendorIdentifier: p.vendorIdentifier });
+            onSizeChartChange(p.sizeChartUrl ?? "");
+            setSearching(false); setQuery(""); setResults([]); setDetail(null);
+            toast(`Linked to SanMar ${detail.style}`);
+        } catch (err: any) { toast(err.message || "Failed to link youth style", "error"); }
+        finally { setResolving(false); }
+    }
+
+    function cancel() {
+        setSearching(false); setQuery(""); setResults([]); setDetail(null);
+    }
+
+    if (value && !searching) {
+        return (
+            <div>
+                <label className="field-label">Youth version (optional)</label>
+                <div className="flex items-center justify-between gap-3 bg-signal-cyan/[0.06] border border-signal-cyan/20 rounded-md px-3.5 py-2.5">
+                    <div className="min-w-0">
+                        <p className="text-sm font-semibold text-white truncate">{value.name}</p>
+                        {value.vendorIdentifier && <p className="text-xs text-graphite-300">SanMar style {value.vendorIdentifier}</p>}
+                    </div>
+                    <div className="flex gap-3 shrink-0">
+                        <button type="button" onClick={() => setSearching(true)} className="text-xs font-semibold text-signal-cyan hover:text-signal-cyan-bright">Change</button>
+                        <button type="button" onClick={() => { onChange(null); onSizeChartChange(""); }} className="text-xs font-semibold text-signal-red hover:text-signal-red-bright">Remove</button>
+                    </div>
+                </div>
+                <div className="mt-3">
+                    <SizeChartUploader url={sizeChartUrl} onChange={onSizeChartChange} label="Youth Size Chart (PDF)" />
+                </div>
+            </div>
+        );
+    }
+
+    // ── Confirm step: colors (locked to Adult's) + size picker ──
+    if (detail) {
+        return (
+            <div>
+                <div className="flex items-start justify-between gap-3 mb-3">
+                    <div>
+                        <p className="text-sm font-bold text-white">{detail.title}</p>
+                        <p className="text-xs text-graphite-300">{detail.brand} · Style {detail.style}</p>
+                    </div>
+                    <button type="button" onClick={() => setDetail(null)} className="text-xs text-graphite-300 hover:text-white underline shrink-0">← Back to search</button>
+                </div>
+
+                <div className="mb-3">
+                    <label className="field-label mb-1.5">Colors (same as Adult)</label>
+                    {colorIntersection.length === 0 ? (
+                        <p className="text-xs text-signal-amber bg-signal-amber/10 border border-signal-amber/25 rounded-md px-3 py-2">
+                            None of Adult&apos;s colors are offered for this youth style — pick a different style, or add colors to Adult first.
+                        </p>
+                    ) : (
+                        <div className="flex flex-wrap gap-1.5">
+                            {colorIntersection.map(c => (
+                                <span key={c} className="inline-flex items-center gap-1.5 text-xs bg-signal-cyan/10 text-signal-cyan border border-signal-cyan/25 px-2 py-0.5 rounded-full">
+                                    <span className="w-3 h-3 rounded-full border border-white/15 shrink-0" style={{ backgroundColor: getColorCss(c) }} />
+                                    {c}
+                                </span>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                {detail.sizes.length > 0 && (
+                    <div className="mb-3">
+                        <div className="flex items-center justify-between mb-1.5">
+                            <label className="field-label mb-0">Sizes to offer</label>
+                            <div className="flex gap-2">
+                                <button type="button" onClick={() => setSelectedSizes(new Set(detail.sizes))} className="text-xs font-semibold text-signal-cyan hover:text-signal-cyan-bright">Select all</button>
+                                <button type="button" onClick={() => setSelectedSizes(new Set())} className="text-xs font-semibold text-graphite-300 hover:text-graphite-200">Clear</button>
+                            </div>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            {detail.sizes.map(s => {
+                                const checked = selectedSizes.has(s);
+                                return (
+                                    <label key={s} className={`px-2.5 py-1 rounded-md border text-xs font-semibold cursor-pointer transition-colors ${checked ? "bg-signal-cyan text-graphite-950 border-signal-cyan" : "border-white/10 text-graphite-300 hover:border-signal-cyan/40 hover:text-signal-cyan"}`}>
+                                        <input type="checkbox" checked={checked} className="sr-only"
+                                            onChange={() => setSelectedSizes(prev => { const n = new Set(prev); n.has(s) ? n.delete(s) : n.add(s); return n; })} />
+                                        {s}
+                                    </label>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
+
+                <button type="button" onClick={confirmLink} disabled={resolving || colorIntersection.length === 0 || selectedSizes.size === 0}
+                    className="console-sheen w-full py-2.5 text-sm font-bold rounded-md text-graphite-950 bg-signal-cyan-gradient shadow-glow-cyan-sm hover:shadow-glow-cyan disabled:opacity-40 disabled:cursor-not-allowed transition-shadow active:scale-95">
+                    {resolving ? "Linking…" : "Confirm & Link"}
+                </button>
+            </div>
+        );
+    }
+
+    return (
+        <div>
+            <label className="field-label">Youth version (optional)</label>
+            <div className="relative">
+                <input value={query} onChange={handleChange}
+                    placeholder="Search SanMar for the youth style (e.g. PC61Y)…"
+                    className="w-full pl-3 pr-8 py-2 text-sm border border-white/10 rounded-md outline-none focus:border-signal-cyan/60 focus:ring-2 focus:ring-signal-cyan/30 bg-white/[0.03] text-white placeholder:text-graphite-500 transition-all" />
+                {loading && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                        <div className="w-4 h-4 border-2 border-signal-cyan border-t-transparent rounded-full animate-spin" />
+                    </div>
+                )}
+            </div>
+            {results.length > 0 && (
+                <div className="mt-1.5 border border-white/10 rounded-md overflow-hidden max-h-56 overflow-y-auto divide-y divide-white/[0.06] bg-graphite-900 shadow-console">
+                    {results.map((r, i) => (
+                        <button key={i} type="button" onClick={() => pickResult(r)}
+                            className="w-full text-left px-3.5 py-2 hover:bg-white/[0.05] transition-colors flex items-center gap-3">
+                            {r.productImage ? (
+                                <img src={r.productImage} alt="" className="w-7 h-7 rounded-md object-cover border border-white/10 shrink-0" />
+                            ) : null}
+                            <div className="min-w-0 flex-1">
+                                <p className="text-sm font-semibold text-white truncate">{r.title ?? r.style}</p>
+                                <p className="text-xs text-graphite-300 truncate">{r.brand ?? ""} {r.brand ? "·" : ""} Style {r.style}</p>
+                            </div>
+                        </button>
+                    ))}
+                </div>
+            )}
+            {value && (
+                <button type="button" onClick={cancel} className="text-xs text-graphite-300 hover:text-graphite-200 mt-1.5">← Cancel</button>
+            )}
+            <p className="text-xs text-graphite-300 mt-1.5">If this style also comes in youth sizes, search for it and pick it — it&apos;s imported automatically and linked here, offering the same colors as Adult. Shoppers get an Adult/Youth toggle on this product&apos;s page.</p>
         </div>
     );
 }
@@ -309,15 +550,21 @@ function VendorSearchPanel({ source, onSelect }: { source: "SANMAR"|"SS"; onSele
     const [detail, setDetail] = useState<VendorDetail | null>(null);
     const [selectedColors, setSelectedColors] = useState<Set<string>>(new Set());
     const timerRef = useRef<ReturnType<typeof setTimeout>>();
+    const liveTimerRef = useRef<ReturnType<typeof setTimeout>>();
     const requestSeq = useRef(0);
 
-    async function doSearch(q: string) {
+    // `live=true` lets the backend fall back to a live SanMar SOAP lookup when
+    // nothing local matches — routinely several seconds, since it's a real
+    // network round-trip to SanMar. Only ever set from the longer-settled
+    // timer in handleChange below, never from the fast typing-feedback search,
+    // so normal typing never gets stuck waiting on it.
+    async function doSearch(q: string, live = false) {
         const seq = ++requestSeq.current;
         if (!q.trim()) { setResults([]); setNotice(""); setError(""); return; }
         setLoading(true); setError(""); setNotice("");
         try {
             if (source === "SANMAR") {
-                const data = await api(`/sanmar/catalog?q=${encodeURIComponent(q)}&limit=40`);
+                const data = await api(`/sanmar/catalog?q=${encodeURIComponent(q)}&limit=40${live ? "&live=true" : ""}`);
                 if (seq !== requestSeq.current) return; // a newer search superseded this one
                 const seen = new Set<string>();
                 const unique: any[] = [];
@@ -353,7 +600,9 @@ function VendorSearchPanel({ source, onSelect }: { source: "SANMAR"|"SS"; onSele
         const q = e.target.value;
         setQuery(q);
         clearTimeout(timerRef.current);
+        clearTimeout(liveTimerRef.current);
         timerRef.current = setTimeout(() => doSearch(q), 400);
+        if (source === "SANMAR") liveTimerRef.current = setTimeout(() => doSearch(q, true), 900);
     }
 
     async function handlePick(result: any) {
@@ -437,7 +686,7 @@ function VendorSearchPanel({ source, onSelect }: { source: "SANMAR"|"SS"; onSele
                                 <button type="button" onClick={() => setSelectedColors(new Set(detail.colors))}
                                     className="text-xs font-semibold text-signal-cyan hover:text-signal-cyan-bright">Select all</button>
                                 <button type="button" onClick={() => setSelectedColors(new Set())}
-                                    className="text-xs font-semibold text-graphite-400 hover:text-graphite-200">Clear</button>
+                                    className="text-xs font-semibold text-graphite-300 hover:text-graphite-200">Clear</button>
                             </div>
                         </div>
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-64 overflow-y-auto border border-white/10 rounded-lg p-2.5">
@@ -579,6 +828,8 @@ export default function ProductsPage() {
             sizes:p.sizesJson?JSON.parse(p.sizesJson):[], colors:p.colorsJson?JSON.parse(p.colorsJson):[],
             images:p.imagesJson?JSON.parse(p.imagesJson):[],
             sizeChartUrl: p.sizeChartUrl ?? "",
+            youthLink: p.youthProduct ? { id: p.youthProduct.id, name: p.youthProduct.name, vendorIdentifier: p.youthProduct.vendorIdentifier } : null,
+            youthSizeChartUrl: p.youthProduct?.sizeChartUrl ?? "",
             upchargeEnabled: Boolean(p.upchargeEnabled), upchargeDollars: ((p.upchargeCents ?? 300)/100).toFixed(2),
             weightOz: p.weightOz != null ? String(p.weightOz) : "",
         });
@@ -626,6 +877,8 @@ export default function ProductsPage() {
                 priceCents:Math.round(parseFloat(form.priceDollars)*100), sizes:form.sizes, colors:form.colors,
                 images:form.images, shopIds:form.shopIds,
                 sizeChartUrl: form.sizeChartUrl || null,
+                youthProductId: form.youthLink?.id || null,
+                youthSizeChartUrl: form.youthLink ? (form.youthSizeChartUrl || "") : undefined,
                 upchargeEnabled:form.upchargeEnabled,
                 upchargeCents:Math.round(parseFloat(form.upchargeDollars || "0")*100) || 300,
                 weightOz: form.weightOz.trim() ? Math.round(parseFloat(form.weightOz)) : null,
@@ -802,20 +1055,17 @@ export default function ProductsPage() {
                                             )}
                                         </td>
                                         <td className="text-right pr-5">
-                                            <div className="flex items-center justify-end gap-1">
-                                                <button type="button" onClick={() => openEdit(p)}
-                                                    className="px-2.5 py-1 rounded-md text-xs font-medium text-graphite-300 hover:bg-white/[0.06] hover:text-white transition-colors">
-                                                    Edit
-                                                </button>
-                                                <button type="button" disabled={duplicatingId===p.id} onClick={() => duplicateProduct(p)}
-                                                    className="px-2.5 py-1 rounded-md text-xs font-medium text-graphite-300 hover:bg-white/[0.06] hover:text-white transition-colors disabled:opacity-50">
-                                                    {duplicatingId===p.id ? "…" : "Duplicate"}
-                                                </button>
-                                                <button type="button" onClick={() => setDeleteTarget(p)}
-                                                    className="px-2.5 py-1 rounded-md text-xs font-medium text-signal-red hover:bg-signal-red/10 hover:text-signal-red-bright transition-colors">
-                                                    Delete
-                                                </button>
-                                            </div>
+                                            <IconButtonRow>
+                                                <IconButton title="Edit product" onClick={() => openEdit(p)}>
+                                                    <EditIcon />
+                                                </IconButton>
+                                                <IconButton title="Duplicate product" loading={duplicatingId === p.id} onClick={() => duplicateProduct(p)}>
+                                                    <DuplicateIcon />
+                                                </IconButton>
+                                                <IconButton title="Delete product" tone="red" onClick={() => setDeleteTarget(p)}>
+                                                    <TrashIcon />
+                                                </IconButton>
+                                            </IconButtonRow>
                                         </td>
                                     </motion.tr>
                                 ))}
@@ -939,7 +1189,12 @@ export default function ProductsPage() {
 
                     <ImageManager images={form.images} onChange={images => setForm(p => ({ ...p, images }))} />
 
-                    <SizeChartUploader url={form.sizeChartUrl} onChange={sizeChartUrl => setForm(p => ({ ...p, sizeChartUrl }))} />
+                    <SizeChartUploader url={form.sizeChartUrl} onChange={sizeChartUrl => setForm(p => ({ ...p, sizeChartUrl }))}
+                        label={form.youthLink ? "Adult Size Chart (PDF)" : "Size Chart (PDF)"} />
+
+                    <YouthLinkPanel products={products} editProductId={editProduct?.id ?? null} adultColors={form.colors}
+                        value={form.youthLink} onChange={youthLink => setForm(p => ({ ...p, youthLink }))}
+                        sizeChartUrl={form.youthSizeChartUrl} onSizeChartChange={youthSizeChartUrl => setForm(p => ({ ...p, youthSizeChartUrl }))} />
 
                     <ModalFooter>
                         <Button type="button" variant="outline" onClick={() => { setShowAdd(false); setEditProduct(null); }}>Cancel</Button>

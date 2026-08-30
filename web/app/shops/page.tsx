@@ -57,14 +57,10 @@ export default function ShopsLandingPage() {
                     </div>
                 </div>
 
-                <div className="max-w-5xl mx-auto px-4 sm:px-6 py-12 sm:py-16 text-center">
+                <div className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 py-12 sm:py-16 text-center">
                     <motion.div initial={{ opacity:0, y:-8 }} animate={{ opacity:1, y:0 }} transition={{ duration:0.4, ease:EASE }}>
-                        <p className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-graphite-300 mb-3">
-                            <span className="w-1.5 h-1.5 rounded-full bg-signal-green animate-signal-pulse" />
-                            Now shopping
-                        </p>
                         <h1 className="text-3xl sm:text-4xl lg:text-5xl font-semibold text-white leading-tight mb-3 tracking-tight">
-                            Group Shops
+                            Shops
                         </h1>
                         <p className="text-base text-graphite-300 max-w-xl mx-auto leading-relaxed">
                             Custom screen printed &amp; embroidered apparel for teams, schools, and events. Pick a shop below to start shopping —

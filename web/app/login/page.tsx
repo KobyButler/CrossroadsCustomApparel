@@ -16,7 +16,7 @@ export default function LoginPage() {
 
     useEffect(() => {
         if (typeof window !== "undefined" && localStorage.getItem("auth_token")) {
-            router.replace("/");
+            router.replace("/admin");
         }
     }, [router]);
 
@@ -35,7 +35,7 @@ export default function LoginPage() {
             if (!res.ok) { setError(data.error ?? "Login failed"); return; }
             localStorage.setItem("auth_token", data.token);
             document.cookie = `auth_token=${data.token}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax`;
-            router.replace("/");
+            router.replace("/admin");
         } catch {
             setError("Could not connect to the server. Is the API running?");
         } finally {

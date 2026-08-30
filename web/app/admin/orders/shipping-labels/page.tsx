@@ -6,6 +6,8 @@ import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Modal, ModalFooter } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
+import { IconButton, IconButtonRow } from "@/components/ui/icon-button";
+import { CreditCardIcon, PrinterIcon, RefreshIcon, TruckIcon } from "@/components/ui/icons";
 import { motion, AnimatePresence } from "framer-motion";
 
 const EASE = [0.16, 1, 0.3, 1] as [number, number, number, number];
@@ -229,30 +231,27 @@ export default function ShippingLabelsPage() {
                                                 ) : <span className="text-xs text-graphite-500">—</span>}
                                             </td>
                                             <td className="text-right pr-5">
-                                                <div className="flex items-center justify-end gap-1.5">
+                                                <IconButtonRow>
                                                     {status === "pending" ? (
-                                                        <button type="button" disabled={isBuying} onClick={() => setConfirmBuy({ ids: [r.id], regenerate: false })}
-                                                            className="px-2.5 py-1 rounded-md text-xs font-semibold text-signal-cyan bg-signal-cyan/10 hover:bg-signal-cyan/15 transition-colors disabled:opacity-50">
-                                                            {isBuying ? "Buying…" : "Buy Label"}
-                                                        </button>
+                                                        <IconButton title="Buy shipping label" tone="brand" loading={isBuying}
+                                                            onClick={() => setConfirmBuy({ ids: [r.id], regenerate: false })}>
+                                                            <CreditCardIcon />
+                                                        </IconButton>
                                                     ) : (
                                                         <>
-                                                            <button type="button" onClick={() => printLabels([r.id])}
-                                                                className="px-2.5 py-1 rounded-md text-xs font-medium text-graphite-300 hover:bg-white/[0.06] hover:text-white transition-colors">
-                                                                Print
-                                                            </button>
-                                                            <button type="button" disabled={isBuying} onClick={() => setConfirmBuy({ ids: [r.id], regenerate: true })}
-                                                                title="Wrong address or damaged label? Buy a fresh one — this does not refund the original."
-                                                                className="px-2.5 py-1 rounded-md text-xs font-medium text-graphite-500 hover:bg-white/[0.06] hover:text-graphite-200 transition-colors disabled:opacity-50">
-                                                                {isBuying ? "…" : "Regenerate"}
-                                                            </button>
+                                                            <IconButton title="Print label" onClick={() => printLabels([r.id])}>
+                                                                <PrinterIcon />
+                                                            </IconButton>
+                                                            <IconButton title="Wrong address or damaged label? Buy a fresh one — this does not refund the original." loading={isBuying}
+                                                                onClick={() => setConfirmBuy({ ids: [r.id], regenerate: true })}>
+                                                                <RefreshIcon />
+                                                            </IconButton>
                                                         </>
                                                     )}
-                                                    <button type="button" onClick={() => markShipped([r.id])}
-                                                        className="px-2.5 py-1 rounded-md text-xs font-semibold text-signal-green bg-signal-green/10 hover:bg-signal-green/15 transition-colors">
-                                                        Mark Shipped
-                                                    </button>
-                                                </div>
+                                                    <IconButton title="Mark shipped" tone="emerald" onClick={() => markShipped([r.id])}>
+                                                        <TruckIcon />
+                                                    </IconButton>
+                                                </IconButtonRow>
                                             </td>
                                         </motion.tr>
                                     );

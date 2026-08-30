@@ -18,6 +18,7 @@ const SCALAR_FIELDS: { key: string; label: string; format?: (v: unknown) => stri
     { key: 'paymentMethod', label: 'Payment method' },
     { key: 'shippingMethod', label: 'Shipping method' },
     { key: 'shippingCents', label: 'Shipping cost', format: fmtCents },
+    { key: 'taxCents', label: 'Tax', format: fmtCents },
     { key: 'shipAddress1', label: 'Address line 1' },
     { key: 'shipAddress2', label: 'Address line 2' },
     { key: 'shipCity', label: 'City' },
