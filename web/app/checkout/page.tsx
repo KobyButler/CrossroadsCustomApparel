@@ -68,6 +68,14 @@ export default function CheckoutPage() {
     const [stripeClientSecret, setStripeClientSecret] = useState<string | null>(null);
     const [submittedGroups, setSubmittedGroups] = useState<ReturnType<typeof groupByShop>>([]);
     const [submittedShipping, setSubmittedShipping] = useState<{ method: ShippingMethod; cents: number }>({ method: "", cents: 0 });
+    // Sales tax is only known once the server calculates it (at "Continue" —
+    // see handleContinue), not live as the customer fills out the form, so the
+    // review step just shows an estimate and this fills in once it's known.
+    const [submittedTaxCents, setSubmittedTaxCents] = useState(0);
+    // The server-computed final total (post-discount, +shipping, +tax) — the
+    // source of truth for what actually gets charged/owed, since the client's
+    // own `grandTotal` estimate below doesn't account for a discount code.
+    const [submittedTotalCents, setSubmittedTotalCents] = useState(0);
     const [reference, setReference] = useState("");
     const quoteTimer = useRef<ReturnType<typeof setTimeout>>();
 
@@ -145,6 +153,8 @@ export default function CheckoutPage() {
                 setStripeClientSecret(res.clientSecret);
                 setSubmittedGroups(groups);
                 setSubmittedShipping({ method: shippingMethod, cents: res.shippingCents ?? 0 });
+                setSubmittedTaxCents(res.taxCents ?? 0);
+                setSubmittedTotalCents((res.orders ?? []).reduce((a: number, o: any) => a + (o.totalCents ?? 0), 0));
                 setReference(res.orderGroupId ?? res.orderId);
                 setStep("payment");
             } catch (err: any) { setError(err.message || "Could not initialize payment."); }
@@ -158,6 +168,8 @@ export default function CheckoutPage() {
                 });
                 setSubmittedGroups(groups);
                 setSubmittedShipping({ method: shippingMethod, cents: res.shippingCents ?? 0 });
+                setSubmittedTaxCents(res.taxCents ?? 0);
+                setSubmittedTotalCents((res.orders ?? []).reduce((a: number, o: any) => a + (o.totalCents ?? 0), 0));
                 setReference(res.orderGroupId ?? res.orders?.[0]?.id ?? "");
                 clearAll();
                 setStep("done");
@@ -189,7 +201,10 @@ export default function CheckoutPage() {
         const isOffline = paymentMethod === "pickup";
         const isPickup = submittedShipping.method === "PICKUP";
         const itemsTotal = submittedGroups.reduce((a, g) => a + g.subtotal, 0);
-        const finalTotal = itemsTotal + submittedShipping.cents;
+        // submittedTotalCents (from the server) is the source of truth — it
+        // accounts for a discount code the way this itemsTotal reconstruction
+        // doesn't. Falls back to the reconstruction only if it's ever unset.
+        const finalTotal = submittedTotalCents || (itemsTotal + submittedShipping.cents + submittedTaxCents);
         return (
             <div className="console-canvas min-h-screen flex flex-col items-center justify-center p-4">
                 <motion.div initial={{ opacity:0, scale:0.93, y:16 }} animate={{ opacity:1, scale:1, y:0 }}
@@ -231,6 +246,12 @@ export default function CheckoutPage() {
                             <span className="text-graphite-300">{isPickup ? "Pickup" : "Shipping"}</span>
                             <span className="text-white font-semibold font-mono tabular-nums">{isPickup ? "Free" : fmt(submittedShipping.cents)}</span>
                         </div>
+                        {submittedTaxCents > 0 && (
+                            <div className="flex justify-between text-sm">
+                                <span className="text-graphite-300">Tax</span>
+                                <span className="text-white font-semibold font-mono tabular-nums">{fmt(submittedTaxCents)}</span>
+                            </div>
+                        )}
                         <div className="flex justify-between text-sm font-bold pt-1 border-t border-white/[0.08]">
                             <span className="text-graphite-100">Total</span>
                             <span className="text-white font-mono tabular-nums">{fmt(finalTotal)}</span>
@@ -499,9 +520,14 @@ export default function CheckoutPage() {
                                             <span className="text-graphite-300 text-xs">Select an option</span>
                                         )}
                                     </div>
+                                    <div className="flex justify-between text-sm text-graphite-300">
+                                        <span>Tax</span>
+                                        <span className="text-graphite-400 text-xs">Calculated at checkout</span>
+                                    </div>
                                     <div className="flex justify-between font-bold text-white pt-2 border-t border-white/[0.08] text-base">
                                         <span>Total</span><span className="font-mono tabular-nums">{fmt(grandTotal)}</span>
                                     </div>
+                                    <p className="text-[11px] text-graphite-400 -mt-1">Plus applicable sales tax, shown before you pay.</p>
                                 </div>
                             </Card>
                         </div>
@@ -512,6 +538,21 @@ export default function CheckoutPage() {
                     <motion.div initial={{ opacity:0, x:16 }} animate={{ opacity:1, x:0 }} transition={{ duration:0.3 }}
                         className="max-w-lg mx-auto">
                         <h2 className="text-lg font-bold text-white mb-4">Complete your payment</h2>
+                        <div className="console-panel rounded-lg p-5 mb-4 space-y-1.5">
+                            <div className="flex justify-between text-sm text-graphite-300">
+                                <span>{submittedShipping.method === "PICKUP" ? "Pickup" : "Shipping"}</span>
+                                <span className="text-white font-medium font-mono tabular-nums">{submittedShipping.method === "PICKUP" ? "Free" : fmt(submittedShipping.cents)}</span>
+                            </div>
+                            {submittedTaxCents > 0 && (
+                                <div className="flex justify-between text-sm text-graphite-300">
+                                    <span>Tax</span>
+                                    <span className="text-white font-medium font-mono tabular-nums">{fmt(submittedTaxCents)}</span>
+                                </div>
+                            )}
+                            <div className="flex justify-between text-base font-bold text-white pt-2 border-t border-white/[0.08]">
+                                <span>Total</span><span className="font-mono tabular-nums">{fmt(submittedTotalCents)}</span>
+                            </div>
+                        </div>
                         <Elements stripe={stripePromise} options={{
                             clientSecret: stripeClientSecret,
                             appearance: {
@@ -527,7 +568,7 @@ export default function CheckoutPage() {
                                 }
                             }
                         }}>
-                            <StripePaymentForm totalCents={grandTotal}
+                            <StripePaymentForm totalCents={submittedTotalCents}
                                 onSuccess={() => { clearAll(); setStep("done"); }}
                                 onBack={() => setStep("review")} />
                         </Elements>

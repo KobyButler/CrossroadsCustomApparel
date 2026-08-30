@@ -106,6 +106,17 @@ Admin creates a **Shop** linked to a **Collection**. The shop gets a unique slug
 ### Pricing
 All prices stored in **cents** (integers) in the database. The UI converts to/from dollars automatically.
 
+### Sales Tax (Stripe Tax)
+Every checkout — card, cash, and check — calculates sales tax via the [Stripe Tax API](https://docs.stripe.com/tax/payment-intent/custom) (`server/src/utils/tax.ts`) and adds it to the order total. Tax is based on the shipping address for "Ship to you" orders, and the business address for pickup orders (the sale happens where the customer takes possession).
+
+This only produces a non-zero tax amount once Stripe Tax is actually configured for the account being used:
+1. **Head office address** — Settings → Tax in the Stripe Dashboard (or `stripe.tax.settings.update`), using `BUSINESS_ADDRESS1/CITY/STATE/ZIP`.
+2. **At least one active tax registration** — Tax → Registrations in the Dashboard (or `stripe.tax.registrations.create`) for every state/country the business is actually registered to collect tax in.
+
+Both are per-Stripe-account (test vs. live keys are separate accounts) — set up test mode for local development, and **redo both steps in live mode before going live**, or every real order will silently charge $0 tax. If either step is missing, `quoteOrderTax` fails soft to $0 tax and logs a `[tax]` error rather than breaking checkout — check the server logs if tax isn't showing up.
+
+Sales tax collected is excluded from "Gross Revenue" everywhere it's reported (Finance, Analytics, Dashboard) — it's owed to the state, not income.
+
 ---
 
 ## Production Deployment
@@ -124,6 +135,7 @@ Deployed on **Render** (server) + **Vercel** (frontend).
 - [ ] `CORS_ORIGINS` — production frontend domain
 - [ ] `SMTP_*` — Google Workspace SMTP credentials
 - [ ] `STRIPE_SECRET_KEY` + `STRIPE_WEBHOOK_SECRET` — from Stripe dashboard
+- [ ] Stripe Tax **live-mode** head office address + registration(s) — see "Sales Tax" above; without this, live orders charge $0 tax even though the code path is live
 - [ ] `ADMIN_EMAIL` / `ADMIN_PASSWORD` — run `npm run seed` once after deploy
 - [ ] `SANMAR_*` / `SS_*` — vendor credentials
 

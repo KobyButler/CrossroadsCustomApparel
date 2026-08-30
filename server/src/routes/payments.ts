@@ -5,13 +5,10 @@ import { config } from '../config.js';
 import { sendOrderConfirmation } from '../utils/email.js';
 import { buildShopGroups, applyDiscountAcrossGroups, allocateShippingAcrossGroups, newOrderGroupId, assertShippingAllowed } from '../utils/checkoutHelpers.js';
 import { quoteShipping } from '../utils/shippingCalc.js';
+import { quoteOrderTax } from '../utils/tax.js';
+import { getStripe } from '../utils/stripeClient.js';
 
 export const router = Router();
-
-function getStripe() {
-    if (!config.stripe.secretKey) throw new Error('STRIPE_SECRET_KEY is not set');
-    return new Stripe(config.stripe.secretKey);
-}
 
 async function resolveDiscount(discountCode?: string) {
     if (!discountCode) return null;
@@ -20,6 +17,43 @@ async function resolveDiscount(discountCode?: string) {
     });
     if (d && (d.maxUses === null || d.usedCount < d.maxUses)) return d;
     return null;
+}
+
+// Discards a customer's still-unpaid order (and cancels its PaymentIntent) for
+// this shop before a new checkout attempt creates another one. Without this,
+// every time a customer starts the card-payment step — then hits Back, edits
+// their cart, refreshes, or just retries after a network hiccup — a brand new
+// UNPAID order gets created alongside whichever attempt they eventually pay
+// on, so the same order shows up 2-3x in the admin list (one PAID, the rest
+// stuck UNPAID forever). This keeps at most one live pending-payment order
+// per (shop, customer) at a time, so a retry replaces the abandoned attempt
+// instead of piling up next to it.
+//
+// Scoped to UNPAID + paymentMethod 'stripe' orders only — orders already PAID,
+// or placed for pickup/cash/check, are never touched. If the old PaymentIntent
+// turns out to already be succeeded/processing (the customer's previous
+// attempt is completing right this moment), it's left alone rather than risk
+// deleting an order that's about to be paid.
+async function retireStalePendingOrder(shopId: string | null, customerEmail: string) {
+    const stale = await prisma.order.findFirst({
+        where: { shopId, customerEmail, paymentStatus: 'UNPAID', paymentMethod: 'stripe', status: { not: 'CANCELLED' } },
+        orderBy: { createdAt: 'desc' }
+    });
+    if (!stale) return;
+
+    if (stale.stripePaymentIntentId) {
+        try {
+            const stripe = getStripe();
+            const pi = await stripe.paymentIntents.retrieve(stale.stripePaymentIntentId);
+            if (pi.status === 'succeeded' || pi.status === 'processing') return; // let it finish — don't touch
+            if (pi.status !== 'canceled') await stripe.paymentIntents.cancel(stale.stripePaymentIntentId);
+        } catch (err) {
+            console.error('[checkout] failed to cancel stale PaymentIntent (continuing anyway):', err);
+        }
+    }
+
+    await prisma.orderItem.deleteMany({ where: { orderId: stale.id } });
+    await prisma.order.delete({ where: { id: stale.id } }).catch(() => {});
 }
 
 // ─── POST /api/payments/create-intent ─────────────────────────────────────────
@@ -63,7 +97,19 @@ router.post('/create-intent', async (req: Request, res: Response) => {
         : null;
     const shippingCentsTotal = shippingQuote?.cents ?? 0;
     const finalGroups = allocateShippingAcrossGroups(discountedGroups, shippingCentsTotal);
-    const grandTotal = discountedTotal + shippingCentsTotal;
+
+    // Sales tax is calculated once, here, at the point the customer commits to
+    // checkout — not live as they type (each Stripe Tax calculation is a billed
+    // API call), so the review screen shows an estimate and this step reveals
+    // the exact total that actually gets charged.
+    const stripe = getStripe();
+    const taxQuote = await quoteOrderTax(stripe, {
+        groupSubtotals: finalGroups.map(g => g.subtotal),
+        shippingCents: shippingCentsTotal,
+        shippingMethod: isShipping ? 'SHIP' : 'PICKUP',
+        shipAddress: isShipping ? { line1: shipAddress1, line2: shipAddress2, city: shipCity, state: shipState, zip: shipZip } : null
+    });
+    const grandTotal = discountedTotal + shippingCentsTotal + taxQuote.totalTaxCents;
 
     // Stripe requires a minimum of 50 cents
     if (grandTotal < 50) {
@@ -76,31 +122,39 @@ router.post('/create-intent', async (req: Request, res: Response) => {
         create: { email: customerEmail, name: customerName }
     });
 
+    // Clear out any abandoned/unpaid attempt this same customer left behind for
+    // these shops (see retireStalePendingOrder) before starting a fresh one —
+    // otherwise a retry piles up as a duplicate instead of replacing it.
+    await Promise.all(finalGroups.map(g => retireStalePendingOrder(g.shopId, customerEmail)));
+
     const orderGroupId = finalGroups.length > 1 ? newOrderGroupId() : null;
 
     // Create the Stripe PaymentIntent first so every order can be stamped with its id
-    const stripe = getStripe();
     const pi = await stripe.paymentIntents.create({
         amount: grandTotal,
         currency: 'usd',
-        metadata: { orderGroupId: orderGroupId ?? '' },
+        metadata: { orderGroupId: orderGroupId ?? '', taxCents: String(taxQuote.totalTaxCents) },
         automatic_payment_methods: { enabled: true }
     });
 
     const createdOrders = [];
-    for (const g of finalGroups) {
+    for (let idx = 0; idx < finalGroups.length; idx++) {
+        const g = finalGroups[idx];
+        const taxCents = taxQuote.taxCentsByGroup[idx] ?? 0;
         const order = await prisma.order.create({
             data: {
                 shopId: g.shopId, orderGroupId,
                 status: 'UNFULFILLED', paymentStatus: 'UNPAID', paymentMethod: 'stripe',
                 stripePaymentIntentId: pi.id,
+                stripeTaxCalculationId: taxQuote.calculationId,
                 customerId: customer.id, customerName, customerEmail,
                 shippingMethod: isShipping ? 'SHIP' : 'PICKUP', shippingCents: g.shippingCents,
                 shipAddress1: isShipping ? shipAddress1 : null, shipAddress2: isShipping ? (shipAddress2 ?? null) : null,
                 shipCity: isShipping ? shipCity : null, shipState: isShipping ? shipState : null, shipZip: isShipping ? shipZip : null,
                 residential,
                 specialInstructions: specialInstructions || null,
-                totalCents: g.subtotal + g.shippingCents,
+                taxCents,
+                totalCents: g.subtotal + g.shippingCents + taxCents,
                 items: { createMany: { data: g.items } }
             }
         });
@@ -115,6 +169,7 @@ router.post('/create-intent', async (req: Request, res: Response) => {
         clientSecret: pi.client_secret,
         orderId: createdOrders[0].id,
         orderGroupId,
+        taxCents: taxQuote.totalTaxCents,
         shippingCents: shippingCentsTotal,
         shippingEstimated: shippingQuote?.estimated ?? null,
         orders: createdOrders.map(o => ({ id: o.id, shopId: o.shopId, totalCents: o.totalCents }))
@@ -154,6 +209,30 @@ export async function stripeWebhookHandler(req: Request, res: Response) {
             return res.json({ received: true });
         }
 
+        // Finalize the Stripe Tax calculation into a Transaction — this is what
+        // makes the collected tax show up in Stripe's Tax reporting/filing tools.
+        // One calculation covered the whole cart (possibly multiple shops/orders),
+        // so this runs once per PaymentIntent, guarded by stripeTaxTransactionId
+        // being unset on the pre-update order rows (idempotent across webhook
+        // retries). Best-effort: the tax was already collected from the customer
+        // regardless of whether this bookkeeping step succeeds.
+        const first = orders[0];
+        if (first.stripeTaxCalculationId && !first.stripeTaxTransactionId) {
+            try {
+                const stripe = getStripe();
+                const tx = await stripe.tax.transactions.createFromCalculation({
+                    calculation: first.stripeTaxCalculationId,
+                    reference: first.orderGroupId ?? first.id
+                });
+                await prisma.order.updateMany({
+                    where: { id: { in: orders.map(o => o.id) } },
+                    data: { stripeTaxTransactionId: tx.id }
+                });
+            } catch (err: any) {
+                console.error('[stripe-webhook] failed to record Stripe Tax transaction (tax was still collected from the customer — this only affects Stripe\'s own filing records):', err.message);
+            }
+        }
+
         for (const order of orders) {
             if (order.paymentStatus === 'PAID') continue;
 
@@ -180,6 +259,8 @@ export async function stripeWebhookHandler(req: Request, res: Response) {
                 customerName: order.customerName,
                 customerEmail: order.customerEmail,
                 totalCents: order.totalCents,
+                shippingCents: order.shippingCents,
+                taxCents: order.taxCents,
                 shopName: order.shop?.name,
                 specialInstructions: order.specialInstructions,
                 items: order.items.map(i => ({

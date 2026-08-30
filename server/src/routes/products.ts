@@ -24,6 +24,32 @@ const uploadPdf = multer({
 export const router = Router();
 
 const shopSelect = { select: { id: true, name: true, slug: true } };
+const youthSelect = { select: { id: true, name: true, vendorIdentifier: true, sizeChartUrl: true } };
+
+// Writes a size chart URL onto a linked youth product (called after the adult
+// product's own save succeeds). undefined means "not touched by this save" —
+// only runs when the admin actually set/changed the youth size chart field.
+async function syncYouthSizeChart(youthProductId: string | null | undefined, youthSizeChartUrl: string | undefined) {
+    if (!youthProductId || youthSizeChartUrl === undefined) return;
+    await prisma.product.update({ where: { id: youthProductId }, data: { sizeChartUrl: youthSizeChartUrl || null } })
+        .catch(err => console.error('[products] failed to sync youth size chart (non-fatal):', err));
+}
+
+// Validates a proposed adult->youth product link before saving it. Returns a
+// user-facing error string, or null if the link is fine. currentProductId is
+// null on create (nothing to compare against yet) and the product's own id on
+// update (so re-saving with the same link it already has isn't rejected).
+async function validateYouthLink(youthProductId: string, currentProductId: string | null): Promise<string | null> {
+    if (youthProductId === currentProductId) return "A product can't be linked to itself.";
+    const target = await prisma.product.findUnique({ where: { id: youthProductId }, select: { id: true, name: true } });
+    if (!target) return 'Selected youth product not found.';
+    const claimedBy = await prisma.product.findFirst({
+        where: { youthProductId, ...(currentProductId ? { id: { not: currentProductId } } : {}) },
+        select: { id: true, name: true }
+    });
+    if (claimedBy) return `"${target.name}" is already linked as the youth version of "${claimedBy.name}".`;
+    return null;
+}
 
 // Renames a multer temp file to include its original extension and returns the public URL.
 async function finalizeUpload(file: Express.Multer.File, fallbackExt: string): Promise<string> {
@@ -51,7 +77,7 @@ router.get('/', async (req, res) => {
     // Omit pagination wrapper when limit is not specified (keeps backwards compat for small catalogs)
     if (!req.query.page && !req.query.limit) {
         const data = await prisma.product.findMany({
-            include: { shops: shopSelect },
+            include: { shops: shopSelect, youthProduct: youthSelect },
             orderBy: { createdAt: 'desc' }
         });
         return res.json(data);
@@ -59,7 +85,7 @@ router.get('/', async (req, res) => {
 
     const [data, total] = await Promise.all([
         prisma.product.findMany({
-            include: { shops: shopSelect },
+            include: { shops: shopSelect, youthProduct: youthSelect },
             orderBy: { createdAt: 'desc' },
             take: limit,
             skip
@@ -97,10 +123,14 @@ router.post('/sizechart/upload', uploadPdf.single('sizechart'), async (req, res)
 router.post('/', async (req, res) => {
     const {
         name, sku, vendor, vendorIdentifier, brand, description, priceCents, images, sizes, colors,
-        shopIds, upchargeEnabled, upchargeCents, weightOz, sizeChartUrl
+        shopIds, upchargeEnabled, upchargeCents, weightOz, sizeChartUrl, youthProductId, youthSizeChartUrl
     } = req.body;
     if (!Array.isArray(colors) || colors.length === 0) {
         return res.status(400).json({ error: 'At least one color is required.' });
+    }
+    if (youthProductId) {
+        const err = await validateYouthLink(youthProductId, null);
+        if (err) return res.status(400).json({ error: err });
     }
     try {
         const p = await prisma.product.create({
@@ -114,13 +144,17 @@ router.post('/', async (req, res) => {
                 upchargeEnabled: Boolean(upchargeEnabled),
                 ...(upchargeCents !== undefined ? { upchargeCents } : {}),
                 ...(weightOz !== undefined ? { weightOz: weightOz === null ? null : Number(weightOz) } : {}),
+                youthProductId: youthProductId || null,
                 ...(Array.isArray(shopIds) && shopIds.length
                     ? { shops: { connect: shopIds.map((id: string) => ({ id })) } }
                     : {})
             },
-            include: { shops: shopSelect }
+            include: { shops: shopSelect, youthProduct: youthSelect }
         });
-        res.json(p);
+        await syncYouthSizeChart(p.youthProductId, youthSizeChartUrl);
+        res.json(youthSizeChartUrl !== undefined && p.youthProductId
+            ? await prisma.product.findUnique({ where: { id: p.id }, include: { shops: shopSelect, youthProduct: youthSelect } })
+            : p);
     } catch (err: any) {
         if (err?.code === 'P2002') {
             return res.status(409).json({ error: `A product with SKU "${sku}" already exists.` });
@@ -132,7 +166,7 @@ router.post('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
     const p = await prisma.product.findUnique({
         where: { id: req.params.id },
-        include: { shops: shopSelect }
+        include: { shops: shopSelect, youthProduct: youthSelect }
     });
     if (!p) return res.status(404).json({ error: 'not found' });
     res.json(p);
@@ -141,13 +175,18 @@ router.get('/:id', async (req, res) => {
 router.put('/:id', async (req, res) => {
     const {
         name, sku, vendor, vendorIdentifier, brand, description, priceCents, images, sizes, colors,
-        shopIds, upchargeEnabled, upchargeCents, weightOz, sizeChartUrl
+        shopIds, upchargeEnabled, upchargeCents, weightOz, sizeChartUrl, youthProductId, youthSizeChartUrl
     } = req.body;
     if (!Array.isArray(colors) || colors.length === 0) {
         return res.status(400).json({ error: 'At least one color is required.' });
     }
     const existing = await prisma.product.findUnique({ where: { id: req.params.id } });
     if (!existing) return res.status(404).json({ error: 'not found' });
+
+    if (youthProductId !== undefined && youthProductId && youthProductId !== existing.youthProductId) {
+        const linkErr = await validateYouthLink(youthProductId, req.params.id);
+        if (linkErr) return res.status(400).json({ error: linkErr });
+    }
 
     try {
         const p = await prisma.product.update({
@@ -165,11 +204,12 @@ router.put('/:id', async (req, res) => {
                 ...(upchargeEnabled !== undefined ? { upchargeEnabled: Boolean(upchargeEnabled) } : {}),
                 ...(upchargeCents !== undefined ? { upchargeCents } : {}),
                 ...(weightOz !== undefined ? { weightOz: weightOz === null ? null : Number(weightOz) } : {}),
+                ...(youthProductId !== undefined ? { youthProductId: youthProductId || null } : {}),
                 ...(Array.isArray(shopIds)
                     ? { shops: { set: shopIds.map((id: string) => ({ id })) } }
                     : {})
             },
-            include: { shops: shopSelect }
+            include: { shops: shopSelect, youthProduct: youthSelect }
         });
 
         // Clean up any of our own uploaded files that are no longer referenced.
@@ -181,8 +221,14 @@ router.put('/:id', async (req, res) => {
             await cleanupRemovedFiles([existing.sizeChartUrl], [sizeChartUrl]);
         }
 
-        res.json(p);
+        await syncYouthSizeChart(p.youthProductId, youthSizeChartUrl);
+        res.json(youthSizeChartUrl !== undefined && p.youthProductId
+            ? await prisma.product.findUnique({ where: { id: p.id }, include: { shops: shopSelect, youthProduct: youthSelect } })
+            : p);
     } catch (err: any) {
+        if (err?.code === 'P2002' && err?.meta?.target?.includes?.('youthProductId')) {
+            return res.status(409).json({ error: 'That product is already linked as another product\'s youth version.' });
+        }
         if (err?.code === 'P2002') {
             return res.status(409).json({ error: `A product with that SKU already exists.` });
         }

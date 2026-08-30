@@ -8,6 +8,8 @@ import { Select } from "@/components/ui/select";
 import { Modal, ModalFooter } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
+import { IconButton, IconButtonRow } from "@/components/ui/icon-button";
+import { EyeIcon, EditIcon, CheckIcon, XCircleIcon } from "@/components/ui/icons";
 import { motion, AnimatePresence } from "framer-motion";
 
 type VendorOrder = {
@@ -23,7 +25,7 @@ type Order = {
     status: string; totalCents: number; createdAt: string;
     paymentStatus?: string; paymentMethod?: string;
     items: OrderItemRow[]; shop?: { id: string; name: string } | null; shopId?: string | null;
-    shippingMethod?: string; shippingCents?: number;
+    shippingMethod?: string; shippingCents?: number; taxCents?: number;
     shipAddress1?: string; shipAddress2?: string; shipCity?: string; shipState?: string; shipZip?: string;
     residential?: boolean;
     specialInstructions?: string | null;
@@ -47,7 +49,7 @@ const PAYMENT_METHOD_OPTIONS = [
 const EMPTY_EDIT_FORM = {
     customerName: "", customerEmail: "", shopId: "",
     status: "UNFULFILLED", paymentStatus: "UNPAID", paymentMethod: "",
-    shippingMethod: "PICKUP", shippingDollars: "0.00",
+    shippingMethod: "PICKUP", shippingDollars: "0.00", taxDollars: "0.00",
     shipAddress1: "", shipAddress2: "", shipCity: "", shipState: "", shipZip: "", residential: true,
     specialInstructions: "",
 };
@@ -141,6 +143,8 @@ export default function OrdersPage() {
 
     const [historyEntries, setHistoryEntries] = useState<HistoryEntry[]>([]);
     const [loadingHistory, setLoadingHistory]  = useState(false);
+    const [cancelTarget, setCancelTarget] = useState<Order | null>(null);
+    const [cancelling, setCancelling]     = useState(false);
 
     useEffect(() => { setPage(1); }, [tab, filterShop]);
     useEffect(() => { fetchOrders(); }, [tab, page, filterShop]);
@@ -184,9 +188,14 @@ export default function OrdersPage() {
         setSelectedIds(prev => prev.size === filtered.length ? new Set() : new Set(filtered.map(o => o.id)));
     }
 
-    async function cancelOrder(id: string) {
-        try { await api(`/orders/${id}/cancel`, { method: "POST" }); toast("Order cancelled"); fetchOrders(); }
-        catch (err: any) { toast(err.message || "Failed to cancel order", "error"); }
+    async function cancelOrder() {
+        if (!cancelTarget) return;
+        setCancelling(true);
+        try {
+            await api(`/orders/${cancelTarget.id}/cancel`, { method: "POST" });
+            toast("Order cancelled"); setCancelTarget(null); fetchOrders();
+        } catch (err: any) { toast(err.message || "Failed to cancel order", "error"); }
+        finally { setCancelling(false); }
     }
     async function markFulfilled(id: string) {
         try { await api(`/orders/${id}/fulfill`, { method: "POST" }); toast("Order marked as fulfilled"); fetchOrders(); }
@@ -200,9 +209,10 @@ export default function OrdersPage() {
     }
 
     function exportCSV() {
+        const csvCell = (s: string) => `"${s.replace(/"/g, '""')}"`;
         const csv = [
-            ["Order ID","Customer","Email","Status","Total","Date","Items"].join(","),
-            ...filtered.map(o => [o.id,`"${o.customerName}"`,o.customerEmail,o.status,`$${(o.totalCents/100).toFixed(2)}`,new Date(o.createdAt).toLocaleDateString(),o.items?.length??0].join(","))
+            ["Order ID","Customer","Email","Status","Tax","Total","Date","Items","Comments"].join(","),
+            ...filtered.map(o => [o.id,csvCell(o.customerName),o.customerEmail,o.status,`$${((o.taxCents??0)/100).toFixed(2)}`,`$${(o.totalCents/100).toFixed(2)}`,new Date(o.createdAt).toLocaleDateString(),o.items?.length??0,csvCell(o.specialInstructions ?? "")].join(","))
         ].join("\n");
         const a = document.createElement("a");
         a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
@@ -239,6 +249,7 @@ export default function OrdersPage() {
             shopId: order.shopId ?? order.shop?.id ?? "",
             status: order.status, paymentStatus: order.paymentStatus ?? "UNPAID", paymentMethod: order.paymentMethod ?? "",
             shippingMethod: order.shippingMethod ?? "PICKUP", shippingDollars: (((order.shippingCents ?? 0)) / 100).toFixed(2),
+            taxDollars: (((order.taxCents ?? 0)) / 100).toFixed(2),
             shipAddress1: order.shipAddress1 ?? "", shipAddress2: order.shipAddress2 ?? "",
             shipCity: order.shipCity ?? "", shipState: order.shipState ?? "", shipZip: order.shipZip ?? "",
             residential: order.residential ?? true,
@@ -270,7 +281,8 @@ export default function OrdersPage() {
 
     const editSubtotalCents = editItems.reduce((a, i) => a + Math.round((parseFloat(i.priceDollars) || 0) * 100) * (Number(i.quantity) || 0), 0);
     const editShippingCents = Math.round((parseFloat(editForm.shippingDollars) || 0) * 100);
-    const editTotalCents = editSubtotalCents + editShippingCents;
+    const editTaxCents = Math.round((parseFloat(editForm.taxDollars) || 0) * 100);
+    const editTotalCents = editSubtotalCents + editShippingCents + editTaxCents;
 
     async function saveOrderEdit(e: React.FormEvent) {
         e.preventDefault();
@@ -285,6 +297,7 @@ export default function OrdersPage() {
                 status: editForm.status, paymentStatus: editForm.paymentStatus, paymentMethod: editForm.paymentMethod || null,
                 shippingMethod: editForm.shippingMethod,
                 shippingCents: editShippingCents,
+                taxCents: editTaxCents,
                 shipAddress1: editForm.shipAddress1 || null, shipAddress2: editForm.shipAddress2 || null,
                 shipCity: editForm.shipCity || null, shipState: editForm.shipState || null, shipZip: editForm.shipZip || null,
                 residential: editForm.residential,
@@ -484,28 +497,24 @@ export default function OrdersPage() {
                                             </span>
                                         </td>
                                         <td className="text-right pr-5">
-                                            <div className="flex items-center justify-end gap-1.5">
-                                                <button type="button" onClick={() => setDetailOrder(order)}
-                                                    className="px-2.5 py-1 rounded-md text-xs font-medium text-graphite-300 hover:bg-white/[0.06] hover:text-white transition-colors">
-                                                    View
-                                                </button>
-                                                <button type="button" onClick={() => openEditOrder(order)}
-                                                    className="px-2.5 py-1 rounded-md text-xs font-medium text-graphite-300 hover:bg-white/[0.06] hover:text-white transition-colors">
-                                                    Edit
-                                                </button>
+                                            <IconButtonRow>
+                                                <IconButton title="View order" onClick={() => setDetailOrder(order)}>
+                                                    <EyeIcon />
+                                                </IconButton>
+                                                <IconButton title="Edit order" onClick={() => openEditOrder(order)}>
+                                                    <EditIcon />
+                                                </IconButton>
                                                 {order.status === "UNFULFILLED" && (
                                                     <>
-                                                        <button type="button" onClick={() => markFulfilled(order.id)}
-                                                            className="px-2.5 py-1 rounded-md text-xs font-semibold text-signal-green bg-signal-green/10 hover:bg-signal-green/20 transition-colors">
-                                                            Fulfill
-                                                        </button>
-                                                        <button type="button" onClick={() => cancelOrder(order.id)}
-                                                            className="px-2.5 py-1 rounded-md text-xs font-medium text-signal-red hover:bg-signal-red/10 transition-colors">
-                                                            Cancel
-                                                        </button>
+                                                        <IconButton title="Mark fulfilled" tone="emerald" onClick={() => markFulfilled(order.id)}>
+                                                            <CheckIcon />
+                                                        </IconButton>
+                                                        <IconButton title="Cancel order" tone="red" onClick={() => setCancelTarget(order)}>
+                                                            <XCircleIcon />
+                                                        </IconButton>
                                                     </>
                                                 )}
-                                            </div>
+                                            </IconButtonRow>
                                         </td>
                                     </motion.tr>
                                 ))}
@@ -685,19 +694,28 @@ export default function OrdersPage() {
                                 </div>
                             )}
                         </div>
-                        <div className="flex justify-between items-center pt-1">
+                        <div className="flex justify-between items-end pt-1">
                             <div className="flex items-center gap-3">
                                 <SignalLamp status={detailOrder.status} />
                                 {detailOrder.shop && <span className="text-xs text-graphite-300">via {detailOrder.shop.name}</span>}
                             </div>
-                            <p className="text-lg font-semibold text-white font-mono tabular-nums">{fmt(detailOrder.totalCents)}</p>
+                            <div className="text-right">
+                                {(detailOrder.taxCents ?? 0) > 0 && (
+                                    <p className="text-xs text-graphite-300">
+                                        Subtotal {fmt(detailOrder.totalCents - (detailOrder.shippingCents ?? 0) - (detailOrder.taxCents ?? 0))}
+                                        {" + "}Shipping {fmt(detailOrder.shippingCents ?? 0)}
+                                        {" + "}Tax {fmt(detailOrder.taxCents ?? 0)}
+                                    </p>
+                                )}
+                                <p className="text-lg font-semibold text-white font-mono tabular-nums">{fmt(detailOrder.totalCents)}</p>
+                            </div>
                         </div>
                         <ModalFooter>
                             <Button variant="outline" onClick={() => setDetailOrder(null)}>Close</Button>
                             <Button variant="outline" onClick={() => { const o = detailOrder; setDetailOrder(null); openEditOrder(o); }}>Edit Order</Button>
                             {detailOrder.status === "UNFULFILLED" && (
                                 <>
-                                    <Button variant="danger" onClick={() => { cancelOrder(detailOrder.id); setDetailOrder(null); }}>Cancel Order</Button>
+                                    <Button variant="danger" onClick={() => { const o = detailOrder; setDetailOrder(null); setCancelTarget(o); }}>Cancel Order</Button>
                                     <Button onClick={() => { markFulfilled(detailOrder.id); setDetailOrder(null); }}>Mark Fulfilled</Button>
                                 </>
                             )}
@@ -748,7 +766,7 @@ export default function OrdersPage() {
                         </div>
 
                         <div className="bg-white/[0.04] border border-white/10 rounded-lg p-4 space-y-3">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                 <div>
                                     <label className="field-label">Fulfillment</label>
                                     <Select value={editForm.shippingMethod} onChange={e => setEditForm(p => ({ ...p, shippingMethod: e.target.value }))}>
@@ -758,6 +776,8 @@ export default function OrdersPage() {
                                 </div>
                                 <Input label="Shipping Cost ($)" type="number" step="0.01" min="0" value={editForm.shippingDollars}
                                     onChange={e => setEditForm(p => ({ ...p, shippingDollars: e.target.value }))} />
+                                <Input label="Tax ($)" type="number" step="0.01" min="0" value={editForm.taxDollars}
+                                    onChange={e => setEditForm(p => ({ ...p, taxDollars: e.target.value }))} />
                             </div>
                             {editForm.shippingMethod === "SHIP" && (
                                 <>
@@ -837,7 +857,7 @@ export default function OrdersPage() {
 
                         <div className="flex justify-between items-center pt-2 border-t border-white/[0.06]">
                             <div className="text-xs text-graphite-300 font-mono">
-                                Subtotal {fmt(editSubtotalCents)} + Shipping {fmt(editShippingCents)}
+                                Subtotal {fmt(editSubtotalCents)} + Shipping {fmt(editShippingCents)} + Tax {fmt(editTaxCents)}
                             </div>
                             <p className="text-lg font-semibold text-white font-mono tabular-nums">{fmt(editTotalCents)}</p>
                         </div>
@@ -925,6 +945,18 @@ export default function OrdersPage() {
                 <ModalFooter>
                     <Button variant="outline" onClick={() => setShowExport(false)}>Cancel</Button>
                     <Button onClick={exportCSV}>Download CSV</Button>
+                </ModalFooter>
+            </Modal>
+
+            {/* Cancel Order Confirmation */}
+            <Modal open={!!cancelTarget} onClose={() => !cancelling && setCancelTarget(null)} title="Cancel Order" size="sm">
+                <p className="text-sm text-graphite-200 mb-1">
+                    Cancel the order from <span className="font-semibold text-white">{cancelTarget?.customerName}</span>?
+                </p>
+                <p className="text-xs text-graphite-300 mb-4">This can&apos;t be undone from here — the customer isn&apos;t automatically notified or refunded.</p>
+                <ModalFooter>
+                    <Button type="button" variant="outline" onClick={() => setCancelTarget(null)} disabled={cancelling}>Keep Order</Button>
+                    <Button type="button" variant="danger" loading={cancelling} onClick={cancelOrder}>Cancel Order</Button>
                 </ModalFooter>
             </Modal>
         </div>

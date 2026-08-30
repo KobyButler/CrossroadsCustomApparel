@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Modal, ModalFooter } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
+import { IconButton, IconButtonRow } from "@/components/ui/icon-button";
+import { PowerIcon, CheckIcon } from "@/components/ui/icons";
 import { motion } from "framer-motion";
 
 const EASE = [0.16, 1, 0.3, 1] as [number, number, number, number];
@@ -134,10 +136,12 @@ export default function DiscountsPage() {
                                                 ) : <span className="text-xs text-graphite-500">Never</span>}
                                             </td>
                                             <td className="text-right pr-5">
-                                                <button type="button" onClick={() => toggleCode(c.id, c.active)}
-                                                    className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${c.active ? "text-signal-red hover:bg-signal-red/10" : "text-signal-green bg-signal-green/10 hover:bg-signal-green/15"}`}>
-                                                    {c.active ? "Deactivate" : "Activate"}
-                                                </button>
+                                                <IconButtonRow>
+                                                    <IconButton title={c.active ? "Deactivate" : "Activate"} tone={c.active ? "amber" : "emerald"}
+                                                        onClick={() => toggleCode(c.id, c.active)}>
+                                                        {c.active ? <PowerIcon /> : <CheckIcon />}
+                                                    </IconButton>
+                                                </IconButtonRow>
                                             </td>
                                         </motion.tr>
                                     );
