@@ -5,30 +5,33 @@ export type BadgeVariant =
     | "default" | "success" | "warning" | "danger" | "info"
     | "purple" | "pink" | "orange" | "teal" | "neutral";
 
+// Console system, dark ground: tinted-dark fill + bright text, never a pastel
+// pill. `purple`/`pink` keep their prop names for backward compatibility but
+// render as non-violet hues (indigo / rose) — no variant renders violet.
 const styles: Record<BadgeVariant, string> = {
-    default: "bg-slate-100  text-slate-600  ring-slate-200/60",
-    success: "bg-emerald-50 text-emerald-700 ring-emerald-200/60",
-    warning: "bg-amber-50   text-amber-700   ring-amber-200/60",
-    danger:  "bg-red-50     text-red-700     ring-red-200/60",
-    info:    "bg-sky-50     text-sky-700     ring-sky-200/60",
-    purple:  "bg-violet-50  text-violet-700  ring-violet-200/60",
-    pink:    "bg-pink-50    text-pink-700    ring-pink-200/60",
-    orange:  "bg-orange-50  text-orange-700  ring-orange-200/60",
-    teal:    "bg-teal-50    text-teal-700    ring-teal-200/60",
-    neutral: "bg-slate-100  text-slate-500  ring-slate-200/60",
+    default: "bg-white/[0.06]        text-graphite-200      ring-white/10",
+    success: "bg-signal-green/10     text-signal-green      ring-signal-green/25",
+    warning: "bg-signal-amber/10     text-signal-amber      ring-signal-amber/25",
+    danger:  "bg-signal-red/10       text-signal-red        ring-signal-red/25",
+    info:    "bg-signal-cyan/10      text-signal-cyan       ring-signal-cyan/25",
+    purple:  "bg-[#5b8def]/10        text-[#8fb4ff]         ring-[#5b8def]/25",
+    pink:    "bg-[#ff6b8b]/10        text-[#ff9fb3]         ring-[#ff6b8b]/25",
+    orange:  "bg-[#ff9142]/10        text-[#ffb073]         ring-[#ff9142]/25",
+    teal:    "bg-[#2dd4bf]/10        text-[#5eead4]         ring-[#2dd4bf]/25",
+    neutral: "bg-white/[0.04]        text-graphite-300      ring-white/8",
 };
 
 const dots: Record<BadgeVariant, string> = {
-    default: "bg-slate-400",
-    success: "bg-emerald-500",
-    warning: "bg-amber-500",
-    danger:  "bg-red-500",
-    info:    "bg-sky-500",
-    purple:  "bg-violet-500",
-    pink:    "bg-pink-500",
-    orange:  "bg-orange-500",
-    teal:    "bg-teal-500",
-    neutral: "bg-slate-400",
+    default: "bg-graphite-300",
+    success: "bg-signal-green",
+    warning: "bg-signal-amber",
+    danger:  "bg-signal-red",
+    info:    "bg-signal-cyan",
+    purple:  "bg-[#5b8def]",
+    pink:    "bg-[#ff6b8b]",
+    orange:  "bg-[#ff9142]",
+    teal:    "bg-[#2dd4bf]",
+    neutral: "bg-graphite-400",
 };
 
 interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {

@@ -44,7 +44,7 @@ export function Modal({ open, onClose, title, description, size = "md", children
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                         transition={{ duration: 0.2 }}
-                        className="absolute inset-0 bg-ink-950/60 backdrop-blur-sm print:hidden"
+                        className="absolute inset-0 bg-graphite-950/70 backdrop-blur-sm print:hidden"
                         onClick={onClose}
                     />
 
@@ -56,23 +56,23 @@ export function Modal({ open, onClose, title, description, size = "md", children
                         exit={{   opacity: 0, scale: 0.95,  y: 8  }}
                         transition={{ duration: 0.22, ease: [0.32, 0.72, 0, 1] }}
                         className={cn(
-                            "relative w-full bg-white rounded-2xl shadow-modal",
-                            "ring-1 ring-black/8 flex flex-col",
+                            "relative w-full console-panel rounded-lg shadow-console-hover",
+                            "flex flex-col",
                             sizes[size],
                             "max-h-[90vh]",
-                            "print:max-h-none print:shadow-none print:ring-0 print:rounded-none"
+                            "print:max-h-none print:shadow-none print:ring-0 print:rounded-none print:bg-white"
                         )}
                     >
                         {/* Header */}
                         {(title || description) && (
-                            <div className="px-6 pt-5 pb-4 border-b border-slate-100 shrink-0">
+                            <div className="px-6 pt-5 pb-4 border-b border-white/[0.06] shrink-0 print:border-slate-200">
                                 {title && (
-                                    <h2 className="text-base font-bold text-slate-900 leading-snug">
+                                    <h2 className="text-base font-bold text-white leading-snug print:text-slate-900">
                                         {title}
                                     </h2>
                                 )}
                                 {description && (
-                                    <p className="text-sm text-slate-500 mt-0.5">{description}</p>
+                                    <p className="text-sm text-graphite-300 mt-0.5 print:text-slate-500">{description}</p>
                                 )}
                             </div>
                         )}
@@ -83,8 +83,8 @@ export function Modal({ open, onClose, title, description, size = "md", children
                             aria-label="Close modal"
                             onClick={onClose}
                             className={cn(
-                                "absolute top-4 right-4 p-1.5 rounded-lg text-slate-400",
-                                "hover:text-slate-600 hover:bg-slate-100 transition-colors print:hidden"
+                                "absolute top-4 right-4 p-1.5 rounded-md text-graphite-400",
+                                "hover:text-white hover:bg-white/[0.08] transition-colors print:hidden"
                             )}
                         >
                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -93,7 +93,7 @@ export function Modal({ open, onClose, title, description, size = "md", children
                         </button>
 
                         {/* Body */}
-                        <div className="px-6 py-5 overflow-y-auto flex-1 print:overflow-visible print:max-h-none">
+                        <div className="px-6 py-5 overflow-y-auto flex-1 print:overflow-visible print:max-h-none print:text-slate-900">
                             {children}
                         </div>
                     </motion.div>
@@ -105,7 +105,7 @@ export function Modal({ open, onClose, title, description, size = "md", children
 
 export function ModalFooter({ className, children }: React.HTMLAttributes<HTMLDivElement>) {
     return (
-        <div className={cn("flex items-center justify-end gap-2 pt-4 mt-4 border-t border-slate-100", className)}>
+        <div className={cn("flex items-center justify-end gap-2 pt-4 mt-4 border-t border-white/[0.06] print:border-slate-100", className)}>
             {children}
         </div>
     );

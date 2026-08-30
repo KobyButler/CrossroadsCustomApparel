@@ -87,22 +87,25 @@ function SidebarContent({ onNav }: { onNav?: () => void }) {
     return (
         <div className="flex flex-col h-full">
             {/* Brand */}
-            <div className="px-4 py-4 flex flex-col items-center gap-1">
+            <div className="px-4 py-5 flex flex-col items-center gap-1.5">
                 <Image
                     src="/logo.png"
                     alt="Crossroads Custom Apparel"
-                    width={140}
-                    height={56}
+                    width={132}
+                    height={52}
                     className="object-contain"
                     priority
                 />
-                <div className="sidebar-brand-sub text-[10px]">Admin Dashboard</div>
+                <div className="flex items-center gap-1.5 text-[10px] font-medium tracking-wide text-graphite-300">
+                    <span className="w-1.5 h-1.5 rounded-full bg-signal-green animate-signal-pulse" />
+                    Dispatch Console
+                </div>
             </div>
 
-            <div className="sidebar-divider" />
+            <div className="h-px bg-white/[0.06] mx-4 mb-2" />
 
             {/* Navigation */}
-            <nav className="flex-1 px-3 py-1 space-y-0.5 overflow-y-auto">
+            <nav className="flex-1 px-4 py-1 space-y-0.5 overflow-y-auto console-scroll">
                 {NAV.map(item => {
                     const isActive = pathname === item.href ||
                         (item.href !== "/" && pathname?.startsWith(item.href));
@@ -110,10 +113,10 @@ function SidebarContent({ onNav }: { onNav?: () => void }) {
 
                     return (
                         <div key={item.href}>
-                            <Link href={item.href} onClick={onNav} className={cn("nav-item", isActive && "active")}>
+                            <Link href={item.href} onClick={onNav} className={cn("console-nav-item", isActive && "active")}>
                                 <span className={cn(
                                     "shrink-0 transition-colors duration-200",
-                                    isActive ? "text-brand-400" : "text-ink-400"
+                                    isActive ? "text-signal-cyan" : "text-graphite-500"
                                 )}>
                                     {item.icon}
                                 </span>
@@ -126,10 +129,10 @@ function SidebarContent({ onNav }: { onNav?: () => void }) {
                                         initial={{ height: 0, opacity: 0 }}
                                         animate={{ height: "auto", opacity: 1 }}
                                         exit={{ height: 0, opacity: 0 }}
-                                        transition={{ duration: 0.2, ease: [0.32, 0.72, 0, 1] }}
+                                        transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
                                         className="overflow-hidden"
                                     >
-                                        <div className="sidebar-subnav-rail ml-4 pl-3 mt-0.5 mb-1 space-y-0.5">
+                                        <div className="ml-[1.15rem] pl-3 mt-0.5 mb-1 space-y-0.5 border-l border-white/[0.07]">
                                             {item.children!.map(sub => {
                                                 const subActive = pathname === sub.href;
                                                 return (
@@ -138,11 +141,11 @@ function SidebarContent({ onNav }: { onNav?: () => void }) {
                                                         href={sub.href}
                                                         onClick={onNav}
                                                         className={cn(
-                                                            "flex items-center px-3 py-2 rounded-lg text-xs font-medium",
+                                                            "flex items-center px-3 py-2 rounded-md text-xs font-medium",
                                                             "transition-colors duration-150",
                                                             subActive
-                                                                ? "text-brand-300 bg-brand-600/10"
-                                                                : "sidebar-subnav-text hover:text-white hover:bg-white-8"
+                                                                ? "text-signal-cyan-bright bg-signal-cyan/10"
+                                                                : "text-graphite-300 hover:text-graphite-100 hover:bg-white/[0.04]"
                                                         )}
                                                     >
                                                         {sub.label}
@@ -159,16 +162,16 @@ function SidebarContent({ onNav }: { onNav?: () => void }) {
             </nav>
 
             {/* Footer / user */}
-            <div className="sidebar-footer">
+            <div className="border-t border-white/[0.06] p-3">
                 {userEmail && (
-                    <p className="sidebar-user-email text-[11px] font-medium truncate px-2 py-1 mb-1">
+                    <p className="text-[11px] font-medium text-graphite-300 truncate px-2 py-1 mb-1 font-mono">
                         {userEmail}
                     </p>
                 )}
                 <button
                     type="button"
                     onClick={handleLogout}
-                    className="sidebar-logout-text w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-medium transition-all duration-200 hover:bg-red-500/10 hover:text-red-400"
+                    className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-xs font-medium text-graphite-300 transition-all duration-200 hover:bg-signal-red/10 hover:text-signal-red"
                 >
                     <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5 shrink-0">
                         <path fillRule="evenodd" d="M3 3a1 1 0 011 1v12a1 1 0 11-2 0V4a1 1 0 011-1zm7.707 3.293a1 1 0 010 1.414L9.414 9H17a1 1 0 110 2H9.414l1.293 1.293a1 1 0 01-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0z" clipRule="evenodd" />
@@ -187,6 +190,10 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
     const [mobileOpen, setMobileOpen] = useState(false);
 
     const isPublic = pathname?.startsWith("/shop/") || pathname === "/shops" || pathname === "/checkout" || pathname === "/login";
+    // "The Manifest Line" console world is now the whole app's system — every
+    // admin route renders on the dark console shell below. Public routes
+    // (storefront, checkout, login) render their own console-styled root
+    // directly, since they skip this shell entirely (see isPublic above).
 
     // Auth guard
     useEffect(() => {
@@ -206,10 +213,10 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
 
     return (
         <ToastProvider>
-            <div className="app-bg min-h-screen flex">
+            <div className="min-h-screen flex console-canvas text-graphite-100">
 
                 {/* ── Desktop sidebar (always visible ≥ lg) ── */}
-                <aside className="no-print sidebar-root hidden lg:flex w-[220px] shrink-0 flex-col sticky top-0 h-screen overflow-y-auto scrollbar-none">
+                <aside className="no-print console-sidebar hidden lg:flex w-[220px] xl:w-[248px] shrink-0 flex-col sticky top-0 h-screen overflow-y-auto scrollbar-none">
                     <SidebarContent />
                 </aside>
 
@@ -224,7 +231,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
                                 animate={{ opacity: 1 }}
                                 exit={{ opacity: 0 }}
                                 transition={{ duration: 0.2 }}
-                                className="fixed inset-0 z-40 bg-black/60 lg:hidden"
+                                className="fixed inset-0 z-40 bg-black/60 backdrop-blur-[2px] lg:hidden"
                                 onClick={() => setMobileOpen(false)}
                             />
                             {/* Drawer */}
@@ -233,8 +240,8 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
                                 initial={{ x: -240 }}
                                 animate={{ x: 0 }}
                                 exit={{ x: -240 }}
-                                transition={{ duration: 0.25, ease: [0.32, 0.72, 0, 1] }}
-                                className="sidebar-root fixed top-0 left-0 z-50 w-[240px] h-full flex flex-col lg:hidden shadow-2xl"
+                                transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+                                className="console-sidebar fixed top-0 left-0 z-50 w-[240px] h-full flex flex-col lg:hidden shadow-console-hover"
                             >
                                 <SidebarContent onNav={() => setMobileOpen(false)} />
                             </motion.aside>
@@ -246,11 +253,11 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
                 <div className="flex-1 min-w-0 flex flex-col">
 
                     {/* Mobile top bar */}
-                    <div className="no-print lg:hidden sticky top-0 z-30 flex items-center gap-3 px-4 py-3 border-b border-slate-200 bg-white/80 backdrop-blur-sm">
+                    <div className="no-print lg:hidden sticky top-0 z-30 flex items-center gap-3 px-4 py-3 backdrop-blur-md border-b border-white/[0.06] bg-[#0a0c10]/85">
                         <button
                             type="button"
                             onClick={() => setMobileOpen(true)}
-                            className="p-2 rounded-lg text-slate-600 hover:bg-slate-100 transition-colors"
+                            className="p-2 rounded-md text-graphite-300 hover:bg-white/[0.06] hover:text-white transition-colors"
                             aria-label="Open menu"
                         >
                             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -272,8 +279,8 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
                             key={pathname}
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.25, ease: [0.32, 0.72, 0, 1] }}
-                            className="p-4 sm:p-6 lg:p-7 max-w-[1200px]"
+                            transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                            className="p-4 sm:p-6 lg:p-8 xl:p-10 w-full max-w-[1800px] mx-auto"
                         >
                             {children}
                         </motion.div>

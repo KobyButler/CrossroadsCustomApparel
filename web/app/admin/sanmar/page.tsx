@@ -2,7 +2,11 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { api } from "@/app/lib/api";
 import { useToast } from "@/components/ui/toast";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { motion, AnimatePresence } from "framer-motion";
+
+const EASE = [0.16, 1, 0.3, 1] as [number, number, number, number];
 
 /* ─── Types ───────────────────────────────────────────────────────────────── */
 
@@ -119,6 +123,10 @@ function formatCatPath(path: string): string {
 
 /* ─── Constants ───────────────────────────────────────────────────────────── */
 
+// NOTE: these hex values represent real, physical garment colors a shopper
+// can filter by (matched against actual SanMar color names) — they are
+// product data, not UI theming, so they are intentionally left outside the
+// signal-color system (see migration report).
 const COLOR_FAMILIES = [
     { label: "Black",  hex: "#111827", keywords: ["black"] },
     { label: "White",  hex: "#f3f4f6", keywords: ["white", "natural", "ivory", "cream"] },
@@ -197,6 +205,9 @@ function groupToStyleCards(rows: CatalogRow[]): StyleCard[] {
     return Array.from(map.values()).map(c => ({ ...c, colorCount: c.colors.length, sizeCount: c.sizes.length }));
 }
 
+// NOTE: these hex values are literal representations of real garment colors
+// (mapped from vendor color-name text), not UI theming — left as-is, see
+// migration report.
 function colorHex(name: string): string {
     const n = name.toLowerCase();
     if (n.includes("black"))                                       return "#111827";
@@ -240,11 +251,11 @@ function FacetSection({ title, expanded, onToggle, children }: {
     title: string; expanded: boolean; onToggle: () => void; children: React.ReactNode;
 }) {
     return (
-        <div className="border-b border-slate-100 last:border-0">
+        <div className="border-b border-white/[0.06] last:border-0">
             <button type="button" onClick={onToggle}
-                className="flex items-center justify-between w-full py-3 text-sm font-bold text-slate-700 hover:text-slate-900 transition-colors">
+                className="flex items-center justify-between w-full py-3 text-sm font-semibold text-graphite-200 hover:text-white transition-colors">
                 {title}
-                <svg className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${expanded ? "" : "-rotate-90"}`}
+                <svg className={`w-4 h-4 text-graphite-500 transition-transform duration-200 ${expanded ? "" : "-rotate-90"}`}
                     fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                 </svg>
@@ -278,49 +289,50 @@ function ProductCard({ card, onClick, index }: { card: StyleCard; onClick: () =>
             onClick={onClick}
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
+            whileHover={{ y: -3 }}
             transition={{ delay: Math.min(index * 0.025, 0.25), duration: 0.2, ease: "easeOut" }}
-            className="text-left bg-white rounded-3xl ring-1 ring-black/5 shadow-sm hover:shadow-xl hover:ring-violet-200/80 hover:-translate-y-1 transition-all duration-200 group overflow-hidden"
+            className="text-left console-panel rounded-lg hover:border-white/[0.14] hover:shadow-console-hover transition-[box-shadow,border-color] duration-200 group overflow-hidden"
             style={{ isolation: "isolate" }}
         >
-            <div className="relative bg-gradient-to-br from-slate-50 to-slate-100 aspect-[4/5] overflow-hidden">
+            <div className="relative bg-graphite-100 aspect-[4/5] overflow-hidden">
                 {hasImg ? (
                     <img src={card.productImage} alt={card.title ?? card.style}
                         onError={() => setImgErr(true)}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                 ) : (
-                    <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-slate-200">
+                    <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-graphite-400">
                         <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1}
                                 d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                         </svg>
-                        <span className="text-[10px] font-mono text-slate-300">{card.style}</span>
+                        <span className="text-[10px] font-mono text-graphite-500">{card.style}</span>
                     </div>
                 )}
-                <div className={`absolute top-2.5 right-2.5 w-2.5 h-2.5 rounded-full ring-2 ring-white shadow ${
-                    stockLevel === "high" ? "bg-emerald-400" : stockLevel === "low" ? "bg-amber-400" : "bg-red-400"
+                <div className={`absolute top-2.5 right-2.5 w-2.5 h-2.5 rounded-full ring-2 ring-white ${
+                    stockLevel === "high" ? "bg-signal-green" : stockLevel === "low" ? "bg-signal-amber" : "bg-signal-red"
                 }`} />
                 <div className="absolute bottom-0 left-0 right-0 px-3 pb-3 pt-8 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                    <span className="text-xs font-mono font-bold text-white/90">{card.style}</span>
+                    <span className="text-xs font-mono font-semibold text-white/90">{card.style}</span>
                 </div>
             </div>
             <div className="p-3.5">
-                <p className="font-bold text-slate-900 text-sm leading-snug line-clamp-1">{card.title ?? card.style}</p>
-                {card.brand && <p className="text-xs text-slate-400 mt-0.5 truncate">{card.brand}</p>}
+                <p className="font-semibold text-white text-sm leading-snug line-clamp-1">{card.title ?? card.style}</p>
+                {card.brand && <p className="text-xs text-graphite-300 mt-0.5 truncate">{card.brand}</p>}
                 <div className="mt-2.5 flex items-end justify-between gap-2">
                     <div>
-                        <p className="text-base font-black text-slate-900">
+                        <p className="text-base font-semibold font-mono tabular-nums text-white">
                             {card.priceCents > 0 ? fmt(card.priceCents) : "—"}
                         </p>
-                        <p className="text-xs text-slate-400">{card.colorCount} color{card.colorCount !== 1 ? "s" : ""}</p>
+                        <p className="text-xs text-graphite-300">{card.colorCount} color{card.colorCount !== 1 ? "s" : ""}</p>
                     </div>
                     <div className="flex -space-x-1.5">
                         {card.colors.slice(0, 5).map(c => (
-                            <div key={c} className="w-4 h-4 rounded-full ring-[1.5px] ring-white shrink-0 shadow-sm"
+                            <div key={c} className="w-4 h-4 rounded-full ring-[1.5px] ring-graphite-900 shrink-0"
                                 style={{ backgroundColor: colorHex(c) }} />
                         ))}
                         {card.colorCount > 5 && (
-                            <div className="w-4 h-4 rounded-full bg-slate-100 ring-[1.5px] ring-white flex items-center justify-center shrink-0 shadow-sm">
-                                <span className="text-[8px] font-black text-slate-500">+{card.colorCount - 5}</span>
+                            <div className="w-4 h-4 rounded-full bg-white/[0.08] ring-[1.5px] ring-graphite-900 flex items-center justify-center shrink-0">
+                                <span className="text-[8px] font-semibold text-graphite-300">+{card.colorCount - 5}</span>
                             </div>
                         )}
                     </div>
@@ -341,15 +353,16 @@ function ListRow({ card, onClick, index }: { card: StyleCard; onClick: () => voi
             onClick={onClick}
             initial={{ opacity: 0, x: -8 }}
             animate={{ opacity: 1, x: 0 }}
+            whileHover={{ x: 2 }}
             transition={{ delay: Math.min(index * 0.015, 0.2), duration: 0.18 }}
-            className="w-full flex items-center gap-4 px-5 py-4 hover:bg-violet-50/40 transition-colors border-b border-slate-50 last:border-0 text-left group"
+            className="w-full flex items-center gap-4 px-5 py-4 hover:bg-white/[0.03] transition-colors border-b border-white/[0.05] last:border-0 text-left group"
         >
-            <div className="w-14 h-14 rounded-2xl bg-slate-50 overflow-hidden shrink-0 ring-1 ring-black/5">
+            <div className="w-14 h-14 rounded-md bg-graphite-100 overflow-hidden shrink-0">
                 {hasImg ? (
                     <img src={card.productImage} alt="" onError={() => setImgErr(true)}
                         className="w-full h-full object-cover" />
                 ) : (
-                    <div className="w-full h-full flex items-center justify-center text-slate-300">
+                    <div className="w-full h-full flex items-center justify-center text-graphite-400">
                         <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
                                 d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -358,23 +371,23 @@ function ListRow({ card, onClick, index }: { card: StyleCard; onClick: () => voi
                 )}
             </div>
             <div className="flex-1 min-w-0">
-                <p className="font-semibold text-slate-800 text-sm truncate">{card.title ?? card.style}</p>
-                <p className="text-xs text-slate-400 mt-0.5">{[card.brand, card.style].filter(Boolean).join(" · ")}</p>
+                <p className="font-semibold text-graphite-100 text-sm truncate">{card.title ?? card.style}</p>
+                <p className="text-xs text-graphite-300 mt-0.5">{[card.brand, card.style].filter(Boolean).join(" · ")}</p>
                 <div className="flex items-center gap-1.5 mt-1.5">
                     {card.colors.slice(0, 10).map(c => (
-                        <div key={c} className="w-3.5 h-3.5 rounded-full ring-1 ring-white shadow-sm shrink-0"
+                        <div key={c} className="w-3.5 h-3.5 rounded-full ring-1 ring-graphite-900 shrink-0"
                             style={{ backgroundColor: colorHex(c) }} />
                     ))}
-                    {card.colorCount > 10 && <span className="text-[10px] text-slate-400">+{card.colorCount - 10}</span>}
+                    {card.colorCount > 10 && <span className="text-[10px] text-graphite-300">+{card.colorCount - 10}</span>}
                 </div>
             </div>
             <div className="text-right shrink-0 space-y-1">
-                <p className="font-black text-slate-900 text-sm">{card.priceCents > 0 ? fmt(card.priceCents) : "—"}</p>
-                <p className={`text-xs font-medium ${card.totalQty > 0 ? "text-emerald-500" : "text-slate-300"}`}>
+                <p className="font-semibold font-mono tabular-nums text-white text-sm">{card.priceCents > 0 ? fmt(card.priceCents) : "—"}</p>
+                <p className={`text-xs font-medium ${card.totalQty > 0 ? "text-signal-green" : "text-graphite-300"}`}>
                     {card.totalQty > 0 ? `${card.totalQty.toLocaleString()} in stock` : "Out of stock"}
                 </p>
             </div>
-            <svg className="w-4 h-4 text-slate-300 group-hover:text-violet-400 transition-colors shrink-0"
+            <svg className="w-4 h-4 text-graphite-500 group-hover:text-signal-cyan transition-colors shrink-0"
                 fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
             </svg>
@@ -390,36 +403,35 @@ function HealthCard({ title, sub, log, syncing, onSync }: {
     const ok = log?.status === "SUCCESS";
     const running = syncing || log?.status === "RUNNING";
     return (
-        <div className="bg-white rounded-2xl ring-1 ring-black/5 p-5 space-y-4">
+        <div className="console-panel rounded-lg p-5 space-y-4">
             <div className="flex items-start justify-between gap-3">
                 <div>
-                    <p className="font-bold text-slate-800 text-sm">{title}</p>
-                    <p className="text-xs text-slate-400 mt-0.5">{sub}</p>
+                    <p className="font-semibold text-white text-sm">{title}</p>
+                    <p className="text-xs text-graphite-300 mt-0.5">{sub}</p>
                 </div>
-                <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${running ? "bg-amber-50" : ok ? "bg-emerald-50" : "bg-slate-100"}`}>
+                <div className={`w-9 h-9 rounded-md flex items-center justify-center shrink-0 ${running ? "bg-signal-amber/10" : ok ? "bg-signal-green/10" : "bg-white/[0.04]"}`}>
                     {running ? (
-                        <div className="w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+                        <div className="w-4 h-4 border-2 border-signal-amber border-t-transparent rounded-full animate-spin" />
                     ) : ok ? (
-                        <svg className="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <svg className="w-4 h-4 text-signal-green" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                         </svg>
                     ) : (
-                        <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <svg className="w-4 h-4 text-graphite-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                         </svg>
                     )}
                 </div>
             </div>
             {log ? (
-                <p className="text-xs text-slate-500">
-                    {log.rowsProcessed != null && <span className="font-medium text-slate-700">{log.rowsProcessed.toLocaleString()} items · </span>}
+                <p className="text-xs text-graphite-300">
+                    {log.rowsProcessed != null && <span className="font-medium text-graphite-100 font-mono tabular-nums">{log.rowsProcessed.toLocaleString()} items · </span>}
                     {timeAgo(log.startedAt)}
                 </p>
-            ) : <p className="text-xs text-slate-400">Never synced</p>}
-            <button type="button" onClick={onSync} disabled={running}
-                className="w-full py-2.5 text-xs font-bold rounded-xl bg-slate-900 text-white hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+            ) : <p className="text-xs text-graphite-300">Never synced</p>}
+            <Button type="button" variant="secondary" size="sm" onClick={onSync} disabled={running} className="w-full">
                 {running ? "Updating…" : "Refresh Now"}
-            </button>
+            </Button>
         </div>
     );
 }
@@ -428,11 +440,11 @@ function HealthCard({ title, sub, log, syncing, onSync }: {
 
 function FilterChip({ label, color, onRemove }: { label: string; color?: string; onRemove: () => void }) {
     return (
-        <span className="flex items-center gap-1.5 bg-violet-100 text-violet-700 text-xs font-semibold px-3 py-1.5 rounded-full">
-            {color && <div className="w-3 h-3 rounded-full ring-1 ring-white/60 shrink-0" style={{ backgroundColor: color }} />}
+        <span className="flex items-center gap-1.5 bg-signal-cyan/10 text-signal-cyan ring-1 ring-signal-cyan/25 text-xs font-semibold px-3 py-1.5 rounded-full">
+            {color && <div className="w-3 h-3 rounded-full ring-1 ring-white/30 shrink-0" style={{ backgroundColor: color }} />}
             {label}
             <button type="button" aria-label={`Remove ${label} filter`} onClick={onRemove}
-                className="hover:text-violet-900 ml-0.5">
+                className="hover:text-signal-cyan-bright ml-0.5">
                 <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                 </svg>
@@ -699,18 +711,20 @@ export default function SanMarPage() {
         <div className="space-y-5 pb-16">
 
             {/* ── Hero ────────────────────────────────────────────────────── */}
-            <div className="relative overflow-hidden rounded-3xl p-7 text-white"
-                style={{ background: "linear-gradient(135deg,#6d28d9 0%,#4f46e5 50%,#2563eb 100%)" }}>
-                <div className="absolute -top-12 -right-12 w-56 h-56 rounded-full bg-white/10 blur-3xl pointer-events-none" />
-                <div className="absolute -bottom-12 -left-12 w-72 h-72 rounded-full bg-white/5 blur-3xl pointer-events-none" />
+            <motion.div
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, ease: EASE }}
+                className="relative overflow-hidden console-panel rounded-lg p-7"
+            >
                 <div className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-5">
                     <div>
                         <div className="flex items-center gap-2 mb-1.5">
-                            <div className={`w-2 h-2 rounded-full ${status?.sftpEnabled ? "bg-emerald-400 animate-pulse" : "bg-amber-400"}`} />
-                            <p className="text-violet-200 text-xs font-bold uppercase tracking-widest">SanMar Wholesale</p>
+                            <span className={`w-2 h-2 rounded-full ${status?.sftpEnabled ? "bg-signal-green animate-signal-pulse" : "bg-signal-amber"}`} />
+                            <p className="console-label">SanMar Wholesale</p>
                         </div>
-                        <h1 className="text-3xl font-black tracking-tight">Product Catalog</h1>
-                        <p className="text-violet-200 text-sm mt-1">Browse wholesale products and add them to your store</p>
+                        <h1 className="page-title">Product Catalog</h1>
+                        <p className="page-subtitle">Browse wholesale products and add them to your store</p>
                     </div>
                     <div className="flex gap-3 flex-wrap">
                         {[
@@ -718,30 +732,35 @@ export default function SanMarPage() {
                             { label: "Brands",     val: catMeta.brands.length     || "—" },
                             { label: "Categories", val: categoryTree.length       || "—" },
                         ].map(s => (
-                            <div key={s.label} className="bg-white/15 backdrop-blur-sm border border-white/20 rounded-2xl px-4 py-3 text-center min-w-[80px]">
-                                <p className="text-xl font-black tabular-nums">{s.val}</p>
-                                <p className="text-xs text-violet-200 mt-0.5">{s.label}</p>
+                            <div key={s.label} className="bg-white/[0.04] border border-white/10 rounded-md px-4 py-3 text-center min-w-[80px]">
+                                <p className="text-xl font-semibold font-mono tabular-nums text-white">{s.val}</p>
+                                <p className="text-xs text-graphite-300 mt-0.5">{s.label}</p>
                             </div>
                         ))}
                     </div>
                 </div>
                 {lastSDL?.completedAt && (
-                    <div className="relative mt-5 pt-4 border-t border-white/20 flex items-center justify-between text-xs text-violet-200">
+                    <div className="relative mt-5 pt-4 border-t border-white/[0.06] flex items-center justify-between text-xs text-graphite-300">
                         <span><span className="text-white font-semibold">Catalog updated</span> · {timeAgo(lastSDL.completedAt)}</span>
                         <span>Inventory refreshes hourly</span>
                     </div>
                 )}
-            </div>
+            </motion.div>
 
             {/* ── Search + view toggle ─────────────────────────────────────── */}
-            <div className="flex gap-3 items-center">
+            <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.08, duration: 0.35, ease: EASE }}
+                className="flex gap-3 items-center"
+            >
                 <div className="relative flex-1">
-                    <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none"
+                    <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-graphite-400 pointer-events-none"
                         fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                     </svg>
                     <input
-                        className="w-full pl-11 pr-4 py-3 text-sm border border-slate-200 rounded-2xl outline-none focus:border-violet-400 focus:ring-4 focus:ring-violet-400/10 bg-white shadow-sm transition-all placeholder:text-slate-400"
+                        className="w-full pl-11 pr-4 py-3 text-sm border border-white/10 rounded-md outline-none focus:border-signal-cyan/60 focus:ring-2 focus:ring-signal-cyan/30 bg-white/[0.03] text-white transition-all placeholder:text-graphite-500 hover:border-white/20"
                         placeholder="Search by name, style number, or brand…"
                         value={filters.q}
                         onChange={e => {
@@ -754,28 +773,28 @@ export default function SanMarPage() {
                     {filters.q && (
                         <button type="button" aria-label="Clear search"
                             onClick={() => { setFilter("q", ""); setCatPage(1); }}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 transition-colors">
-                            <svg className="w-3 h-3 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                            className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded-full bg-white/[0.08] hover:bg-white/[0.14] transition-colors">
+                            <svg className="w-3 h-3 text-graphite-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                             </svg>
                         </button>
                     )}
                 </div>
-                <div className="flex items-center gap-1 bg-slate-100 rounded-xl p-1 shrink-0">
+                <div className="flex items-center gap-1 bg-white/[0.04] ring-1 ring-white/10 rounded-md p-1 shrink-0">
                     <button type="button" aria-label="Grid view" onClick={() => setView("grid")}
-                        className={`px-2.5 py-1.5 rounded-lg transition-all ${view === "grid" ? "bg-white shadow text-slate-900" : "text-slate-500 hover:text-slate-700"}`}>
+                        className={`px-2.5 py-1.5 rounded-md transition-all ${view === "grid" ? "bg-white/[0.10] text-signal-cyan" : "text-graphite-400 hover:text-graphite-200"}`}>
                         <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 16 16">
                             <path d="M1 2.5A1.5 1.5 0 012.5 1h3A1.5 1.5 0 017 2.5v3A1.5 1.5 0 015.5 7h-3A1.5 1.5 0 011 5.5v-3zm8 0A1.5 1.5 0 0110.5 1h3A1.5 1.5 0 0115 2.5v3A1.5 1.5 0 0113.5 7h-3A1.5 1.5 0 019 5.5v-3zm-8 8A1.5 1.5 0 012.5 9h3A1.5 1.5 0 017 10.5v3A1.5 1.5 0 015.5 15h-3A1.5 1.5 0 011 13.5v-3zm8 0A1.5 1.5 0 0110.5 9h3A1.5 1.5 0 0115 10.5v3A1.5 1.5 0 0113.5 15h-3A1.5 1.5 0 019 13.5v-3z" />
                         </svg>
                     </button>
                     <button type="button" aria-label="List view" onClick={() => setView("list")}
-                        className={`px-2.5 py-1.5 rounded-lg transition-all ${view === "list" ? "bg-white shadow text-slate-900" : "text-slate-500 hover:text-slate-700"}`}>
+                        className={`px-2.5 py-1.5 rounded-md transition-all ${view === "list" ? "bg-white/[0.10] text-signal-cyan" : "text-graphite-400 hover:text-graphite-200"}`}>
                         <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 16 16">
                             <path fillRule="evenodd" d="M2.5 12a.5.5 0 01.5-.5h10a.5.5 0 010 1H3a.5.5 0 01-.5-.5zm0-4a.5.5 0 01.5-.5h10a.5.5 0 010 1H3a.5.5 0 01-.5-.5zm0-4a.5.5 0 01.5-.5h10a.5.5 0 010 1H3a.5.5 0 01-.5-.5z" />
                         </svg>
                     </button>
                 </div>
-            </div>
+            </motion.div>
 
             {/* ── Two-column layout ────────────────────────────────────────── */}
             <div className="flex gap-6 items-start">
@@ -783,7 +802,12 @@ export default function SanMarPage() {
                 {/* ══ LEFT SIDEBAR ══
                     z-30 ensures this stacking context renders above product cards
                     that create their own stacking contexts via Framer Motion transforms */}
-                <div className="w-56 shrink-0 sticky top-4 space-y-3" style={{ zIndex: 30 }}>
+                <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.12, duration: 0.35, ease: EASE }}
+                    className="w-56 shrink-0 sticky top-4 space-y-3" style={{ zIndex: 30 }}
+                >
 
                     {/* ── Category nav with hover flyout ── */}
                     {/*
@@ -796,14 +820,14 @@ export default function SanMarPage() {
                     <div className="relative" onMouseLeave={handleNavMouseLeave}>
 
                         {/* Category list card */}
-                        <div className="bg-white rounded-2xl ring-1 ring-black/5">
+                        <div className="console-panel rounded-lg overflow-hidden">
 
                             {/* All Products */}
                             <button type="button" onClick={clearAll}
-                                className={`flex items-center gap-2.5 w-full px-4 py-3 text-sm font-bold border-b transition-colors ${
+                                className={`flex items-center gap-2.5 w-full px-4 py-3 text-sm font-semibold border-b border-white/[0.06] transition-colors ${
                                     !filters.category
-                                        ? "bg-violet-50 text-violet-700 border-violet-100"
-                                        : "text-slate-600 hover:bg-slate-50 border-slate-100"
+                                        ? "bg-signal-cyan/10 text-signal-cyan"
+                                        : "text-graphite-300 hover:bg-white/[0.04] hover:text-white"
                                 }`}>
                                 <svg className="w-4 h-4 shrink-0 opacity-60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
@@ -818,14 +842,14 @@ export default function SanMarPage() {
                                     <button key={rootNode.path} type="button"
                                         onMouseEnter={() => handleNavMouseEnter(rootNode.path)}
                                         onClick={() => selectCategoryPath(rootNode.path)}
-                                        className={`flex items-center justify-between w-full px-4 py-2.5 text-sm transition-colors border-b border-slate-50 last:border-0 ${
+                                        className={`flex items-center justify-between w-full px-4 py-2.5 text-sm transition-colors border-b border-white/[0.04] last:border-0 ${
                                             isActive
-                                                ? "bg-violet-50 text-violet-700 font-bold"
-                                                : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                                                ? "bg-signal-cyan/10 text-signal-cyan font-semibold"
+                                                : "text-graphite-300 hover:bg-white/[0.04] hover:text-white"
                                         }`}>
                                         <span>{rootNode.name}</span>
                                         {rootNode.children.length > 0 && (
-                                            <svg className={`w-4 h-4 shrink-0 transition-colors ${isActive ? "text-violet-400" : "text-slate-300"}`}
+                                            <svg className={`w-4 h-4 shrink-0 transition-colors ${isActive ? "text-signal-cyan/70" : "text-graphite-500"}`}
                                                 fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                                             </svg>
@@ -844,14 +868,14 @@ export default function SanMarPage() {
                                     animate={{ opacity: 1, x: 0 }}
                                     exit={{ opacity: 0, x: -6 }}
                                     transition={{ duration: 0.12, ease: "easeOut" }}
-                                    className="absolute top-0 bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden"
+                                    className="absolute top-0 console-panel rounded-lg shadow-console-hover overflow-hidden"
                                     style={{ left: "calc(100% + 8px)", width: 220, zIndex: 50 }}
                                     onMouseEnter={handleFlyoutMouseEnter}
                                     onMouseLeave={handleNavMouseLeave}
                                 >
                                     {/* Flyout header */}
-                                    <div className="px-4 py-3 bg-slate-50 border-b border-slate-100">
-                                        <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest">
+                                    <div className="px-4 py-3 bg-white/[0.03] border-b border-white/[0.06]">
+                                        <p className="console-label">
                                             {hoveredNode.name}
                                         </p>
                                     </div>
@@ -862,8 +886,8 @@ export default function SanMarPage() {
                                             onClick={() => selectCategoryPath(hoveredNode.path)}
                                             className={`flex items-center w-full px-4 py-2 text-sm font-semibold transition-colors ${
                                                 filters.category === hoveredNode.path && !filters.subcategory
-                                                    ? "text-violet-700 bg-violet-50"
-                                                    : "text-slate-700 hover:bg-slate-50"
+                                                    ? "text-signal-cyan bg-signal-cyan/10"
+                                                    : "text-graphite-200 hover:bg-white/[0.04] hover:text-white"
                                             }`}>
                                             All {hoveredNode.name}
                                         </button>
@@ -872,12 +896,12 @@ export default function SanMarPage() {
                                                 onClick={() => selectCategoryPath(child.path)}
                                                 className={`flex items-center justify-between w-full px-4 py-2 text-sm transition-colors ${
                                                     filters.category === child.path
-                                                        ? "text-violet-700 bg-violet-50 font-semibold"
-                                                        : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                                                        ? "text-signal-cyan bg-signal-cyan/10 font-semibold"
+                                                        : "text-graphite-300 hover:bg-white/[0.04] hover:text-white"
                                                 }`}>
                                                 <span>{child.name}</span>
                                                 {child.children.length > 0 && (
-                                                    <svg className="w-3.5 h-3.5 text-slate-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                    <svg className="w-3.5 h-3.5 text-graphite-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                                         <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                                                     </svg>
                                                 )}
@@ -891,7 +915,7 @@ export default function SanMarPage() {
 
                     {/* ── Filter facets (shown when a category is selected) ── */}
                     {filters.category && (
-                        <div className="bg-white rounded-2xl ring-1 ring-black/5 px-4">
+                        <div className="console-panel rounded-lg px-4">
 
                             {/* ── Deeper category navigation ── */}
                             {selectedNode && selectedNode.children.length > 0 && (
@@ -904,7 +928,7 @@ export default function SanMarPage() {
                                                 const parts = filters.category.split(";");
                                                 selectCategoryPath(parts.slice(0, -1).join(";") || parts[0]);
                                             }}
-                                            className="flex items-center justify-between w-full py-1.5 px-2 text-sm rounded-lg text-slate-500 hover:text-slate-700 transition-colors">
+                                            className="flex items-center justify-between w-full py-1.5 px-2 text-sm rounded-md text-graphite-300 hover:text-white transition-colors">
                                             <span className="flex items-center gap-1.5">
                                                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                                                     <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
@@ -915,14 +939,14 @@ export default function SanMarPage() {
                                         {selectedNode.children.map(child => (
                                             <button key={child.path} type="button"
                                                 onClick={() => selectCategoryPath(child.path)}
-                                                className={`flex items-center justify-between w-full py-1.5 px-2 text-sm rounded-lg transition-colors ${
+                                                className={`flex items-center justify-between w-full py-1.5 px-2 text-sm rounded-md transition-colors ${
                                                     filters.category === child.path
-                                                        ? "text-violet-700 font-semibold bg-violet-50"
-                                                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                                                        ? "text-signal-cyan font-semibold bg-signal-cyan/10"
+                                                        : "text-graphite-300 hover:text-white hover:bg-white/[0.04]"
                                                 }`}>
                                                 <span>{child.name}</span>
                                                 {filters.category === child.path && (
-                                                    <svg className="w-3.5 h-3.5 text-violet-500 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                                    <svg className="w-3.5 h-3.5 text-signal-cyan shrink-0" fill="currentColor" viewBox="0 0 20 20">
                                                         <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                                                     </svg>
                                                 )}
@@ -934,19 +958,19 @@ export default function SanMarPage() {
 
                             {/* ── For leaf nodes or no children: show breadcrumb nav ── */}
                             {selectedNode && selectedNode.children.length === 0 && (
-                                <div className="py-3 border-b border-slate-100">
-                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Category</p>
-                                    <div className="flex flex-wrap gap-1 items-center text-xs text-slate-500">
+                                <div className="py-3 border-b border-white/[0.06]">
+                                    <p className="console-label mb-2">Category</p>
+                                    <div className="flex flex-wrap gap-1 items-center text-xs text-graphite-300">
                                         {filters.category.split(";").map((seg, idx, arr) => {
                                             const path = arr.slice(0, idx + 1).join(";");
                                             const isLast = idx === arr.length - 1;
                                             return (
                                                 <span key={path} className="flex items-center gap-1">
-                                                    {idx > 0 && <span className="text-slate-300">›</span>}
+                                                    {idx > 0 && <span className="text-graphite-500">›</span>}
                                                     {isLast
-                                                        ? <span className="font-bold text-violet-600">{seg}</span>
+                                                        ? <span className="font-semibold text-signal-cyan">{seg}</span>
                                                         : <button type="button" onClick={() => selectCategoryPath(path)}
-                                                            className="hover:text-violet-600 transition-colors">{seg}</button>
+                                                            className="hover:text-signal-cyan transition-colors">{seg}</button>
                                                     }
                                                 </span>
                                             );
@@ -958,7 +982,7 @@ export default function SanMarPage() {
                                             if (parts.length > 1) selectCategoryPath(parts.slice(0, -1).join(";"));
                                             else clearAll();
                                         }}
-                                        className="mt-2 flex items-center gap-1 text-xs text-slate-400 hover:text-slate-700 transition-colors">
+                                        className="mt-2 flex items-center gap-1 text-xs text-graphite-300 hover:text-white transition-colors">
                                         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                                             <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
                                         </svg>
@@ -972,11 +996,11 @@ export default function SanMarPage() {
                                 <FacetSection title="Type" expanded={expandedFacets.subcategory} onToggle={() => toggleFacet("subcategory")}>
                                     {relevantSubcats.map(sub => (
                                         <label key={sub}
-                                            className="flex items-center gap-2.5 py-1 cursor-pointer text-sm text-slate-600 hover:text-slate-900 transition-colors">
+                                            className="flex items-center gap-2.5 py-1 cursor-pointer text-sm text-graphite-300 hover:text-white transition-colors">
                                             <input type="checkbox"
                                                 checked={filters.subcategory === sub}
                                                 onChange={() => setFilter("subcategory", filters.subcategory === sub ? "" : sub)}
-                                                className="w-4 h-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500 focus:ring-offset-0 cursor-pointer" />
+                                                className="w-4 h-4 rounded border-white/20 bg-white/[0.03] accent-signal-cyan focus:ring-signal-cyan focus:ring-offset-0 cursor-pointer" />
                                             {sub}
                                         </label>
                                     ))}
@@ -988,11 +1012,11 @@ export default function SanMarPage() {
                                 <FacetSection title="Brand" expanded={expandedFacets.brand} onToggle={() => toggleFacet("brand")}>
                                     {catMeta.brands.map(brand => (
                                         <label key={brand}
-                                            className="flex items-center gap-2.5 py-1 cursor-pointer text-sm text-slate-600 hover:text-slate-900 transition-colors">
+                                            className="flex items-center gap-2.5 py-1 cursor-pointer text-sm text-graphite-300 hover:text-white transition-colors">
                                             <input type="checkbox"
                                                 checked={filters.brand === brand}
                                                 onChange={() => setFilter("brand", filters.brand === brand ? "" : brand)}
-                                                className="w-4 h-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500 focus:ring-offset-0 cursor-pointer" />
+                                                className="w-4 h-4 rounded border-white/20 bg-white/[0.03] accent-signal-cyan focus:ring-signal-cyan focus:ring-offset-0 cursor-pointer" />
                                             {brand}
                                         </label>
                                     ))}
@@ -1005,12 +1029,12 @@ export default function SanMarPage() {
                                     const isLight = fam.hex === "#f3f4f6" || fam.hex === "#f9fafb";
                                     return (
                                         <label key={fam.label}
-                                            className="flex items-center gap-2.5 py-1 cursor-pointer text-sm text-slate-600 hover:text-slate-900 transition-colors">
+                                            className="flex items-center gap-2.5 py-1 cursor-pointer text-sm text-graphite-300 hover:text-white transition-colors">
                                             <input type="checkbox"
                                                 checked={filters.colorName === fam.label}
                                                 onChange={() => setFilter("colorName", filters.colorName === fam.label ? "" : fam.label)}
-                                                className="w-4 h-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500 focus:ring-offset-0 cursor-pointer" />
-                                            <div className={`w-4 h-4 rounded-full shrink-0 shadow-sm ${isLight ? "ring-1 ring-slate-200" : ""}`}
+                                                className="w-4 h-4 rounded border-white/20 bg-white/[0.03] accent-signal-cyan focus:ring-signal-cyan focus:ring-offset-0 cursor-pointer" />
+                                            <div className={`w-4 h-4 rounded-full shrink-0 ${isLight ? "ring-1 ring-white/20" : ""}`}
                                                 style={{ backgroundColor: fam.hex }} />
                                             {fam.label}
                                         </label>
@@ -1025,10 +1049,10 @@ export default function SanMarPage() {
                                         {availableSizes.map(size => (
                                             <button key={size} type="button"
                                                 onClick={() => setFilter("size", filters.size === size ? "" : size)}
-                                                className={`px-2.5 py-1 text-xs font-semibold rounded-lg border-2 transition-all ${
+                                                className={`px-2.5 py-1 text-xs font-semibold rounded-md border transition-all ${
                                                     filters.size === size
-                                                        ? "border-violet-600 bg-violet-50 text-violet-700"
-                                                        : "border-slate-200 text-slate-600 hover:border-slate-300"
+                                                        ? "border-signal-cyan/50 bg-signal-cyan/10 text-signal-cyan"
+                                                        : "border-white/15 text-graphite-300 hover:border-white/25"
                                                 }`}>
                                                 {size}
                                             </button>
@@ -1041,24 +1065,23 @@ export default function SanMarPage() {
                             <FacetSection title="Price" expanded={expandedFacets.price} onToggle={() => toggleFacet("price")}>
                                 {PRICE_RANGES.map(range => (
                                     <label key={range.key}
-                                        className="flex items-center gap-2.5 py-1 cursor-pointer text-sm text-slate-600 hover:text-slate-900 transition-colors">
+                                        className="flex items-center gap-2.5 py-1 cursor-pointer text-sm text-graphite-300 hover:text-white transition-colors">
                                         <input type="checkbox"
                                             checked={filters.priceRange === range.key}
                                             onChange={() => setFilter("priceRange", filters.priceRange === range.key ? "" : range.key)}
-                                            className="w-4 h-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500 focus:ring-offset-0 cursor-pointer" />
+                                            className="w-4 h-4 rounded border-white/20 bg-white/[0.03] accent-signal-cyan focus:ring-signal-cyan focus:ring-offset-0 cursor-pointer" />
                                         {range.label}
                                     </label>
                                 ))}
                             </FacetSection>
 
                             {/* ── In Stock ── */}
-                            <div className="py-3.5 border-t border-slate-100">
+                            <div className="py-3.5 border-t border-white/[0.06]">
                                 <button type="button"
                                     onClick={() => setFilter("inStock", !filters.inStock)}
-                                    className="flex items-center gap-3 w-full text-sm font-semibold text-slate-700 hover:text-slate-900 transition-colors">
+                                    className="flex items-center gap-3 w-full text-sm font-semibold text-graphite-200 hover:text-white transition-colors">
                                     <div className="relative shrink-0" style={{ width: 32, height: 18 }}>
-                                        <div className="absolute inset-0 rounded-full transition-colors duration-200"
-                                            style={{ backgroundColor: filters.inStock ? "#7c3aed" : "#d1d5db" }} />
+                                        <div className={`absolute inset-0 rounded-full transition-colors duration-200 ${filters.inStock ? "bg-signal-cyan" : "bg-white/15"}`} />
                                         <div className={`absolute top-[3px] w-3 h-3 bg-white rounded-full shadow transition-all duration-200 ${filters.inStock ? "left-[17px]" : "left-[3px]"}`} />
                                     </div>
                                     In Stock Only
@@ -1068,18 +1091,22 @@ export default function SanMarPage() {
                             {/* ── Clear filters ── */}
                             {activeFilterCount > 0 && (
                                 <div className="pb-3.5">
-                                    <button type="button" onClick={clearAll}
-                                        className="w-full py-2 text-xs font-bold text-slate-400 hover:text-slate-700 border border-slate-200 rounded-xl transition-colors hover:border-slate-300">
+                                    <Button type="button" variant="secondary" size="sm" onClick={clearAll} className="w-full">
                                         Clear All Filters
-                                    </button>
+                                    </Button>
                                 </div>
                             )}
                         </div>
                     )}
-                </div>
+                </motion.div>
 
                 {/* ══ RIGHT CONTENT ══ */}
-                <div className="flex-1 min-w-0 space-y-4">
+                <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.16, duration: 0.35, ease: EASE }}
+                    className="flex-1 min-w-0 space-y-4"
+                >
 
                     {/* Active filter chips */}
                     {activeFilterCount > 0 && (
@@ -1110,11 +1137,11 @@ export default function SanMarPage() {
                                 />
                             )}
                             {filters.inStock && (
-                                <span className="flex items-center gap-1.5 bg-emerald-100 text-emerald-700 text-xs font-semibold px-3 py-1.5 rounded-full">
+                                <span className="flex items-center gap-1.5 bg-signal-green/10 text-signal-green ring-1 ring-signal-green/25 text-xs font-semibold px-3 py-1.5 rounded-full">
                                     In Stock Only
                                     <button type="button" onClick={() => setFilter("inStock", false)}
                                         aria-label="Remove in-stock filter"
-                                        className="hover:text-emerald-900 ml-0.5">
+                                        className="hover:text-signal-green-bright ml-0.5">
                                         <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                                             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                                         </svg>
@@ -1122,14 +1149,14 @@ export default function SanMarPage() {
                                 </span>
                             )}
                             <button type="button" onClick={clearAll}
-                                className="text-xs text-slate-400 hover:text-slate-700 font-semibold underline underline-offset-2 transition-colors">
+                                className="text-xs text-graphite-300 hover:text-white font-semibold underline underline-offset-2 transition-colors">
                                 Clear all
                             </button>
                         </div>
                     )}
 
                     {/* Result count */}
-                    <p className="text-sm text-slate-500 tabular-nums">
+                    <p className="text-sm text-graphite-300 tabular-nums">
                         {catLoading
                             ? "Loading…"
                             : `${catTotal.toLocaleString()} variants · ${styleCards.length} styles shown`}
@@ -1139,31 +1166,30 @@ export default function SanMarPage() {
                     {catLoading ? (
                         <div className="grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
                             {Array.from({ length: 12 }).map((_, i) => (
-                                <div key={i} className="animate-pulse bg-slate-100 rounded-3xl aspect-[4/5]" />
+                                <div key={i} className="skeleton rounded-lg aspect-[4/5]" />
                             ))}
                         </div>
                     ) : styleCards.length === 0 ? (
                         <div className="flex flex-col items-center py-24 gap-4">
-                            <div className="w-16 h-16 rounded-2xl bg-violet-50 flex items-center justify-center">
-                                <svg className="w-8 h-8 text-violet-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                            <div className="w-16 h-16 rounded-lg bg-white/[0.04] flex items-center justify-center">
+                                <svg className="w-8 h-8 text-graphite-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                                 </svg>
                             </div>
                             <div className="text-center">
-                                <p className="font-bold text-slate-500 text-lg">
+                                <p className="font-semibold text-graphite-200 text-lg">
                                     {catTotal === 0 ? "Catalog is empty" : "No results"}
                                 </p>
-                                <p className="text-sm text-slate-400 mt-1">
+                                <p className="text-sm text-graphite-300 mt-1">
                                     {catTotal === 0
                                         ? "Use Catalog Health below to load products"
                                         : "Try a different filter or search term"}
                                 </p>
                             </div>
                             {activeFilterCount > 0 && (
-                                <button type="button" onClick={clearAll}
-                                    className="px-4 py-2 text-sm font-bold text-violet-600 bg-violet-50 hover:bg-violet-100 rounded-xl transition-colors">
+                                <Button type="button" variant="outline" size="sm" onClick={clearAll}>
                                     Clear Filters
-                                </button>
+                                </Button>
                             )}
                         </div>
                     ) : view === "grid" ? (
@@ -1173,7 +1199,7 @@ export default function SanMarPage() {
                             ))}
                         </div>
                     ) : (
-                        <div className="bg-white rounded-3xl ring-1 ring-black/5 shadow-sm overflow-hidden">
+                        <div className="console-panel rounded-lg overflow-hidden">
                             {styleCards.map((card, i) => (
                                 <ListRow key={card.style} card={card} index={i} onClick={() => openProduct(card.style)} />
                             ))}
@@ -1183,30 +1209,28 @@ export default function SanMarPage() {
                     {/* Pagination */}
                     {totalPages > 1 && (
                         <div className="flex items-center justify-center gap-3 pt-2">
-                            <button type="button" disabled={catPage <= 1} onClick={() => setCatPage(p => p - 1)}
-                                className="px-5 py-2.5 text-sm font-bold rounded-xl border border-slate-200 bg-white hover:shadow-sm disabled:opacity-30 disabled:cursor-not-allowed transition-all">
+                            <Button type="button" variant="outline" disabled={catPage <= 1} onClick={() => setCatPage(p => p - 1)}>
                                 ← Previous
-                            </button>
-                            <span className="text-sm text-slate-500 tabular-nums">Page {catPage} of {totalPages}</span>
-                            <button type="button" disabled={catPage >= totalPages} onClick={() => setCatPage(p => p + 1)}
-                                className="px-5 py-2.5 text-sm font-bold rounded-xl border border-slate-200 bg-white hover:shadow-sm disabled:opacity-30 disabled:cursor-not-allowed transition-all">
+                            </Button>
+                            <span className="text-sm text-graphite-300 tabular-nums">Page {catPage} of {totalPages}</span>
+                            <Button type="button" variant="outline" disabled={catPage >= totalPages} onClick={() => setCatPage(p => p + 1)}>
                                 Next →
-                            </button>
+                            </Button>
                         </div>
                     )}
-                </div>
+                </motion.div>
             </div>
 
             {/* ── Catalog Health ───────────────────────────────────────────── */}
-            <div className="border-t border-slate-100 pt-6">
+            <div className="border-t border-white/[0.06] pt-6">
                 <button type="button"
                     onClick={() => setShowHealth(h => !h)}
-                    className="flex items-center gap-3 text-slate-500 hover:text-slate-800 transition-colors w-full">
+                    className="flex items-center gap-3 text-graphite-300 hover:text-white transition-colors w-full">
                     <div className="flex items-center gap-2">
-                        <div className={`w-2 h-2 rounded-full ${lastSDL?.status === "SUCCESS" ? "bg-emerald-400" : "bg-amber-400 animate-pulse"}`} />
-                        <span className="text-sm font-bold">Catalog Health</span>
+                        <div className={`w-2 h-2 rounded-full ${lastSDL?.status === "SUCCESS" ? "bg-signal-green" : "bg-signal-amber animate-signal-pulse"}`} />
+                        <span className="text-sm font-semibold">Catalog Health</span>
                     </div>
-                    {lastSDL?.completedAt && <span className="text-xs text-slate-400">Updated {timeAgo(lastSDL.completedAt)}</span>}
+                    {lastSDL?.completedAt && <span className="text-xs text-graphite-300">Updated {timeAgo(lastSDL.completedAt)}</span>}
                     <svg className={`w-4 h-4 ml-auto transition-transform duration-200 ${showHealth ? "rotate-180" : ""}`}
                         fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
@@ -1240,28 +1264,28 @@ export default function SanMarPage() {
                         <motion.div key="backdrop"
                             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                             transition={{ duration: 0.2 }}
-                            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40"
+                            className="fixed inset-0 bg-graphite-950/70 backdrop-blur-sm z-40"
                             onClick={closePanel} />
 
                         <motion.div key="panel"
                             initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
                             transition={{ type: "spring", damping: 28, stiffness: 280, mass: 0.9 }}
-                            className="fixed right-0 top-0 h-full w-full max-w-[480px] bg-white z-50 shadow-2xl shadow-black/20 flex flex-col overflow-y-auto">
+                            className="fixed right-0 top-0 h-full w-full max-w-[480px] bg-graphite-900 border-l border-white/10 z-50 shadow-console-hover flex flex-col overflow-y-auto">
 
                             <button type="button" aria-label="Close panel" onClick={closePanel}
-                                className="absolute top-4 right-4 z-10 w-8 h-8 bg-white/80 backdrop-blur-sm rounded-full flex items-center justify-center shadow hover:bg-slate-100 transition-colors">
-                                <svg className="w-4 h-4 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                className="absolute top-4 right-4 z-10 w-8 h-8 bg-graphite-950/60 backdrop-blur-sm ring-1 ring-white/10 rounded-full flex items-center justify-center hover:bg-graphite-950/80 transition-colors">
+                                <svg className="w-4 h-4 text-graphite-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                                 </svg>
                             </button>
 
                             {detailLoading ? (
                                 <div className="flex-1 flex items-center justify-center">
-                                    <div className="w-10 h-10 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
+                                    <div className="w-10 h-10 border-2 border-signal-cyan border-t-transparent rounded-full animate-spin" />
                                 </div>
                             ) : detail ? (
                                 <div>
-                                    <div className="relative bg-gradient-to-br from-slate-50 to-slate-100 h-72 overflow-hidden">
+                                    <div className="relative bg-graphite-100 h-72 overflow-hidden">
                                         {(() => {
                                             const v = detail.variants.find(v => v.colorName === selectedColor);
                                             const src = isUrl(v?.productImage) ? v!.productImage
@@ -1271,7 +1295,7 @@ export default function SanMarPage() {
                                                 <img src={src} alt={detail.title ?? panelStyle!}
                                                     className="w-full h-full object-contain" />
                                             ) : (
-                                                <div className="w-full h-full flex items-center justify-center text-slate-200">
+                                                <div className="w-full h-full flex items-center justify-center text-graphite-400">
                                                     <svg className="w-20 h-20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={0.75}
                                                             d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -1279,14 +1303,14 @@ export default function SanMarPage() {
                                                 </div>
                                             );
                                         })()}
-                                        <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-sm text-white text-xs font-mono font-bold px-3 py-1.5 rounded-full">
+                                        <div className="absolute bottom-3 left-3 bg-graphite-950/70 backdrop-blur-sm text-white text-xs font-mono font-semibold px-3 py-1.5 rounded-full">
                                             {panelStyle}
                                         </div>
                                         {(() => {
                                             const totalQty = detail.variants.reduce((a, v) => a + v.inventoryQty, 0);
                                             return (
-                                                <div className={`absolute bottom-3 right-3 text-xs font-bold px-3 py-1.5 rounded-full backdrop-blur-sm ${
-                                                    totalQty > 500 ? "bg-emerald-500/90 text-white" : totalQty > 0 ? "bg-amber-500/90 text-white" : "bg-red-500/90 text-white"
+                                                <div className={`absolute bottom-3 right-3 text-xs font-semibold px-3 py-1.5 rounded-full backdrop-blur-sm ${
+                                                    totalQty > 500 ? "bg-signal-green/90 text-graphite-950" : totalQty > 0 ? "bg-signal-amber/90 text-graphite-950" : "bg-signal-red/90 text-graphite-950"
                                                 }`}>
                                                     {totalQty > 0 ? `${totalQty.toLocaleString()} in stock` : "Out of stock"}
                                                 </div>
@@ -1296,30 +1320,30 @@ export default function SanMarPage() {
 
                                     <div className="p-6 space-y-6">
                                         <div>
-                                            {detail.brand && <p className="text-xs font-bold text-violet-500 uppercase tracking-widest mb-1">{detail.brand}</p>}
-                                            <h2 className="text-xl font-black text-slate-900 leading-tight">{detail.title ?? panelStyle}</h2>
+                                            {detail.brand && <p className="text-xs font-semibold text-signal-cyan uppercase tracking-widest mb-1">{detail.brand}</p>}
+                                            <h2 className="text-xl font-semibold text-white leading-tight">{detail.title ?? panelStyle}</h2>
                                             {detail.category && (
-                                                <p className="text-xs text-slate-400 mt-1">
+                                                <p className="text-xs text-graphite-300 mt-1">
                                                     {formatCatPath(detail.category)}{detail.subcategory ? ` · ${detail.subcategory}` : ""}
                                                 </p>
                                             )}
-                                            <p className="text-2xl font-black text-slate-900 mt-3">
+                                            <p className="text-2xl font-semibold font-mono tabular-nums text-white mt-3">
                                                 {detail.priceCents > 0 ? `From ${fmt(detail.priceCents)}` : "Price on request"}
-                                                <span className="text-sm font-normal text-slate-400 ml-2">wholesale</span>
+                                                <span className="text-sm font-sans font-normal text-graphite-300 ml-2">wholesale</span>
                                             </p>
                                         </div>
 
                                         {detail.description && (
-                                            <p className="text-sm text-slate-600 leading-relaxed">{detail.description}</p>
+                                            <p className="text-sm text-graphite-300 leading-relaxed">{detail.description}</p>
                                         )}
 
                                         {/* Colors */}
                                         <div>
                                             <div className="flex items-center justify-between mb-3">
-                                                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                                                <p className="console-label">
                                                     Colors <span className="font-normal">({detail.colors.length})</span>
                                                 </p>
-                                                {selectedColor && <p className="text-xs text-slate-500 font-medium">{selectedColor}</p>}
+                                                {selectedColor && <p className="text-xs text-graphite-300 font-medium">{selectedColor}</p>}
                                             </div>
                                             <div className="flex flex-wrap gap-2">
                                                 {detail.colors.map(color => {
@@ -1330,8 +1354,8 @@ export default function SanMarPage() {
                                                         <button key={color} type="button" title={color} aria-label={color}
                                                             onClick={() => setColor(color)}
                                                             className={`relative w-8 h-8 rounded-full transition-all duration-150 ${
-                                                                selectedColor === color ? "ring-2 ring-offset-2 ring-violet-500 scale-110 shadow-lg" : "hover:scale-105"
-                                                            } ${isLight ? "ring-1 ring-slate-200" : ""}`}
+                                                                selectedColor === color ? "ring-2 ring-offset-2 ring-offset-graphite-900 ring-signal-cyan scale-110" : "hover:scale-105"
+                                                            } ${isLight ? "ring-1 ring-white/15" : ""}`}
                                                             style={{ backgroundColor: hex }}>
                                                             {qty === 0 && (
                                                                 <div className="absolute inset-0 rounded-full flex items-center justify-center">
@@ -1346,7 +1370,7 @@ export default function SanMarPage() {
 
                                         {/* Sizes */}
                                         <div>
-                                            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">
+                                            <p className="console-label mb-3">
                                                 Sizes <span className="font-normal">({detail.sizes.length})</span>
                                             </p>
                                             <div className="flex flex-wrap gap-2">
@@ -1356,7 +1380,7 @@ export default function SanMarPage() {
                                                         .reduce((a, v) => a + v.inventoryQty, 0);
                                                     return (
                                                         <span key={size}
-                                                            className={`px-3 py-1.5 text-xs font-bold rounded-xl border-2 ${qty > 0 ? "border-slate-200 text-slate-700 bg-white" : "border-slate-100 text-slate-300 bg-slate-50"}`}>
+                                                            className={`px-3 py-1.5 text-xs font-semibold rounded-md border ${qty > 0 ? "border-white/15 text-white bg-white/[0.03]" : "border-white/[0.06] text-graphite-300 bg-white/[0.02] opacity-40"}`}>
                                                             {size}
                                                         </span>
                                                     );
@@ -1365,22 +1389,22 @@ export default function SanMarPage() {
                                         </div>
 
                                         {/* Add to Store */}
-                                        <div className="border-t border-slate-100 pt-5 space-y-4">
-                                            <p className="font-bold text-slate-900">Add to Your Store</p>
+                                        <div className="border-t border-white/[0.06] pt-5 space-y-4">
+                                            <p className="font-semibold text-white">Add to Your Store</p>
                                             {importDone ? (
                                                 <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
                                                     className="flex flex-col items-center gap-3 py-8 text-center">
-                                                    <div className="w-14 h-14 rounded-full bg-emerald-100 flex items-center justify-center">
-                                                        <svg className="w-7 h-7 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                                    <div className="w-14 h-14 rounded-full bg-signal-green/15 flex items-center justify-center">
+                                                        <svg className="w-7 h-7 text-signal-green" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                                                             <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                                                         </svg>
                                                     </div>
                                                     <div>
-                                                        <p className="font-bold text-slate-900">Added to your store!</p>
-                                                        <p className="text-sm text-slate-500 mt-0.5">{detail.title ?? panelStyle} is now in your products</p>
+                                                        <p className="font-semibold text-white">Added to your store!</p>
+                                                        <p className="text-sm text-graphite-300 mt-0.5">{detail.title ?? panelStyle} is now in your products</p>
                                                     </div>
                                                     <button type="button" onClick={() => setImportDone(false)}
-                                                        className="text-sm text-violet-600 hover:text-violet-800 font-semibold underline underline-offset-2">
+                                                        className="text-sm text-signal-cyan hover:text-signal-cyan-bright font-semibold underline underline-offset-2">
                                                         Add another style
                                                     </button>
                                                 </motion.div>
@@ -1389,30 +1413,30 @@ export default function SanMarPage() {
                                                     {detail.colors.length > 0 && (
                                                         <div>
                                                             <div className="flex items-center justify-between mb-1.5">
-                                                                <label className="text-xs text-slate-500 font-bold block">Which colors do you want to offer?</label>
+                                                                <label className="text-xs text-graphite-300 font-semibold block">Which colors do you want to offer?</label>
                                                                 <div className="flex gap-2">
                                                                     <button type="button" onClick={() => setImportColors(new Set(detail.colors))}
-                                                                        className="text-xs font-semibold text-violet-600 hover:text-violet-800">Select all</button>
+                                                                        className="text-xs font-semibold text-signal-cyan hover:text-signal-cyan-bright">Select all</button>
                                                                     <button type="button" onClick={() => setImportColors(new Set())}
-                                                                        className="text-xs font-semibold text-slate-400 hover:text-slate-600">Clear</button>
+                                                                        className="text-xs font-semibold text-graphite-300 hover:text-white">Clear</button>
                                                                 </div>
                                                             </div>
-                                                            <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto border border-slate-200 rounded-xl p-2.5">
+                                                            <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto border border-white/10 rounded-md p-2.5 bg-white/[0.02]">
                                                                 {detail.colors.map(c => {
                                                                     const checked = importColors.has(c);
                                                                     const thumb = detail.colorImages?.[c];
                                                                     return (
-                                                                        <label key={c} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition-colors ${checked ? "bg-violet-50 ring-1 ring-violet-200" : "hover:bg-slate-50"}`}>
-                                                                            <input type="checkbox" checked={checked} className="accent-violet-600 w-3.5 h-3.5 shrink-0"
+                                                                        <label key={c} className={`flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer transition-colors ${checked ? "bg-signal-cyan/10 ring-1 ring-signal-cyan/25" : "hover:bg-white/[0.04]"}`}>
+                                                                            <input type="checkbox" checked={checked} className="accent-signal-cyan w-3.5 h-3.5 shrink-0"
                                                                                 onChange={() => setImportColors(prev => {
                                                                                     const next = new Set(prev);
                                                                                     next.has(c) ? next.delete(c) : next.add(c);
                                                                                     return next;
                                                                                 })} />
                                                                             {thumb ? (
-                                                                                <img src={thumb} alt={c} className="w-6 h-6 rounded object-cover border border-slate-200 shrink-0" />
+                                                                                <img src={thumb} alt={c} className="w-6 h-6 rounded object-cover border border-white/10 shrink-0" />
                                                                             ) : null}
-                                                                            <span className="text-xs text-slate-700 truncate">{c}</span>
+                                                                            <span className="text-xs text-graphite-100 truncate">{c}</span>
                                                                         </label>
                                                                     );
                                                                 })}
@@ -1420,9 +1444,9 @@ export default function SanMarPage() {
                                                         </div>
                                                     )}
                                                     <div>
-                                                        <label className="text-xs text-slate-500 font-bold mb-1.5 block">Assign to Shop(s) (optional)</label>
+                                                        <label className="text-xs text-graphite-300 font-semibold mb-1.5 block">Assign to Shop(s) (optional)</label>
                                                         {shops.length === 0 ? (
-                                                            <p className="text-xs text-slate-400">No group shops yet — you can assign this product to a shop later.</p>
+                                                            <p className="text-xs text-graphite-300">No group shops yet — you can assign this product to a shop later.</p>
                                                         ) : (
                                                             <div className="flex flex-wrap gap-2">
                                                                 {shops.map(s => {
@@ -1434,7 +1458,7 @@ export default function SanMarPage() {
                                                                                 next.has(s.id) ? next.delete(s.id) : next.add(s.id);
                                                                                 return next;
                                                                             })}
-                                                                            className={`text-xs font-medium px-3 py-1.5 rounded-xl border transition-all ${checked ? "bg-violet-600 text-white border-violet-600" : "border-slate-200 text-slate-600 hover:border-violet-300 hover:bg-violet-50"}`}>
+                                                                            className={`text-xs font-medium px-3 py-1.5 rounded-md border transition-all ${checked ? "bg-signal-cyan text-graphite-950 border-signal-cyan" : "border-white/15 text-graphite-300 hover:border-signal-cyan/40 hover:bg-signal-cyan/[0.06] hover:text-signal-cyan"}`}>
                                                                             {s.name}
                                                                         </button>
                                                                     );
@@ -1443,40 +1467,38 @@ export default function SanMarPage() {
                                                         )}
                                                     </div>
                                                     <div>
-                                                        <label className="text-xs text-slate-500 font-bold mb-1.5 block">Your Selling Price</label>
-                                                        <div className="relative">
-                                                            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm pointer-events-none">$</span>
-                                                            <input type="number" step="0.01" min="0"
-                                                                value={priceVal} onChange={e => setPriceVal(e.target.value)}
-                                                                className="w-full pl-8 pr-4 py-3 text-sm border border-slate-200 rounded-xl outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-400/20"
-                                                                placeholder="0.00" />
-                                                        </div>
+                                                        <Input
+                                                            type="number" step="0.01" min="0"
+                                                            value={priceVal} onChange={e => setPriceVal(e.target.value)}
+                                                            label="Your Selling Price"
+                                                            leftIcon={<span className="text-sm font-semibold">$</span>}
+                                                            placeholder="0.00" />
                                                         {detail.priceCents > 0 && (
-                                                            <p className="text-xs text-slate-400 mt-1.5">
+                                                            <p className="text-xs text-graphite-300 mt-1.5">
                                                                 Wholesale: {fmt(detail.priceCents)}
                                                                 {priceVal && parseFloat(priceVal) > detail.priceCents / 100 && (
-                                                                    <span className="ml-2 text-emerald-500 font-semibold">
+                                                                    <span className="ml-2 text-signal-green font-semibold">
                                                                         +{fmt((parseFloat(priceVal) * 100) - detail.priceCents)} margin
                                                                     </span>
                                                                 )}
                                                             </p>
                                                         )}
                                                         {detail.upchargeDetected && (
-                                                            <p className="text-xs text-amber-600 mt-1.5 font-medium">⚠ SanMar charges more for larger sizes on this style — a +$3 upcharge for 2XL and up will be turned on automatically.</p>
+                                                            <p className="flex items-start gap-1.5 text-xs text-signal-amber mt-1.5 font-medium">
+                                                                <svg className="w-3.5 h-3.5 shrink-0 mt-px" fill="currentColor" viewBox="0 0 20 20">
+                                                                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                                                </svg>
+                                                                <span>SanMar charges more for larger sizes on this style — a +$3 upcharge for 2XL and up will be turned on automatically.</span>
+                                                            </p>
                                                         )}
                                                     </div>
-                                                    <button type="button"
-                                                        disabled={importing || !priceVal || (detail.colors.length > 0 && importColors.size === 0)}
+                                                    <Button type="button" variant="primary" size="lg"
+                                                        disabled={!priceVal || (detail.colors.length > 0 && importColors.size === 0)}
+                                                        loading={importing}
                                                         onClick={doImport}
-                                                        className="w-full py-3.5 text-sm font-black rounded-xl text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all active:scale-95"
-                                                        style={{ background: "linear-gradient(135deg,#7c3aed 0%,#4f46e5 50%,#2563eb 100%)", boxShadow: "0 4px 20px rgba(109,40,217,0.3)" }}>
-                                                        {importing ? (
-                                                            <span className="flex items-center justify-center gap-2">
-                                                                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                                                Adding…
-                                                            </span>
-                                                        ) : "Add to Store →"}
-                                                    </button>
+                                                        className="w-full">
+                                                        {importing ? "Adding…" : "Add to Store →"}
+                                                    </Button>
                                                 </>
                                             )}
                                         </div>

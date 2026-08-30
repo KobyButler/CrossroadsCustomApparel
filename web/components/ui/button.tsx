@@ -16,26 +16,26 @@ interface ButtonProps extends Omit<HTMLMotionProps<"button">, "size" | "children
 
 const variants: Record<ButtonVariant, string> = {
     primary:
-        "bg-brand-gradient text-white shadow-button " +
-        "hover:shadow-glow btn-shine",
+        "bg-signal-cyan-gradient text-graphite-950 shadow-glow-cyan-sm " +
+        "hover:shadow-glow-cyan console-sheen",
     secondary:
-        "bg-brand-100 text-brand-700 hover:bg-brand-200",
+        "bg-white/[0.06] text-graphite-100 ring-1 ring-white/10 hover:bg-white/[0.10] hover:ring-white/20",
     outline:
-        "border border-slate-200 bg-white text-slate-700 " +
-        "hover:border-brand-300 hover:text-brand-700 hover:bg-brand-50",
+        "border border-white/15 bg-transparent text-graphite-200 " +
+        "hover:border-signal-cyan/40 hover:text-signal-cyan hover:bg-signal-cyan/[0.06]",
     ghost:
-        "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+        "text-graphite-300 hover:bg-white/[0.06] hover:text-white",
     danger:
-        "bg-red-600 text-white hover:bg-red-700 shadow-sm hover:shadow-md",
+        "bg-signal-red text-graphite-950 hover:shadow-glow-red",
     success:
-        "bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm",
+        "bg-signal-green text-graphite-950 hover:shadow-glow-green",
 };
 
 const sizes: Record<ButtonSize, string> = {
-    xs: "h-7  px-2.5 text-xs  gap-1.5 rounded-lg",
-    sm: "h-8  px-3   text-xs  gap-1.5 rounded-lg",
-    md: "h-9  px-4   text-sm  gap-2   rounded-xl",
-    lg: "h-11 px-5   text-sm  gap-2   rounded-xl",
+    xs: "h-7  px-2.5 text-xs  gap-1.5 rounded-md",
+    sm: "h-8  px-3   text-xs  gap-1.5 rounded-md",
+    md: "h-9  px-4   text-sm  gap-2   rounded-md",
+    lg: "h-11 px-5   text-sm  gap-2   rounded-lg",
 };
 
 export function Button({
@@ -58,9 +58,9 @@ export function Button({
             disabled={disabled || loading}
             className={cn(
                 "inline-flex items-center justify-center font-semibold",
-                "transition-colors duration-200 select-none cursor-pointer",
+                "transition-[color,background-color,border-color,box-shadow] duration-200 select-none cursor-pointer",
                 "disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none",
-                "focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2",
+                "focus-visible:ring-2 focus-visible:ring-signal-cyan focus-visible:ring-offset-2 focus-visible:ring-offset-graphite-950",
                 variants[variant],
                 sizes[size],
                 className

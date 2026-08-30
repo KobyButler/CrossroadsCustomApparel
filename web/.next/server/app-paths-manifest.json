@@ -1,22 +1,9 @@
 {
   "/_not-found/page": "app/_not-found/page.js",
-  "/admin/content/page": "app/admin/content/page.js",
-  "/admin/checkouts/page": "app/admin/checkouts/page.js",
-  "/admin/marketing/page": "app/admin/marketing/page.js",
-  "/admin/customers/page": "app/admin/customers/page.js",
-  "/admin/analytics/page": "app/admin/analytics/page.js",
   "/admin/finance/page": "app/admin/finance/page.js",
-  "/admin/orders/drafts/page": "app/admin/orders/drafts/page.js",
-  "/admin/orders/page": "app/admin/orders/page.js",
-  "/admin/products/page": "app/admin/products/page.js",
-  "/admin/shops/page": "app/admin/shops/page.js",
-  "/login/page": "app/login/page.js",
-  "/admin/discounts/page": "app/admin/discounts/page.js",
-  "/admin/orders/report/page": "app/admin/orders/report/page.js",
+  "/shop/[slug]/page": "app/shop/[slug]/page.js",
   "/page": "app/page.js",
-  "/admin/orders/shipping-labels/page": "app/admin/orders/shipping-labels/page.js",
-  "/checkout/page": "app/checkout/page.js",
-  "/shops/page": "app/shops/page.js",
+  "/admin/products/page": "app/admin/products/page.js",
   "/admin/sanmar/page": "app/admin/sanmar/page.js",
-  "/shop/[slug]/page": "app/shop/[slug]/page.js"
+  "/login/page": "app/login/page.js"
 }

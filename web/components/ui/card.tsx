@@ -4,10 +4,7 @@ import { cn } from "@/lib/utils";
 export function Card({ className, children, ...props }: React.HTMLAttributes<HTMLDivElement>) {
     return (
         <div
-            className={cn(
-                "bg-white rounded-2xl ring-1 ring-black/5 shadow-card",
-                className
-            )}
+            className={cn("console-panel rounded-lg", className)}
             {...props}
         >
             {children}
@@ -18,7 +15,7 @@ export function Card({ className, children, ...props }: React.HTMLAttributes<HTM
 export function CardHeader({ className, children, ...props }: React.HTMLAttributes<HTMLDivElement>) {
     return (
         <div
-            className={cn("flex items-center justify-between px-5 py-4 border-b border-slate-100/80", className)}
+            className={cn("flex items-center justify-between px-5 py-4 border-b border-white/[0.06]", className)}
             {...props}
         >
             {children}
@@ -28,7 +25,7 @@ export function CardHeader({ className, children, ...props }: React.HTMLAttribut
 
 export function CardTitle({ className, children, ...props }: React.HTMLAttributes<HTMLHeadingElement>) {
     return (
-        <h3 className={cn("text-sm font-semibold text-slate-900", className)} {...props}>
+        <h3 className={cn("text-sm font-semibold text-white", className)} {...props}>
             {children}
         </h3>
     );
