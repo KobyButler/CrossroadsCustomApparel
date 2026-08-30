@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Modal, ModalFooter } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
-import { ZoomableImage } from "@/components/ui/zoomable-image";
+import { ZoomableImage, ImageLightbox } from "@/components/ui/zoomable-image";
 import { IconButton, IconButtonRow } from "@/components/ui/icon-button";
 import { EditIcon, DuplicateIcon, TrashIcon } from "@/components/ui/icons";
 import { motion, Reorder } from "framer-motion";
@@ -184,7 +184,9 @@ function ShopMultiSelect({ shops, selected, onChange }: { shops:Shop[]; selected
 function ImageManager({ images, onChange }: { images:string[]; onChange:(images:string[])=>void }) {
     const { toast } = useToast();
     const [uploading, setUploading] = useState(false);
+    const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
     const base = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:4000/api";
+    const fullUrls = images.map(imgUrl);
 
     async function handleFiles(e: React.ChangeEvent<HTMLInputElement>) {
         const files = e.target.files;
@@ -227,6 +229,11 @@ function ImageManager({ images, onChange }: { images:string[]; onChange:(images:
                             {i === 0 && (
                                 <span className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 text-[9px] font-bold bg-signal-cyan text-graphite-950 px-1.5 py-0.5 rounded-full">Main</span>
                             )}
+                            <button type="button" title="View full size" aria-label="View full size"
+                                onClick={() => setLightboxIndex(i)}
+                                className="absolute inset-0 m-auto w-6 h-6 rounded-full bg-graphite-950/70 border border-white/20 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 hover:bg-graphite-950/90 transition-all">
+                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35m0 0a7.5 7.5 0 10-10.6 0 7.5 7.5 0 0010.6 0z"/></svg>
+                            </button>
                             <button type="button" title="Remove image" aria-label="Remove image"
                                 onClick={() => handleRemove(url)}
                                 className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-graphite-800 border border-white/15 flex items-center justify-center text-graphite-400 opacity-0 group-hover:opacity-100 hover:text-signal-red hover:border-signal-red/40 transition-all">
@@ -235,6 +242,9 @@ function ImageManager({ images, onChange }: { images:string[]; onChange:(images:
                         </Reorder.Item>
                     ))}
                 </Reorder.Group>
+            )}
+            {lightboxIndex !== null && (
+                <ImageLightbox images={fullUrls} index={lightboxIndex} onIndexChange={setLightboxIndex} onClose={() => setLightboxIndex(null)} alt="Product photo" />
             )}
             {images.length > 1 && <p className="text-xs text-graphite-300 mb-2">Drag to reorder — the first photo is used as the main image.</p>}
             <label className={`inline-flex items-center gap-2 text-sm cursor-pointer px-3 py-2 border border-dashed rounded-md transition-all ${uploading ? "opacity-50 pointer-events-none border-white/10 text-graphite-500" : "border-signal-cyan/30 text-signal-cyan hover:bg-signal-cyan/[0.06]"}`}>
@@ -991,32 +1001,32 @@ export default function ProductsPage() {
                 ) : (
                     <div className="overflow-x-auto">
                         <div className="table-wrap"><table className="data-table">
-                            <thead><tr><th>Product</th><th>Crossroads SKU</th><th>Shops</th><th>Vendor</th><th>Variants</th><th>Price</th><th className="text-right pr-5">Actions</th></tr></thead>
+                            <thead><tr><th>Thumbnail</th><th>Product</th><th className="w-24">Crossroads SKU</th><th className="text-center">Shops</th><th className="text-center">Vendor</th><th>Variants</th><th>Price</th><th className="text-right pr-5">Actions</th></tr></thead>
                             <tbody>
-                                {filtered.map((p, idx) => (
+                                {filtered.map((p, idx) => {
+                                    const productImages: string[] = p.imagesJson ? JSON.parse(p.imagesJson) : [];
+                                    return (
                                     <motion.tr key={p.id} initial={{ opacity:0, y:4 }} animate={{ opacity:1, y:0 }} transition={{ delay:idx*0.02, duration:0.2 }}>
                                         <td>
-                                            <div className="flex items-center gap-3">
-                                                {p.imagesJson && JSON.parse(p.imagesJson)[0] ? (
-                                                    <ZoomableImage src={imgUrl(JSON.parse(p.imagesJson)[0])} alt={p.name}
-                                                        className="w-8 h-8 rounded-lg object-cover shrink-0 ring-1 ring-white/10" />
-                                                ) : (
-                                                    <div className="w-8 h-8 rounded-lg bg-white/[0.05] flex items-center justify-center shrink-0">
-                                                        <svg className="w-4 h-4 text-graphite-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14"/></svg>
-                                                    </div>
-                                                )}
-                                                <div>
-                                                    <p className="font-semibold text-white text-sm">{p.name}</p>
-                                                    {p.brand && <p className="text-xs text-graphite-300">{p.brand}</p>}
+                                            {productImages[0] ? (
+                                                <ZoomableImage src={imgUrl(productImages[0])} alt={p.name} images={productImages.map(imgUrl)}
+                                                    className="w-14 h-14 rounded-lg object-cover shrink-0 ring-1 ring-white/10" />
+                                            ) : (
+                                                <div className="w-14 h-14 rounded-lg bg-white/[0.05] flex items-center justify-center shrink-0">
+                                                    <svg className="w-6 h-6 text-graphite-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14"/></svg>
                                                 </div>
-                                            </div>
+                                            )}
+                                        </td>
+                                        <td>
+                                            <p className="font-semibold text-white text-sm">{p.name}</p>
+                                            {p.brand && <p className="text-xs text-graphite-300">{p.brand}</p>}
                                         </td>
                                         <td><code className="text-xs font-mono bg-white/[0.06] px-1.5 py-0.5 rounded-md text-graphite-200">{p.sku}</code></td>
-                                        <td>
+                                        <td className="text-center">
                                             {(p.shops ?? []).length === 0 ? (
                                                 <span className="text-sm text-graphite-500">—</span>
                                             ) : (
-                                                <div className="flex flex-wrap gap-1">
+                                                <div className="flex flex-wrap gap-1 justify-center">
                                                     {(p.shops ?? []).slice(0,2).map(s => (
                                                         <Badge key={s.id} variant="purple" size="sm">{s.name}</Badge>
                                                     ))}
@@ -1026,7 +1036,7 @@ export default function ProductsPage() {
                                                 </div>
                                             )}
                                         </td>
-                                        <td><Badge variant={VENDOR_COLORS[p.vendor] as any} size="sm">{VENDOR_LABELS[p.vendor] ?? p.vendor}</Badge></td>
+                                        <td className="text-center"><Badge variant={VENDOR_COLORS[p.vendor] as any} size="sm">{VENDOR_LABELS[p.vendor] ?? p.vendor}</Badge></td>
                                         <td>
                                             <div className="flex gap-1 flex-wrap items-center">
                                                 {p.sizesJson && JSON.parse(p.sizesJson).length > 0 && (
@@ -1068,7 +1078,8 @@ export default function ProductsPage() {
                                             </IconButtonRow>
                                         </td>
                                     </motion.tr>
-                                ))}
+                                    );
+                                })}
                             </tbody>
                         </table></div>
                     </div>
