@@ -267,7 +267,9 @@ export default function CheckoutPage() {
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/></svg>
                         {step === "payment" ? "Edit order" : "Continue shopping"}
                     </Link>
-                    <Image src="/logo.png" alt="Crossroads Custom Apparel" width={100} height={40} className="object-contain" />
+                    <Link href="/">
+                        <Image src="/logo.png" alt="Crossroads Custom Apparel" width={100} height={40} className="object-contain" />
+                    </Link>
                 </div>
             </div>
 
