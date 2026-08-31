@@ -21,9 +21,11 @@ for every price/count/SKU.
 STORY: A parent or office manager taps a shared link, immediately reads this
 as a real local print shop (not a template), and can tell in seconds this is
 where their group's gear ships from as one batch.
-FIRST VIEWPORT: A crate lid tips open (one signature 3D reveal on load) onto
-the headline; hero pills read like ink-stamp marks; a stack of stencil-color
-swatches stands in for "the shirts" since no product photography exists yet.
+FIRST VIEWPORT: A tag-hung logo and stenciled headline settle in on a plain
+staggered entrance (the original crate-lid 3D reveal was cut at the user's
+request 2026-08-31); hero pills read like ink-stamp marks; a stack of
+stencil-color swatches stands in for "the shirts" since no product
+photography exists yet.
 FORM: The Gear Drop — assigned, index 6 of 7 grounded candidates, seed key
 8bfab481, weighed against 6 catalog challengers (none won both axes; kept
 raises: a UPC ticket strip on packing-slip cards, isolate/dim manifest-row
@@ -51,7 +53,7 @@ const fadeUp = {
     hidden: { opacity: 0, y: 20 },
     show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.32, 0.72, 0, 1] as [number, number, number, number] } }
 };
-const stagger = { hidden: {}, show: { transition: { staggerChildren: 0.08, delayChildren: 0.55 } } };
+const stagger = { hidden: {}, show: { transition: { staggerChildren: 0.08, delayChildren: 0.1 } } };
 
 const WHAT_WE_DO = [
     {
@@ -104,7 +106,7 @@ function ShopTag({ shop, idx }: { shop: ShopListing; idx: number }) {
     return (
         <motion.div variants={fadeUp} custom={idx}>
             <Link href={`/shop/${shop.slug}`} className="block h-full">
-                <TagCard className="p-5 pt-6 h-full">
+                <TagCard className="p-5 pt-10 h-full">
                     <div className="w-10 h-10 rounded-md bg-stencil-teal/10 flex items-center justify-center mb-3">
                         <svg className="w-5 h-5 text-stencil-teal" fill="currentColor" viewBox="0 0 20 20"><path d="M3 1a1 1 0 000 2h1.22l.305 1.222a.997.997 0 00.01.042l1.358 5.43-.893.892C3.74 11.846 4.632 14 6.414 14H15a1 1 0 000-2H6.414l1-1H14a1 1 0 00.894-.553l3-6A1 1 0 0017 3H6.28l-.31-1.243A1 1 0 005 1H3z" /></svg>
                     </div>
@@ -122,12 +124,10 @@ function ShopTag({ shop, idx }: { shop: ShopListing; idx: number }) {
 
 export default function HomePage() {
     const [shops, setShops] = useState<ShopListing[] | null>(null);
-    const [lidOpen, setLidOpen] = useState(false);
 
     useEffect(() => {
         publicFetch("/shops/directory").then(setShops).catch(() => setShops([]));
     }, []);
-    useEffect(() => { const t = setTimeout(() => setLidOpen(true), 120); return () => clearTimeout(t); }, []);
 
     const previewShops = (shops ?? []).slice(0, 3);
 
@@ -135,12 +135,14 @@ export default function HomePage() {
         <div className="gear-canvas min-h-screen flex flex-col font-gear">
 
             {/* ── Hero + nav ─────────────────────────────────────────────────── */}
-            <header className="relative overflow-hidden" style={{ perspective: 1400 }}>
+            <header className="relative overflow-hidden">
                 {/* Nav bar */}
-                <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease: EASE, delay: 0.5 }}
+                <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease: EASE }}
                     className="relative z-30 border-b border-crate-plywood/70">
                     <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-                        <Image src="/logo.png" alt="Crossroads Custom Apparel" width={44} height={44} className="object-contain rounded-md" priority />
+                        <Link href="/" className="shrink-0">
+                            <Image src="/logo.png" alt="Crossroads Custom Apparel" width={44} height={44} className="object-contain rounded-md" priority />
+                        </Link>
                         <nav aria-label="Primary" className="hidden sm:flex items-center gap-7 text-sm font-bold text-crate-ink-soft">
                             <a href="#how-it-works" className="hover:text-crate-ink transition-colors">How It Works</a>
                             <a href="#shops" className="hover:text-crate-ink transition-colors">Shops</a>
@@ -206,22 +208,6 @@ export default function HomePage() {
                         </motion.div>
                     </motion.div>
                 </div>
-
-                {/* Crate lid — the signature reveal: one panel tips open on load to
-                    disclose the hero, transform-origin at the top like a real lid. */}
-                <motion.div
-                    aria-hidden="true"
-                    initial={{ rotateX: 0, opacity: 1 }}
-                    animate={lidOpen ? { rotateX: -115, opacity: 0 } : {}}
-                    transition={{ duration: 0.85, ease: [0.6, 0.02, 0.15, 1] }}
-                    style={{ transformOrigin: "top center", transformStyle: "preserve-3d" }}
-                    className="absolute inset-0 z-20 pointer-events-none bg-gradient-to-b from-crate-plywood-dark to-[#A9895A]"
-                >
-                    <div className="absolute inset-x-0 bottom-8 flex justify-center gap-6">
-                        <span className="stamp-badge border-crate-paper text-crate-paper">Fragile</span>
-                        <span className="stamp-badge border-crate-paper text-crate-paper">This Side Up</span>
-                    </div>
-                </motion.div>
             </header>
 
             <main className="flex-1">

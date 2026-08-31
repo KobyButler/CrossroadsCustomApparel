@@ -7,7 +7,7 @@ export function PublicFooter() {
     return (
         <footer className="relative z-10 border-t border-crate-plywood/70">
             <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-                <Link href="/shops" className="flex items-center gap-3">
+                <Link href="/" className="flex items-center gap-3">
                     <Image src="/logo.png" alt="Crossroads Custom Apparel" width={100} height={40} className="object-contain" />
                 </Link>
                 <div className="text-center sm:text-right">

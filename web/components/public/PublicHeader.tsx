@@ -28,7 +28,7 @@ export function PublicHeader({
                             </span>
                         </Link>
                     )}
-                    <Link href="/shops" className="flex items-center gap-2">
+                    <Link href="/" className="flex items-center gap-2">
                         <Image src="/logo.png" alt="Crossroads Custom Apparel" width={110} height={44} className="object-contain" priority />
                     </Link>
                 </div>
