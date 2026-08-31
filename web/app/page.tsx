@@ -153,13 +153,25 @@ export default function HomePage() {
                 {/* Hero content */}
                 <div className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 py-16 sm:py-20 text-center">
                     <motion.div initial="hidden" animate="show" variants={stagger}>
-                        <motion.div variants={fadeUp} className="mb-7 relative inline-block">
-                            {/* Logo hung as a tag: punched hole + twine loop, like everything else in this world */}
-                            <svg className="absolute -top-5 left-1/2 -translate-x-1/2 w-10 h-6" viewBox="0 0 40 24" fill="none">
-                                <path d="M4 22C4 10 14 2 20 2s16 8 16 20" stroke="#C7AD7C" strokeWidth="2" strokeLinecap="round" strokeDasharray="1 7" />
-                            </svg>
-                            <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-full bg-crate-paper-deep border-2 border-crate-plywood shadow-tag flex items-center justify-center mx-auto">
-                                <Image src="/logo.png" alt="Crossroads Custom Apparel" width={160} height={160} priority className="w-20 h-20 sm:w-24 sm:h-24 object-contain" />
+                        <motion.div variants={fadeUp} className="mb-9">
+                            {/* Logo hung as a tag: a real grommet at the badge's top edge with a
+                                twisted-twine loop that visibly threads through it — sized relative
+                                to the badge itself so it stays centered at every breakpoint, rather
+                                than a floating dashed arc guessed at a fixed offset. */}
+                            <div className="relative w-28 h-28 sm:w-32 sm:h-32 mx-auto">
+                                <svg className="absolute left-1/2 -translate-x-1/2 -top-6 w-14 h-8 overflow-visible" viewBox="0 0 56 32" fill="none" aria-hidden="true">
+                                    <path d="M14 30 C14 8 42 8 42 30" className="twine-base" />
+                                    <path d="M14 30 C14 8 42 8 42 30" className="twine-highlight" />
+                                </svg>
+                                <span aria-hidden="true" className="absolute left-1/2 -translate-x-1/2 top-1 w-[18px] h-[18px] rounded-full z-10"
+                                    style={{
+                                        background: "radial-gradient(circle at 34% 30%, #F8F1E1 0%, #F8F1E1 52%, #E4D2A9 100%)",
+                                        border: "2px solid #B8985F",
+                                        boxShadow: "inset 0 2px 3px rgba(42,32,21,0.40), inset 0 -1px 0 rgba(255,255,255,0.35), 0 1px 0 rgba(255,255,255,0.30)"
+                                    }} />
+                                <div className="w-full h-full rounded-full bg-crate-paper-deep border-2 border-crate-plywood shadow-tag flex items-center justify-center">
+                                    <Image src="/logo.png" alt="Crossroads Custom Apparel" width={160} height={160} priority className="w-20 h-20 sm:w-24 sm:h-24 object-contain" />
+                                </div>
                             </div>
                         </motion.div>
                         <motion.h1 variants={fadeUp} className="font-display text-4xl sm:text-5xl lg:text-[3.75rem] text-crate-ink leading-[1.08] mb-5">
@@ -249,17 +261,26 @@ export default function HomePage() {
                             <p className="text-sm sm:text-base text-crate-ink-soft leading-relaxed">Three stops from "we need shirts" to everyone wearing them.</p>
                         </motion.div>
                         <div className="relative">
-                            {/* Twine connecting the three steps — desktop only, draws in on scroll */}
-                            <svg className="hidden sm:block absolute top-6 left-0 w-full" height="16" viewBox="0 0 100 4" preserveAspectRatio="none" aria-hidden="true">
-                                <motion.path d="M16 2 H84" className="twine-line" pathLength={0}
+                            {/* Twine connecting the three steps — desktop only, draws in on scroll.
+                                The SVG's own box is exactly the circle's height (h-12 = 48px = 3rem)
+                                and starts flush with the grid's top, so viewBox unit == 1px and the
+                                path's y (24, the circle's true vertical center) needs no guessed
+                                offset. A gentle sag between anchors plus a second, dashed, lighter
+                                stroke on the same path (.twine-highlight over .twine-base) reads as
+                                twisted cord instead of a ruled line. */}
+                            <svg className="hidden sm:block absolute top-0 left-0 w-full h-12" viewBox="0 0 100 48" preserveAspectRatio="none" aria-hidden="true">
+                                <motion.path d="M16.7,22 Q33,30 50,24 Q67,30 83.3,22" className="twine-base" pathLength={0}
                                     initial={{ pathLength: 0 }} whileInView={{ pathLength: 1 }} viewport={{ once: true, margin: "-80px" }}
                                     transition={{ duration: 1.1, ease: "easeInOut" }} />
+                                <motion.path d="M16.7,22 Q33,30 50,24 Q67,30 83.3,22" className="twine-highlight" pathLength={0}
+                                    initial={{ pathLength: 0 }} whileInView={{ pathLength: 1 }} viewport={{ once: true, margin: "-80px" }}
+                                    transition={{ duration: 1.1, ease: "easeInOut", delay: 0.05 }} />
                             </svg>
                             <motion.div initial="hidden" whileInView="show" viewport={{ once: true, margin: "-80px" }} variants={stagger}
                                 className="relative grid grid-cols-1 sm:grid-cols-3 gap-10 sm:gap-6">
                                 {HOW_IT_WORKS.map(s => (
-                                    <motion.div key={s.step} variants={fadeUp} className="text-center sm:text-left">
-                                        <div className="w-12 h-12 rounded-full flex items-center justify-center text-crate-paper font-ticket font-bold text-lg mb-4 mx-auto sm:mx-0 bg-stencil-red shadow-stamp border-2 border-crate-paper-deep">
+                                    <motion.div key={s.step} variants={fadeUp} className="text-center">
+                                        <div className="w-12 h-12 rounded-full flex items-center justify-center text-crate-paper font-ticket font-bold text-lg mb-4 mx-auto bg-stencil-red shadow-stamp border-2 border-crate-paper-deep relative z-10">
                                             {s.step}
                                         </div>
                                         <h3 className="text-base font-extrabold text-crate-ink mb-1.5">{s.title}</h3>

@@ -390,20 +390,40 @@
   box-shadow: 0 2px 4px rgba(42,32,21,0.16), 0 20px 36px -8px rgba(42,32,21,0.30);
   border-color: #C7AD7C;
 }
-/* The punched tag hole — filled with the canvas color so it reads as a real
-   cutout regardless of what sits inside the card. */
+/* The punched tag hole — a real grommet sitting fully inside the card (not
+   straddling the edge), with a metal-ring border and an inset shadow that
+   reads as a hole punched through paper, not a floating dot. ::after draws
+   the short loop of twine threaded through it, an arch via the
+   horizontal/vertical border-radius shorthand rather than a literal curve —
+   cheap, but it reads as string, not a dash. */
 .tag-card::before {
   content: "";
   position: absolute;
-  top: -7px;
-  left: 20px;
-  width: 14px;
-  height: 14px;
+  top: 13px;
+  left: 13px;
+  width: 17px;
+  height: 17px;
   border-radius: 9999px;
-  background: #F8F1E1;
-  border: 1.5px solid #C7AD7C;
-  box-shadow: inset 0 1px 2px rgba(42,32,21,0.28);
+  background: radial-gradient(circle at 34% 30%, #F8F1E1 0%, #F8F1E1 52%, #E4D2A9 100%);
+  border: 2px solid #B8985F;
+  box-shadow:
+    inset 0 2px 3px rgba(42,32,21,0.40),
+    inset 0 -1px 0 rgba(255,255,255,0.35),
+    0 1px 0 rgba(255,255,255,0.30);
   z-index: 2;
+}
+.tag-card::after {
+  content: "";
+  position: absolute;
+  top: 4px;
+  left: 15.5px;
+  width: 13px;
+  height: 12px;
+  border: 1.5px solid #A8895C;
+  border-bottom: none;
+  border-radius: 50% / 100% 100% 0 0;
+  opacity: 0.85;
+  z-index: 1;
 }
 
 /* Crate panel — the flat, legible surface for structured content (checkout
@@ -492,12 +512,22 @@
   white-space: nowrap;
 }
 
-/* Twine line — the dashed hand-tied connector used to string How-It-Works
-   steps and tag/manifest moments together. */
-.twine-line {
-  stroke: #C7AD7C;
-  stroke-width: 2;
-  stroke-dasharray: 1 9;
+/* Twine — the hand-tied connector stringing How-It-Works steps together.
+   Two strokes on the same sagging path fake a twisted cord: a solid muted
+   base plus a thin light dash slightly offset in dash rhythm, the way two
+   plies of fiber catch light differently along a real piece of twine. Used
+   as a pair (.twine-base + .twine-highlight) on two <path> elements sharing
+   one `d`, never as a single flat rule. */
+.twine-base {
+  stroke: #B8985F;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  fill: none;
+}
+.twine-highlight {
+  stroke: #EFDFB8;
+  stroke-width: 1;
+  stroke-dasharray: 2.5 3.5;
   stroke-linecap: round;
   fill: none;
 }
