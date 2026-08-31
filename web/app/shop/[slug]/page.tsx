@@ -1,12 +1,18 @@
 "use client";
+// "The Gear Drop" storefront — an individual Group Shop. See DESIGN.md and
+// the direction contract in app/page.tsx.
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { imgUrl } from "@/app/lib/api";
 import Link from "next/link";
-import Image from "next/image";
 import { getColorCss } from "@/lib/colors";
 import { useCart } from "@/lib/cart";
 import { computeItemPriceCents } from "@/lib/pricing";
+import { GearButton } from "@/components/public/GearButton";
+import { TagCard } from "@/components/public/TagCard";
+import { StampBadge } from "@/components/public/StampBadge";
+import { PublicHeader } from "@/components/public/PublicHeader";
+import { PublicFooter } from "@/components/public/PublicFooter";
 
 const EASE = [0.16, 1, 0.3, 1] as [number, number, number, number];
 
@@ -16,11 +22,6 @@ type Product = {
     priceCents:number; description?:string; imagesJson?:string;
     sizesJson?:string; colorsJson?:string; sizeChartUrl?:string | null;
     upchargeEnabled?:boolean; upchargeCents?:number;
-    // Present when this product is linked to an adult/youth counterpart (see
-    // Product.youthProductId) — at most one of the two is ever set. SanMar
-    // sells these as fully separate styles, so it's still a separate Product
-    // under the hood; this just lets the storefront offer both sizes ranges
-    // from one page via a toggle instead of two disconnected listings.
     youthVariant?: Product | null;
     adultVariant?: Product | null;
 };
@@ -28,27 +29,20 @@ type Shop = { id:string; name:string; notes?:string; expiresAt?:string; shipping
 
 const stripHtml = (s?: string) => (s ?? "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
 
-// Resolves a product's adult/youth pairing (if any) into a direction-agnostic
-// shape: what the "other" listing is, what to label each side of the toggle,
-// and which of the two is the adult listing (whichever side that is, its
-// photos are used for both — the garment design is the same either way, so
-// switching to Youth shouldn't swap in different product photography).
 function getVariantInfo(p: Product): { linked: Product | null; selfLabel: string; linkedLabel: string; adultSource: Product } {
     if (p.youthVariant) return { linked: p.youthVariant, selfLabel: "Adult", linkedLabel: "Youth", adultSource: p };
     if (p.adultVariant) return { linked: p.adultVariant, selfLabel: "Youth", linkedLabel: "Adult", adultSource: p.adultVariant };
     return { linked: null, selfLabel: "", linkedLabel: "", adultSource: p };
 }
 
-// Compact two-segment pill used to switch a product card/drawer between its
-// adult and youth listing.
 function VariantToggle({ selfLabel, linkedLabel, choice, onChange }: {
     selfLabel: string; linkedLabel: string; choice: "self" | "linked"; onChange: (c: "self" | "linked") => void;
 }) {
     return (
-        <div className="inline-flex rounded-md bg-white/[0.04] border border-white/10 p-0.5 text-xs font-semibold" role="group" aria-label="Adult or youth sizing">
+        <div className="inline-flex rounded-md bg-crate-paper-deep border border-crate-plywood p-0.5 text-xs font-bold" role="group" aria-label="Adult or youth sizing">
             {(["self", "linked"] as const).map(c => (
                 <button key={c} type="button" onClick={() => onChange(c)}
-                    className={`px-2.5 py-1 rounded-md transition-colors ${choice === c ? "bg-signal-cyan/15 text-signal-cyan-bright shadow-sm" : "text-graphite-300 hover:text-graphite-100"}`}>
+                    className={`px-2.5 py-1 rounded-md transition-colors ${choice === c ? "bg-stencil-teal/15 text-stencil-teal shadow-sm" : "text-crate-ink-soft hover:text-crate-ink"}`}>
                     {c === "self" ? selfLabel : linkedLabel}
                 </button>
             ))}
@@ -80,8 +74,6 @@ function ProductDetailDrawer({
     const [variantChoice, setVariantChoice] = useState<"self" | "linked">(linked ? initialVariant : "self");
     const active = variantChoice === "linked" && linked ? linked : product;
 
-    // Photos always come from the adult listing — same garment, same photo,
-    // regardless of which sizing the shopper is currently viewing.
     const imgs: string[] = adultSource.imagesJson ? JSON.parse(adultSource.imagesJson) : [];
     const sizes: string[] = active.sizesJson ? JSON.parse(active.sizesJson) : [];
     const colors: string[] = active.colorsJson ? JSON.parse(active.colorsJson) : [];
@@ -94,11 +86,6 @@ function ProductDetailDrawer({
 
     const unitPrice = computeItemPriceCents(active, selSize || undefined);
 
-    // Sizes/colors differ between the adult and youth listing, so a selection
-    // made on one side rarely still makes sense on the other — reset when the
-    // toggle flips instead of carrying over a stale pick. Photos are shared
-    // between both (see adultSource above), so the gallery position is left
-    // alone — no reason to jump back to the first photo on toggle.
     useEffect(() => {
         setSelSize(sizes.length === 1 ? sizes[0] : "");
         setSelColor(colors.length === 1 ? colors[0] : "");
@@ -125,22 +112,22 @@ function ProductDetailDrawer({
     }, []);
 
     return (
-        <div className="fixed inset-0 z-50 flex">
+        <div className="fixed inset-0 z-50 flex font-gear">
             <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }}
-                className="absolute inset-0 bg-graphite-950/70 backdrop-blur-sm" onClick={onClose} />
+                className="absolute inset-0 bg-crate-ink/50 backdrop-blur-sm" onClick={onClose} />
 
             <motion.div
                 initial={{ x:"100%" }} animate={{ x:0 }} exit={{ x:"100%" }}
                 transition={{ type:"spring", stiffness:300, damping:35 }}
-                className="relative ml-auto w-full max-w-lg bg-graphite-900 border-l border-white/10 h-full flex flex-col overflow-hidden shadow-console-hover">
+                className="relative ml-auto w-full max-w-lg bg-crate-paper border-l-2 border-crate-plywood-dark h-full flex flex-col overflow-hidden shadow-console-hover">
 
                 <button type="button" onClick={onClose} aria-label="Close product details"
-                    className="absolute top-4 right-4 z-10 w-9 h-9 rounded-md bg-graphite-900/90 backdrop-blur-sm border border-white/10 flex items-center justify-center text-graphite-300 hover:text-white hover:bg-graphite-800 transition-colors shadow-console">
+                    className="absolute top-4 right-4 z-10 w-9 h-9 rounded-md bg-crate-paper/95 backdrop-blur-sm border border-crate-plywood flex items-center justify-center text-crate-ink-soft hover:text-crate-ink hover:bg-crate-paper-deep transition-colors shadow-tag">
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
                 </button>
 
-                <div className="flex-1 overflow-y-auto">
-                    <div className="relative bg-graphite-100" style={{ aspectRatio:"4/3" }}>
+                <div className="flex-1 overflow-y-auto gear-scroll">
+                    <div className="relative bg-crate-paper-deep" style={{ aspectRatio:"4/3" }}>
                         {imgs.length > 0 ? (
                             <>
                                 <AnimatePresence mode="wait">
@@ -154,11 +141,11 @@ function ProductDetailDrawer({
                                 {imgs.length > 1 && (
                                     <>
                                         <button type="button" aria-label="Previous image" onClick={() => setImgIdx(i => (i - 1 + imgs.length) % imgs.length)}
-                                            className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 bg-graphite-900/85 backdrop-blur-sm rounded-md border border-white/10 flex items-center justify-center text-graphite-200 hover:bg-graphite-800 hover:text-white transition-colors shadow-console">
+                                            className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 bg-crate-paper/90 backdrop-blur-sm rounded-md border border-crate-plywood flex items-center justify-center text-crate-ink-soft hover:bg-crate-paper-deep hover:text-crate-ink transition-colors shadow-tag">
                                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/></svg>
                                         </button>
                                         <button type="button" aria-label="Next image" onClick={() => setImgIdx(i => (i + 1) % imgs.length)}
-                                            className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 bg-graphite-900/85 backdrop-blur-sm rounded-md border border-white/10 flex items-center justify-center text-graphite-200 hover:bg-graphite-800 hover:text-white transition-colors shadow-console">
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 bg-crate-paper/90 backdrop-blur-sm rounded-md border border-crate-plywood flex items-center justify-center text-crate-ink-soft hover:bg-crate-paper-deep hover:text-crate-ink transition-colors shadow-tag">
                                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/></svg>
                                         </button>
                                     </>
@@ -168,29 +155,29 @@ function ProductDetailDrawer({
                                     <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
                                         {imgs.map((_, i) => (
                                             <button key={i} type="button" aria-label={`View image ${i + 1}`} onClick={() => setImgIdx(i)}
-                                                className={`rounded-full transition-all ${i === imgIdx ? "w-5 h-1.5 bg-signal-cyan" : "w-1.5 h-1.5 bg-graphite-400 hover:bg-graphite-500"}`} />
+                                                className={`rounded-full transition-all ${i === imgIdx ? "w-5 h-1.5 bg-stencil-red" : "w-1.5 h-1.5 bg-crate-plywood-dark hover:bg-crate-ink-faint"}`} />
                                         ))}
                                     </div>
                                 )}
                             </>
                         ) : (
                             <div className="w-full h-full flex items-center justify-center">
-                                <svg className="w-20 h-20 text-graphite-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                                <svg className="w-20 h-20 text-crate-plywood-dark" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
                             </div>
                         )}
 
                         {cartQuantityFor(active.id) > 0 && (
-                            <div className="absolute top-3 left-3 bg-signal-cyan text-graphite-950 text-xs font-bold px-2.5 py-1 rounded-full shadow-glow-cyan-sm">
+                            <div className="absolute top-3 left-3 bg-stencil-red text-crate-paper text-xs font-bold px-2.5 py-1 rounded-full shadow-stamp">
                                 {cartQuantityFor(active.id)} in cart
                             </div>
                         )}
                     </div>
 
                     {imgs.length > 1 && (
-                        <div className="flex gap-2 px-5 py-3 overflow-x-auto bg-graphite-900 border-b border-white/[0.06]">
+                        <div className="flex gap-2 px-5 py-3 overflow-x-auto gear-scroll bg-crate-paper-deep/60 border-b border-crate-plywood">
                             {imgs.map((url, i) => (
                                 <button key={i} type="button" onClick={() => setImgIdx(i)}
-                                    className={`shrink-0 w-14 h-14 rounded-md overflow-hidden border-2 transition-all ${i === imgIdx ? "border-signal-cyan ring-2 ring-signal-cyan/20" : "border-white/10 hover:border-white/20"}`}>
+                                    className={`shrink-0 w-14 h-14 rounded-md overflow-hidden border-2 transition-all ${i === imgIdx ? "border-stencil-red ring-2 ring-stencil-red/20" : "border-crate-plywood hover:border-crate-plywood-dark"}`}>
                                     <img src={imgUrl(url)} alt={`View ${i+1}`} className="w-full h-full object-cover" />
                                 </button>
                             ))}
@@ -200,33 +187,33 @@ function ProductDetailDrawer({
                     <div className="p-5 space-y-5">
                         <div>
                             {active.brand && (
-                                <p className="text-xs font-bold text-signal-cyan uppercase tracking-wider mb-1">{active.brand}</p>
+                                <p className="text-xs font-bold text-stencil-teal uppercase tracking-wider mb-1">{active.brand}</p>
                             )}
-                            <h2 className="text-xl font-bold text-white leading-tight">{active.name}</h2>
+                            <h2 className="text-xl font-extrabold text-crate-ink leading-tight">{active.name}</h2>
                             {linked && (
                                 <div className="mt-2.5">
                                     <VariantToggle selfLabel={selfLabel} linkedLabel={linkedLabel} choice={variantChoice} onChange={setVariantChoice} />
                                 </div>
                             )}
-                            <p className="text-2xl font-bold text-signal-cyan-bright mt-2.5 font-mono tabular-nums">
+                            <p className="text-2xl font-extrabold text-stencil-red mt-2.5 font-ticket tabular-nums">
                                 {fmt(unitPrice)}
                             </p>
                         </div>
 
                         {active.description && (
                             <div>
-                                <h3 className="text-xs font-bold text-graphite-300 uppercase tracking-wider mb-1.5">Description</h3>
-                                <p className="text-sm text-graphite-300 leading-relaxed">{stripHtml(active.description)}</p>
+                                <h3 className="text-xs font-bold text-crate-ink-soft uppercase tracking-wider mb-1.5">Description</h3>
+                                <p className="text-sm text-crate-ink-soft leading-relaxed">{stripHtml(active.description)}</p>
                             </div>
                         )}
 
                         {colors.length > 0 && (
                             <div>
                                 <div className="flex items-center justify-between mb-2">
-                                    <h3 className="text-xs font-bold text-graphite-300 uppercase tracking-wider">Color</h3>
+                                    <h3 className="text-xs font-bold text-crate-ink-soft uppercase tracking-wider">Color</h3>
                                     {selColor && (
-                                        <span className="text-sm font-semibold text-graphite-100 flex items-center gap-1.5">
-                                            <span className="w-4 h-4 rounded-full border border-white/15 inline-block"
+                                        <span className="text-sm font-bold text-crate-ink flex items-center gap-1.5">
+                                            <span className="w-4 h-4 rounded-full border border-crate-plywood-dark inline-block"
                                                 style={{ backgroundColor: getColorCss(selColor) }} />
                                             {selColor}
                                         </span>
@@ -240,10 +227,10 @@ function ProductDetailDrawer({
                                         return (
                                             <button key={c} type="button" title={c}
                                                 onClick={() => setSelColor(prev => prev === c ? "" : c)}
-                                                className={`relative w-8 h-8 rounded-full border-2 transition-all ${isSelected ? "border-signal-cyan scale-110 shadow-glow-cyan-sm" : isWhite ? "border-white/20 hover:border-white/30" : "border-transparent hover:scale-105"}`}
+                                                className={`relative w-8 h-8 rounded-full border-2 transition-all ${isSelected ? "border-stencil-red scale-110 shadow-stamp" : isWhite ? "border-crate-plywood-dark hover:border-crate-ink-faint" : "border-transparent hover:scale-105"}`}
                                                 style={{ backgroundColor: css }}>
                                                 {isSelected && (
-                                                    <svg className={`absolute inset-0 m-auto w-4 h-4 ${isWhite || css === "#ffffff" || css.startsWith("#f") || css.startsWith("#e") || css.startsWith("#d") ? "text-graphite-800" : "text-white"}`}
+                                                    <svg className={`absolute inset-0 m-auto w-4 h-4 ${isWhite || css.startsWith("#f") || css.startsWith("#e") || css.startsWith("#d") ? "text-crate-ink" : "text-white"}`}
                                                         fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                                                         <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/>
                                                     </svg>
@@ -258,10 +245,10 @@ function ProductDetailDrawer({
                         {sizes.length > 0 && (
                             <div>
                                 <div className="flex items-center justify-between mb-2">
-                                    <h3 className="text-xs font-bold text-graphite-300 uppercase tracking-wider">Size</h3>
+                                    <h3 className="text-xs font-bold text-crate-ink-soft uppercase tracking-wider">Size</h3>
                                     {active.sizeChartUrl && (
                                         <a href={imgUrl(active.sizeChartUrl)} target="_blank" rel="noopener noreferrer"
-                                            className="inline-flex items-center gap-1 text-xs font-semibold text-signal-cyan hover:text-signal-cyan-bright transition-colors">
+                                            className="inline-flex items-center gap-1 text-xs font-bold text-stencil-teal hover:text-stencil-teal-bright transition-colors">
                                             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h4"/></svg>
                                             Size chart
                                         </a>
@@ -271,44 +258,46 @@ function ProductDetailDrawer({
                                     {sizes.map(s => (
                                         <button key={s} type="button"
                                             onClick={() => setSelSize(prev => prev === s ? "" : s)}
-                                            className={`px-3.5 py-2 rounded-md border text-sm font-semibold transition-all duration-150 ${selSize===s ? "bg-signal-cyan text-graphite-950 border-signal-cyan shadow-glow-cyan-sm" : "border-white/10 text-graphite-300 hover:border-signal-cyan/40 hover:text-signal-cyan"}`}>
+                                            className={`px-3.5 py-2 rounded-md border text-sm font-bold transition-all duration-150 ${selSize===s ? "bg-stencil-red text-crate-paper border-stencil-red shadow-stamp" : "border-crate-plywood text-crate-ink-soft hover:border-stencil-red/40 hover:text-stencil-red"}`}>
                                             {s}
                                         </button>
                                     ))}
                                 </div>
                                 {active.upchargeEnabled && (
-                                    <p className="text-xs text-graphite-300 mt-2">+{fmt(active.upchargeCents ?? 0)} for 2XL and up</p>
+                                    <p className="text-xs text-crate-ink-soft mt-2">+{fmt(active.upchargeCents ?? 0)} for 2XL and up</p>
                                 )}
                             </div>
                         )}
 
                         <div>
-                            <h3 className="text-xs font-bold text-graphite-300 uppercase tracking-wider mb-2">Quantity</h3>
+                            <h3 className="text-xs font-bold text-crate-ink-soft uppercase tracking-wider mb-2">Quantity</h3>
                             <div className="flex items-center gap-3">
-                                <div className="flex items-center border border-white/10 rounded-md overflow-hidden">
+                                <div className="flex items-center border border-crate-plywood rounded-md overflow-hidden">
                                     <button type="button" onClick={() => setQty(q => Math.max(1, q - 1))}
-                                        className="w-10 h-10 flex items-center justify-center text-graphite-200 hover:bg-white/[0.06] transition-colors font-bold text-lg">
+                                        className="w-10 h-10 flex items-center justify-center text-crate-ink-soft hover:bg-crate-paper-deep transition-colors font-bold text-lg">
                                         −
                                     </button>
-                                    <span className="w-10 text-center text-sm font-bold text-white font-mono tabular-nums">{qty}</span>
+                                    <span className="w-10 text-center text-sm font-bold text-crate-ink font-ticket tabular-nums">{qty}</span>
                                     <button type="button" onClick={() => setQty(q => q + 1)}
-                                        className="w-10 h-10 flex items-center justify-center text-graphite-200 hover:bg-white/[0.06] transition-colors font-bold text-lg">
+                                        className="w-10 h-10 flex items-center justify-center text-crate-ink-soft hover:bg-crate-paper-deep transition-colors font-bold text-lg">
                                         +
                                     </button>
                                 </div>
-                                <span className="text-sm text-graphite-300 font-medium font-mono tabular-nums">{fmt(unitPrice * qty)} total</span>
+                                <span className="text-sm text-crate-ink-soft font-medium font-ticket tabular-nums">{fmt(unitPrice * qty)} total</span>
                             </div>
                         </div>
 
-                        <div className="bg-white/[0.04] border border-white/[0.06] rounded-md p-4 space-y-2 text-xs text-graphite-300">
-                            {active.sku && <div className="flex justify-between"><span>SKU</span><span className="font-mono text-graphite-100">{active.sku}</span></div>}
-                        </div>
+                        {active.sku && (
+                            <div className="bg-crate-paper-deep border border-crate-plywood rounded-md p-4 space-y-2 text-xs text-crate-ink-soft">
+                                <div className="flex justify-between"><span>SKU</span><span className="font-ticket text-crate-ink">{active.sku}</span></div>
+                            </div>
+                        )}
                     </div>
                 </div>
 
-                <div className="border-t border-white/[0.08] p-4 bg-graphite-900 shrink-0">
+                <div className="border-t border-crate-plywood p-4 bg-crate-paper-deep shrink-0">
                     <motion.button type="button" whileTap={{ scale:0.97 }} whileHover={{ y:-1 }} onClick={handleAdd}
-                        className={`console-sheen w-full font-semibold py-3.5 rounded-md transition-shadow duration-200 flex items-center justify-center gap-2 ${added ? "bg-signal-green text-graphite-950 shadow-glow-green" : "bg-signal-cyan-gradient text-graphite-950 shadow-glow-cyan-sm hover:shadow-glow-cyan"}`}>
+                        className={`console-sheen w-full font-gear font-bold py-3.5 rounded-md transition-shadow duration-200 flex items-center justify-center gap-2 ${added ? "bg-stencil-green text-crate-paper shadow-stamp" : "stencil-btn-primary"}`}>
                         {added ? (
                             <><svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>Added to cart!</>
                         ) : (
@@ -329,9 +318,7 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
     const [selections, setSelections] = useState<Record<string, { size:string; color:string }>>({});
     const [notFound, setNotFound]     = useState(false);
     const [detailProduct, setDetailProduct] = useState<Product | null>(null);
-    // Which side (self/linked) each card's Adult/Youth toggle is currently showing.
     const [variantChoice, setVariantChoice] = useState<Record<string, "self" | "linked">>({});
-    // Seeds the detail drawer's own toggle so it opens on whatever the card was showing.
     const [detailInitialVariant, setDetailInitialVariant] = useState<"self" | "linked">("self");
 
     useEffect(() => {
@@ -368,78 +355,53 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
 
     /* ── Loading ── */
     if (!shop && !notFound) return (
-        <div className="console-canvas min-h-screen flex items-center justify-center">
+        <div className="gear-canvas min-h-screen flex items-center justify-center font-gear">
             <div className="text-center">
-                <div className="w-8 h-8 border-2 border-signal-cyan border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-                <p className="text-sm text-graphite-300">Loading shop…</p>
+                <div className="w-8 h-8 border-2 border-stencil-red border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+                <p className="text-sm text-crate-ink-soft">Loading shop…</p>
             </div>
         </div>
     );
 
     /* ── Not found ── */
     if (notFound) return (
-        <div className="console-canvas min-h-screen flex items-center justify-center p-4">
-            <motion.div initial={{ opacity:0, scale:0.95 }} animate={{ opacity:1, scale:1 }} transition={{ duration:0.35, ease:EASE }}
-                className="console-panel rounded-lg p-8 text-center max-w-md">
-                <div className="w-16 h-16 bg-white/[0.05] rounded-lg flex items-center justify-center mx-auto mb-4">
-                    <svg className="w-8 h-8 text-graphite-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
-                </div>
-                <h1 className="text-xl font-bold text-white mb-2">Shop not found</h1>
-                <p className="text-sm text-graphite-300">This shop link may have expired or is no longer active.</p>
-                <Link href="/shops" className="text-sm text-signal-cyan hover:text-signal-cyan-bright font-semibold mt-4 inline-block">← Browse all shops</Link>
-                <p className="text-xs text-graphite-300 mt-4">Questions? Contact <a href="mailto:hello@crossroadscustomapparel.com" className="text-signal-cyan hover:underline">hello@crossroadscustomapparel.com</a></p>
+        <div className="gear-canvas min-h-screen flex items-center justify-center p-4 font-gear">
+            <motion.div initial={{ opacity:0, scale:0.95 }} animate={{ opacity:1, scale:1 }} transition={{ duration:0.35, ease:EASE }}>
+                <TagCard interactive={false} className="p-8 text-center max-w-md">
+                    <div className="w-16 h-16 bg-crate-paper-deep border border-crate-plywood rounded-lg flex items-center justify-center mx-auto mb-4">
+                        <svg className="w-8 h-8 text-crate-ink-faint" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+                    </div>
+                    <h1 className="text-xl font-extrabold text-crate-ink mb-2">Shop not found</h1>
+                    <p className="text-sm text-crate-ink-soft">This shop link may have expired or is no longer active.</p>
+                    <Link href="/shops" className="text-sm text-stencil-red hover:text-stencil-red-bright font-bold mt-4 inline-block">← Browse all shops</Link>
+                    <p className="text-xs text-crate-ink-soft mt-4">Questions? Contact <a href="mailto:hello@crossroadscustomapparel.com" className="text-stencil-teal hover:underline">hello@crossroadscustomapparel.com</a></p>
+                </TagCard>
             </motion.div>
         </div>
     );
 
     return (
-        <div className="console-canvas min-h-screen flex flex-col relative overflow-hidden">
+        <div className="gear-canvas min-h-screen flex flex-col relative font-gear">
 
             {/* ── HEADER ── */}
             <div className="relative z-10">
-                <div className="border-b border-white/[0.06]">
-                    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <Link href="/shops" title="All shops" className="flex items-center gap-2 group">
-                                <span className="w-7 h-7 rounded-md bg-white/[0.06] border border-white/10 flex items-center justify-center text-graphite-300 group-hover:text-white group-hover:bg-white/[0.10] transition-colors shrink-0">
-                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/></svg>
-                                </span>
-                                <Image src="/logo.png" alt="Crossroads Custom Apparel" width={100} height={40} className="object-contain" priority />
-                            </Link>
-                        </div>
-                        <div className="flex items-center gap-3">
-                            <a href="mailto:hello@crossroadscustomapparel.com"
-                                className="text-xs text-graphite-300 hover:text-signal-cyan transition-colors hidden sm:block">
-                                hello@crossroadscustomapparel.com
-                            </a>
-                        </div>
-                    </div>
-                </div>
+                <PublicHeader backHref="/shops" backLabel="All shops" />
 
                 <div className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 py-10 sm:py-14">
                     <motion.div initial={{ opacity:0, y:-8 }} animate={{ opacity:1, y:0 }} transition={{ duration:0.4, ease:EASE }}>
-                        <h1 className="text-3xl sm:text-4xl lg:text-5xl font-semibold text-white leading-tight mb-3 tracking-tight">
+                        <h1 className="font-display text-3xl sm:text-4xl lg:text-5xl text-crate-ink leading-tight mb-3">
                             {shop!.name}
                         </h1>
                         {shop!.notes && (
-                            <p className="text-base text-graphite-300 max-w-xl leading-relaxed mb-4">{shop!.notes}</p>
+                            <p className="text-base text-crate-ink-soft max-w-xl leading-relaxed mb-4">{shop!.notes}</p>
                         )}
-                        <div className="flex flex-wrap gap-3 mt-5">
-                            <div className="flex items-center gap-2 bg-white/[0.04] border border-white/10 rounded-md px-3.5 py-2">
-                                <svg className="w-4 h-4 text-signal-cyan shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/></svg>
-                                <span className="text-sm text-graphite-100 font-medium">{products.length} item{products.length !== 1 ? "s" : ""} available</span>
-                            </div>
-                            <div className="flex items-center gap-2 bg-white/[0.04] border border-white/10 rounded-md px-3.5 py-2">
-                                <svg className="w-4 h-4 text-signal-green shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
-                                <span className="text-sm text-graphite-100 font-medium">Secure checkout</span>
-                            </div>
+                        <div className="flex flex-wrap gap-2.5 mt-5">
+                            <StampBadge tone="teal">{products.length} item{products.length !== 1 ? "s" : ""}</StampBadge>
+                            <StampBadge tone="green">Secure checkout</StampBadge>
                             {shop!.expiresAt && (
-                                <div className="flex items-center gap-2 bg-signal-amber/10 border border-signal-amber/25 rounded-md px-3.5 py-2">
-                                    <svg className="w-4 h-4 text-signal-amber shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                                    <span className="text-sm text-signal-amber font-medium">
-                                        Closes {new Date(shop!.expiresAt).toLocaleDateString("en-US", { month:"short", day:"numeric", year:"numeric", timeZone:"UTC" })}
-                                    </span>
-                                </div>
+                                <StampBadge tone="gold">
+                                    Closes {new Date(shop!.expiresAt).toLocaleDateString("en-US", { month:"short", day:"numeric", year:"numeric", timeZone:"UTC" })}
+                                </StampBadge>
                             )}
                         </div>
                     </motion.div>
@@ -447,20 +409,20 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
             </div>
 
             {/* ── STICKY NAV BAR ── */}
-            <div className="sticky top-0 z-20 bg-graphite-950/85 backdrop-blur-md border-b border-white/[0.06]">
+            <div className="sticky top-0 z-20 bg-crate-paper/90 backdrop-blur-md border-b border-crate-plywood/70">
                 <div className="max-w-5xl mx-auto px-4 sm:px-6 h-13 py-2.5 flex items-center justify-between gap-3">
-                    <p className="text-sm font-semibold text-graphite-100">
+                    <p className="text-sm font-bold text-crate-ink">
                         {itemCount === 0 ? "Select your items below" : `${itemCount} item${itemCount !== 1 ? "s" : ""} in your cart${otherShopsCount > 0 ? ` (${otherShopsCount} from other shops)` : ""}`}
                     </p>
                     <AnimatePresence>
                         {itemCount > 0 && (
                             <Link href="/checkout">
                                 <motion.span initial={{ opacity:0, x:10 }} animate={{ opacity:1, x:0 }} exit={{ opacity:0, x:10 }}
-                                    className="console-sheen flex items-center gap-2 text-graphite-950 text-sm font-semibold px-5 py-2 rounded-md bg-signal-cyan-gradient shadow-glow-cyan-sm hover:shadow-glow-cyan transition-shadow cursor-pointer">
+                                    className="console-sheen flex items-center gap-2 stencil-btn stencil-btn-primary h-9 px-4 cursor-pointer">
                                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
-                                    Checkout · {fmt(subtotalCents)}
+                                    <span className="text-sm">Checkout · {fmt(subtotalCents)}</span>
                                     <motion.span key={itemCount} initial={{ scale:1.4 }} animate={{ scale:1 }}
-                                        className="bg-graphite-950/20 text-graphite-950 text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
+                                        className="bg-crate-paper/25 text-crate-paper text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
                                         {itemCount}
                                     </motion.span>
                                 </motion.span>
@@ -470,7 +432,7 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
                 </div>
                 {shopSlugs.length > 1 && (
                     <div className="max-w-5xl mx-auto px-4 sm:px-6 pb-2 -mt-1">
-                        <p className="text-xs text-signal-cyan font-medium flex items-center gap-1.5">
+                        <p className="text-xs text-stencil-teal font-bold flex items-center gap-1.5">
                             <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
                             Shopping across {shopSlugs.length} group shops — you can check out everything together.
                         </p>
@@ -482,15 +444,15 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
                 <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} transition={{ duration:0.3 }}>
                     {products.length === 0 ? (
                         <div className="text-center py-24">
-                            <div className="w-16 h-16 console-panel rounded-lg flex items-center justify-center mx-auto mb-4">
-                                <svg className="w-8 h-8 text-graphite-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+                            <div className="w-16 h-16 bg-crate-paper-deep border border-crate-plywood rounded-lg flex items-center justify-center mx-auto mb-4">
+                                <svg className="w-8 h-8 text-crate-ink-faint" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
                             </div>
-                            <p className="text-graphite-200 font-medium">No products in this shop yet.</p>
-                            <p className="text-sm text-graphite-300 mt-1">Check back soon!</p>
+                            <p className="text-crate-ink font-bold">No products in this shop yet.</p>
+                            <p className="text-sm text-crate-ink-soft mt-1">Check back soon!</p>
                         </div>
                     ) : (
                         <>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 pt-2">
                                 {products.map((p, idx) => {
                                     const { linked, selfLabel, linkedLabel, adultSource } = getVariantInfo(p);
                                     const choice = variantChoice[p.id] ?? "self";
@@ -500,38 +462,36 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
                                     const colors: string[] = active.colorsJson ? JSON.parse(active.colorsJson) : [];
                                     const sel = getSelection(active.id);
                                     const totalInCart = cartQuantityFor(active.id);
-                                    // Photos always come from the adult listing — see getVariantInfo.
                                     const imgs: string[] = adultSource.imagesJson ? JSON.parse(adultSource.imagesJson) : [];
                                     const displayPrice = computeItemPriceCents(active, sel.size || undefined);
                                     const openDetail = () => { setDetailProduct(p); setDetailInitialVariant(choice); };
                                     return (
                                         <motion.div key={p.id}
                                             initial={{ opacity:0, y:16 }} animate={{ opacity:1, y:0 }}
-                                            whileHover={{ y:-2 }}
-                                            transition={{ delay:idx*0.05, duration:0.35, ease:[0.32,0.72,0,1] }}
-                                            className="console-panel rounded-lg hover:shadow-console-hover hover:border-white/[0.14] transition-all duration-300 overflow-hidden flex flex-col group">
+                                            transition={{ delay:idx*0.04, duration:0.35, ease:[0.32,0.72,0,1] }}
+                                            className="tag-card tag-card-interactive overflow-hidden flex flex-col group">
 
-                                            <div className="relative aspect-[4/3] overflow-hidden bg-graphite-100 cursor-pointer"
+                                            <div className="relative aspect-[4/3] overflow-hidden bg-crate-paper-deep cursor-pointer rounded-t-[9px]"
                                                 onClick={openDetail}>
                                                 {imgs.length > 0 ? (
                                                     <img src={imgUrl(imgs[0])} alt={active.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                                                 ) : (
                                                     <div className="w-full h-full flex items-center justify-center">
-                                                        <svg className="w-14 h-14 text-graphite-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                                                        <svg className="w-14 h-14 text-crate-plywood-dark" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
                                                     </div>
                                                 )}
                                                 {totalInCart > 0 && (
-                                                    <div className="absolute top-2.5 right-2.5 bg-signal-cyan text-graphite-950 text-xs font-bold px-2.5 py-1 rounded-full shadow-glow-cyan-sm">
+                                                    <div className="absolute top-2.5 right-2.5 bg-stencil-red text-crate-paper text-xs font-bold px-2.5 py-1 rounded-full shadow-stamp">
                                                         {totalInCart} in cart
                                                     </div>
                                                 )}
                                                 {active.brand && (
-                                                    <div className="absolute bottom-2.5 left-2.5 bg-graphite-950/60 backdrop-blur-sm text-white text-[10px] font-semibold px-2 py-0.5 rounded-full">
+                                                    <div className="absolute bottom-2.5 left-2.5 bg-crate-ink/70 backdrop-blur-sm text-crate-paper text-[10px] font-bold px-2 py-0.5 rounded-full">
                                                         {active.brand}
                                                     </div>
                                                 )}
-                                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-                                                    <span className="opacity-0 group-hover:opacity-100 transition-opacity bg-graphite-950/85 backdrop-blur-sm text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-console">
+                                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/15 transition-colors flex items-center justify-center">
+                                                    <span className="opacity-0 group-hover:opacity-100 transition-opacity bg-crate-ink/85 backdrop-blur-sm text-crate-paper text-xs font-bold px-3 py-1.5 rounded-full shadow-console">
                                                         View Details
                                                     </span>
                                                 </div>
@@ -540,13 +500,13 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
                                             <div className="p-4 flex flex-col flex-1 gap-3">
                                                 <div className="flex-1">
                                                     <button type="button" className="text-left w-full" onClick={openDetail}>
-                                                        <h3 className="font-semibold text-white text-sm leading-snug hover:text-signal-cyan-bright transition-colors">{active.name}</h3>
+                                                        <h3 className="font-bold text-crate-ink text-sm leading-snug hover:text-stencil-red transition-colors">{active.name}</h3>
                                                     </button>
                                                     {active.description && (
-                                                        <p className="text-xs text-graphite-300 mt-1 line-clamp-2 leading-relaxed">{stripHtml(active.description)}</p>
+                                                        <p className="text-xs text-crate-ink-soft mt-1 line-clamp-2 leading-relaxed">{stripHtml(active.description)}</p>
                                                     )}
                                                     <div className="flex items-center justify-between gap-2 mt-2">
-                                                        <p className="text-lg font-bold text-signal-cyan-bright font-mono tabular-nums">
+                                                        <p className="text-lg font-extrabold text-stencil-red font-ticket tabular-nums">
                                                             {fmt(displayPrice)}
                                                         </p>
                                                         {linked && (
@@ -557,15 +517,15 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
                                                 </div>
 
                                                 {(sizes.length > 0 || colors.length > 0) && (
-                                                    <div className="space-y-2.5 border-t border-white/[0.06] pt-3">
+                                                    <div className="space-y-2.5 border-t border-dashed border-crate-plywood-dark pt-3">
                                                         {sizes.length > 0 && (
                                                             <div>
-                                                                <label className="text-[10px] font-bold text-graphite-300 uppercase tracking-wider mb-1.5 block">Size</label>
+                                                                <label className="text-[10px] font-bold text-crate-ink-soft uppercase tracking-wider mb-1.5 block">Size</label>
                                                                 <div className="flex flex-wrap gap-1">
                                                                     {sizes.map(s => (
                                                                         <button key={s} type="button"
                                                                             onClick={() => setSelection(active.id,"size", sel.size===s ? "" : s)}
-                                                                            className={`text-xs px-2.5 py-1 rounded-md border font-semibold transition-all duration-150 ${sel.size===s ? "bg-signal-cyan text-graphite-950 border-signal-cyan shadow-sm" : "border-white/10 text-graphite-300 hover:border-signal-cyan/40 hover:text-signal-cyan"}`}>
+                                                                            className={`text-xs px-2.5 py-1 rounded-md border font-bold transition-all duration-150 ${sel.size===s ? "bg-stencil-red text-crate-paper border-stencil-red shadow-sm" : "border-crate-plywood text-crate-ink-soft hover:border-stencil-red/40 hover:text-stencil-red"}`}>
                                                                             {s}
                                                                         </button>
                                                                     ))}
@@ -574,7 +534,7 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
                                                         )}
                                                         {colors.length > 0 && (
                                                             <div>
-                                                                <label className="text-[10px] font-bold text-graphite-300 uppercase tracking-wider mb-1.5 block">
+                                                                <label className="text-[10px] font-bold text-crate-ink-soft uppercase tracking-wider mb-1.5 block">
                                                                     Color{sel.color ? `: ${sel.color}` : ""}
                                                                 </label>
                                                                 <div className="flex flex-wrap gap-1.5">
@@ -584,7 +544,7 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
                                                                         return (
                                                                             <button key={c} type="button" title={c}
                                                                                 onClick={() => setSelection(active.id,"color", sel.color===c ? "" : c)}
-                                                                                className={`w-6 h-6 rounded-full border-2 transition-all ${isSelected ? "border-signal-cyan scale-110 shadow-glow-cyan-sm ring-2 ring-signal-cyan/20" : "border-white/10 hover:scale-105 hover:border-white/20"}`}
+                                                                                className={`w-6 h-6 rounded-full border-2 transition-all ${isSelected ? "border-stencil-red scale-110 shadow-stamp ring-2 ring-stencil-red/20" : "border-crate-plywood hover:scale-105 hover:border-crate-plywood-dark"}`}
                                                                                 style={{ backgroundColor: css }}>
                                                                             </button>
                                                                         );
@@ -597,11 +557,11 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
 
                                                 <div className="flex gap-2">
                                                     <motion.button type="button" whileTap={{ scale:0.96 }} whileHover={{ y:-1 }} onClick={() => addToCartFromCard(active)}
-                                                        className="console-sheen flex-1 text-graphite-950 text-sm font-semibold py-2.5 rounded-md bg-signal-cyan-gradient shadow-glow-cyan-sm hover:shadow-glow-cyan transition-shadow">
+                                                        className="console-sheen flex-1 stencil-btn stencil-btn-primary text-sm py-2.5">
                                                         Add to cart
                                                     </motion.button>
                                                     <button type="button" onClick={openDetail}
-                                                        className="px-3 py-2.5 rounded-md border border-white/10 text-graphite-300 hover:bg-white/[0.06] hover:border-white/20 transition-colors"
+                                                        className="px-3 py-2.5 rounded-md border border-crate-plywood text-crate-ink-soft hover:bg-crate-paper-deep hover:border-crate-plywood-dark transition-colors"
                                                         title="View details">
                                                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
                                                     </button>
@@ -612,27 +572,26 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
                                 })}
                             </div>
 
-                            {/* Trust / info bar */}
-                            <div className="mt-12 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            {/* Trust info — one manifest ticket, three lines, not three
+                                identical icon cards (see craft-floor). */}
+                            <div className="mt-12 crate-panel rounded-xl max-w-3xl mx-auto overflow-hidden">
                                 {[
-                                    {
+                                    { tone:"red" as const,
                                         icon: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z"/><path strokeLinecap="round" strokeLinejoin="round" d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z"/></svg>,
-                                        title: "Custom Decorated", desc: "Every item screen printed or embroidered by our team"
-                                    },
-                                    {
+                                        title: "Custom Decorated", desc: "Every item screen printed or embroidered by our team" },
+                                    { tone:"teal" as const,
                                         icon: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>,
-                                        title: "Ships to Your Group", desc: "Orders are shipped together to your group's delivery address"
-                                    },
-                                    {
+                                        title: "Ships to Your Group", desc: "Orders are shipped together to your group's delivery address" },
+                                    { tone:"green" as const,
                                         icon: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>,
-                                        title: "Questions?", desc: "hello@crossroadscustomapparel.com"
-                                    },
-                                ].map(item => (
-                                    <div key={item.title} className="console-panel rounded-lg p-5 flex gap-4 items-start">
-                                        <span className="w-10 h-10 rounded-md bg-signal-cyan/10 text-signal-cyan flex items-center justify-center shrink-0">{item.icon}</span>
+                                        title: "Questions?", desc: "hello@crossroadscustomapparel.com" },
+                                ].map((row, i) => (
+                                    <div key={row.title}
+                                        className={`flex items-start gap-4 p-5 sm:p-6 ${i > 0 ? "border-t border-dashed border-crate-plywood-dark" : ""}`}>
+                                        <span className={`w-10 h-10 rounded-md flex items-center justify-center shrink-0 ${TONE_ICON_CLS[row.tone]}`}>{row.icon}</span>
                                         <div>
-                                            <p className="text-sm font-semibold text-white">{item.title}</p>
-                                            <p className="text-xs text-graphite-300 mt-0.5 leading-relaxed">{item.desc}</p>
+                                            <p className="text-sm font-extrabold text-crate-ink">{row.title}</p>
+                                            <p className="text-xs text-crate-ink-soft mt-0.5 leading-relaxed">{row.desc}</p>
                                         </div>
                                     </div>
                                 ))}
@@ -649,29 +608,20 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
                         initial={{ opacity:0, y:80 }} animate={{ opacity:1, y:0 }} exit={{ opacity:0, y:80 }}
                         transition={{ duration:0.3, ease:[0.32,0.72,0,1] }}
                         className="fixed bottom-0 left-0 right-0 z-30 p-4 sm:hidden"
-                        style={{ background:"linear-gradient(to top, rgba(10,12,16,1) 60%, rgba(10,12,16,0))" }}>
+                        style={{ background:"linear-gradient(to top, rgba(248,241,225,1) 60%, rgba(248,241,225,0))" }}>
                         <Link href="/checkout"
-                            className="console-sheen w-full flex items-center justify-between text-graphite-950 font-semibold px-5 py-4 rounded-lg bg-signal-cyan-gradient shadow-glow-cyan">
-                            <span className="bg-graphite-950/20 text-graphite-950 text-xs font-bold px-2.5 py-1 rounded-full">{itemCount}</span>
+                            className="console-sheen w-full flex items-center justify-between stencil-btn stencil-btn-primary px-5 py-4 rounded-lg">
+                            <span className="bg-crate-paper/25 text-crate-paper text-xs font-bold px-2.5 py-1 rounded-full">{itemCount}</span>
                             <span>View Cart &amp; Checkout</span>
-                            <span className="font-bold font-mono tabular-nums">{fmt(subtotalCents)}</span>
+                            <span className="font-bold font-ticket tabular-nums">{fmt(subtotalCents)}</span>
                         </Link>
                     </motion.div>
                 )}
             </AnimatePresence>
 
-            {/* ── FOOTER ── */}
-            <footer className="relative z-10 mt-12 border-t border-white/[0.06]">
-                <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-                    <Link href="/shops" className="flex items-center gap-3">
-                        <Image src="/logo.png" alt="Crossroads Custom Apparel" width={100} height={40} className="object-contain" />
-                    </Link>
-                    <div className="text-center sm:text-right">
-                        <p className="text-xs text-graphite-300">Screen printing &amp; embroidery · <a href="mailto:hello@crossroadscustomapparel.com" className="hover:text-signal-cyan transition-colors">hello@crossroadscustomapparel.com</a></p>
-                        <p className="text-xs text-graphite-500 mt-0.5">© {new Date().getFullYear()} Crossroads Custom Apparel. All rights reserved.</p>
-                    </div>
-                </div>
-            </footer>
+            <div className="relative z-10 mt-12">
+                <PublicFooter />
+            </div>
 
             {/* ── PRODUCT DETAIL DRAWER ── */}
             <AnimatePresence>
@@ -690,3 +640,9 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
         </div>
     );
 }
+
+const TONE_ICON_CLS = {
+    red:  "bg-stencil-red/10 text-stencil-red",
+    teal: "bg-stencil-teal/10 text-stencil-teal",
+    green:"bg-stencil-green/10 text-stencil-green",
+} as const;

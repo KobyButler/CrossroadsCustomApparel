@@ -20,27 +20,34 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <html lang="en">
             <body>
                 {/*
-                THESIS: Every order is a manifest line moving through the shop, not another
-                white-card SaaS dashboard behind a violet gradient sidebar.
-                OWN-WORLD (rev. 2, user-directed): near-black graphite panels lit by four
-                disciplined instrument signals — cyan (primary/live), green (fulfilled),
-                amber (overdue), red (cancelled) — now with real depth: layered shadows,
-                cyan-family gradients on primary actions/panel grounds, two slow ambient
-                glow fields behind the canvas, hover-lift on every interactive surface.
-                No violet anywhere; no glassmorphism/backdrop-blur as decoration. IBM Plex
-                Sans/Mono type. Sharp 6px corners. Content spans the full viewport
-                (max-w-1800px, centered) instead of a narrow left-hugging column.
-                STORY: Koby reads the dashboard like a dispatch console — what's overdue
-                glows amber, what shipped is quiet and green, every number exact, and the
-                whole thing feels alive rather than static.
-                FIRST VIEWPORT: A dark instrument row of KPI dial tiles up top, a live
-                order manifest table below with amber/green/red status lamps, sidebar as
-                a loaded dispatch bay. Signature interaction: KPI tiles and order rows
-                lift with a real shadow on hover; an overdue lamp pulses; the primary
-                action sweeps a light across itself once on hover.
-                FORM: The Manifest Line — assigned, index 5 of 7, seed key 6153ece7.
-                SCOPE (rev. 2): this system now covers the entire application, not just
-                the dashboard — every admin route, the storefront, checkout, and login.
+                Two visual worlds now share this app, split by mode, both recorded in
+                DESIGN.md — this comment is the audit trail for both.
+
+                ADMIN/LOGIN — "The Manifest Line" (Operate). THESIS: every order is a
+                manifest line moving through the shop. OWN-WORLD: near-black graphite
+                panels, four disciplined instrument signals (cyan/green/amber/red),
+                layered shadows, cyan-family gradients, two ambient glow fields, hover-
+                lift everywhere. IBM Plex Sans/Mono. Sharp 6px corners, full-viewport
+                content (max-w-1800px). FORM: assigned, index 5 of 7, seed key 6153ece7.
+
+                LANDING/GROUP SHOPS/CHECKOUT — "The Gear Drop" (Persuade), added
+                2026-08-31 after direct feedback that the console world read as
+                "lifeless and bleak" for the public storefront. THESIS: the storefront
+                looks like the actual fulfillment — a packed gear crate on a sunlit
+                workbench — not a software product grid, and not the admin's night
+                dispatch bay. OWN-WORLD: warm kraft/cardboard ground (never white, never
+                black), four stencil-ink accents (barn red/marigold gold/teal/forest
+                green), every shop/product tile a punched-hole kraft luggage tag at a
+                slight scattered tilt, Allerta Stencil display, Barlow body,
+                Space Mono for every price/count/SKU. FORM: assigned, index 6 of 7
+                grounded candidates, seed key 8bfab481, weighed against 6 catalog
+                challengers (none won both axes). Full contract in app/page.tsx.
+
+                SCOPE: Admin and Login render through AdminShell's console branch and
+                keep the console system exclusively. Landing, Group Shops, and Checkout
+                render through AdminShell's isPublic branch (components/admin/
+                AdminShell.tsx) and use the Gear Drop system exclusively — the two never
+                mix on one page.
                 FINISH: unreviewed and undocumented is unfinished; this build ends with
                 the finish review, the verdict, DESIGN.md, and every shipping raster
                 carrying its provenance.

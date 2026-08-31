@@ -9,5 +9,6 @@ server/prisma/**/*.db-journal
 server/prisma/*.bak-*
 server/dist
 web/.next
+.impeccable/review
 public/uploads/*
 !public/uploads/.gitkeep

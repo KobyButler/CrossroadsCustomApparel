@@ -1,9 +1,10 @@
 "use client";
+// Used only by the public checkout — safe to carry "The Gear Drop" styling
+// (see DESIGN.md); unrelated to the admin console's Button/Card.
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { GearButton } from "@/components/public/GearButton";
 
 const fmt = (cents: number) =>
     new Intl.NumberFormat("en-US", { style:"currency", currency:"USD" }).format(cents / 100);
@@ -27,23 +28,23 @@ export function StripePaymentForm({ totalCents, onSuccess, onBack }: {
 
     return (
         <form onSubmit={handlePay} className="space-y-4">
-            <Card className="p-5">
-                <h2 className="text-sm font-bold text-white mb-4">Card / digital wallet</h2>
+            <div className="crate-panel rounded-lg p-5">
+                <h2 className="text-sm font-extrabold text-crate-ink mb-4">Card / digital wallet</h2>
                 <PaymentElement options={{ layout: "tabs" }} />
-            </Card>
+            </div>
             {error && (
                 <motion.div initial={{ opacity:0, y:-4 }} animate={{ opacity:1, y:0 }}
-                    className="bg-signal-red/10 border border-signal-red/25 rounded-md px-4 py-3 text-sm font-medium text-signal-red">
+                    className="bg-stencil-red/10 border border-stencil-red/25 rounded-md px-4 py-3 text-sm font-medium text-stencil-red">
                     {error}
                 </motion.div>
             )}
             <div className="flex gap-3">
-                <Button type="button" variant="secondary" onClick={onBack} className="flex-1">
+                <GearButton type="button" variant="secondary" onClick={onBack} className="flex-1">
                     ← Back
-                </Button>
-                <Button type="submit" disabled={!stripe} loading={processing} className="flex-[2]">
+                </GearButton>
+                <GearButton type="submit" disabled={!stripe} loading={processing} className="flex-[2]">
                     {processing ? "Processing…" : `Pay ${fmt(totalCents)}`}
-                </Button>
+                </GearButton>
             </div>
         </form>
     );

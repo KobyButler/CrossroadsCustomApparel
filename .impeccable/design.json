@@ -1,34 +1,49 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-08-29T00:00:00.000Z",
-  "title": "Design System: Crossroads Custom Apparel — The Manifest Line",
+  "generatedAt": "2026-08-31T00:00:00.000Z",
+  "title": "Design System: Crossroads Custom Apparel — The Manifest Line & The Gear Drop",
   "extensions": {
     "colorMeta": {
       "signal-cyan":  { "role": "primary", "displayName": "Signal Cyan",  "canonical": "#33e1ff", "tonalRamp": ["#04222b", "#0a3a49", "#0f6478", "#158aa3", "#33e1ff", "#6febff", "#a7f3ff", "#e0fcff"] },
       "signal-green": { "role": "success", "displayName": "Signal Green", "canonical": "#3ddc84", "tonalRamp": ["#08251a", "#0d3d29", "#146538", "#1e9550", "#3ddc84", "#72e9a8", "#a4f2c7", "#d8fae5"] },
       "signal-amber": { "role": "warning", "displayName": "Signal Amber", "canonical": "#ffb238", "tonalRamp": ["#2b1c04", "#4a3008", "#7a4d0a", "#b3730f", "#ffb238", "#ffcb73", "#ffdca3", "#ffefd4"] },
       "signal-red":   { "role": "danger",  "displayName": "Signal Red",   "canonical": "#ff5c5c", "tonalRamp": ["#2b0a0a", "#4a1212", "#7a1f1f", "#b23030", "#ff5c5c", "#ff8a8a", "#ffb3b3", "#ffdada"] },
-      "graphite-950": { "role": "neutral", "displayName": "Canvas",  "canonical": "#0a0c10" },
-      "graphite-900": { "role": "neutral", "displayName": "Panel",   "canonical": "#12151b" },
-      "graphite-300": { "role": "neutral", "displayName": "Body text floor", "canonical": "#9aa0ac" }
+      "graphite-950": { "role": "neutral", "displayName": "Console Canvas",  "canonical": "#0a0c10" },
+      "graphite-900": { "role": "neutral", "displayName": "Console Panel",   "canonical": "#12151b" },
+      "graphite-300": { "role": "neutral", "displayName": "Console body text floor", "canonical": "#9aa0ac" },
+      "stencil-red":   { "role": "primary", "displayName": "Barn Red",     "canonical": "#BE3B27", "tonalRamp": ["#2b0d08", "#4a180f", "#7a2115", "#a62d1e", "#BE3B27", "#d65940", "#E2694F", "#f0a893"] },
+      "stencil-teal":  { "role": "secondary", "displayName": "Ink Teal",   "canonical": "#1D7268", "tonalRamp": ["#081f1c", "#0f3f39", "#164f47", "#1a6158", "#1D7268", "#2f8f83", "#4FA89C", "#8fcfc5"] },
+      "stencil-gold":  { "role": "accent", "displayName": "Marigold",      "canonical": "#C98B22", "tonalRamp": ["#241a06", "#3f2c0a", "#7A560F", "#a67115", "#C98B22", "#dba448", "#E8B45C", "#f3d29b"] },
+      "stencil-green": { "role": "success", "displayName": "Forest Stencil", "canonical": "#4C7A34", "tonalRamp": ["#131f0c", "#213515", "#2C481F", "#3c6129", "#4C7A34", "#628f49", "#7FAE5C", "#b3d69a"] },
+      "crate-paper":      { "role": "neutral", "displayName": "Kraft Paper (canvas)", "canonical": "#F8F1E1" },
+      "crate-paper-deep": { "role": "neutral", "displayName": "Kraft Paper Deep (panel)", "canonical": "#EFE2C4" },
+      "crate-ink":        { "role": "neutral", "displayName": "Warm Ink (headings/values)", "canonical": "#2A2015" },
+      "crate-ink-soft":   { "role": "neutral", "displayName": "Storefront body text floor", "canonical": "#5B4B35" }
     },
     "shadows": [
-      { "name": "console", "value": "0 1px 2px rgba(0,0,0,0.5), 0 10px 24px -8px rgba(0,0,0,0.6)", "purpose": "Default panel elevation — a tight near-black contact shadow plus a soft wide falloff. Applied by .console-panel." },
-      { "name": "console-hover", "value": "0 2px 6px rgba(0,0,0,0.55), 0 20px 44px -10px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.06)", "purpose": "Hover-lift depth on interactive panels/rows (.console-panel-interactive, shadow-console-hover)." },
-      { "name": "glow-cyan", "value": "0 0 1px rgba(51,225,255,0.5), 0 0 28px rgba(51,225,255,0.40), 0 6px 20px rgba(0,0,0,0.45)", "purpose": "Primary-action glow at rest→hover (buttons, the login card)." },
-      { "name": "glow-cyan-sm", "value": "0 0 14px rgba(51,225,255,0.35)", "purpose": "Primary-action glow at rest, before hover deepens it." },
-      { "name": "glow-green", "value": "0 0 20px rgba(61,220,132,0.35)", "purpose": "Success-state panel emphasis (.console-panel-glow-green)." },
-      { "name": "glow-amber", "value": "0 0 20px rgba(255,178,56,0.4)", "purpose": "Urgency-state panel emphasis (.console-panel-glow-amber, e.g. the unfulfilled-orders alert)." },
-      { "name": "glow-red", "value": "0 0 20px rgba(255,92,92,0.4)", "purpose": "Critical-state panel emphasis (.console-panel-glow-red)." },
-      { "name": "nav-rail-glow", "value": "0 0 8px rgba(51,225,255,0.7)", "purpose": "The sidebar's one signature glow — the active route's left rail." }
+      { "name": "console", "value": "0 1px 2px rgba(0,0,0,0.5), 0 10px 24px -8px rgba(0,0,0,0.6)", "purpose": "Default panel elevation on the console system — .console-panel." },
+      { "name": "console-hover", "value": "0 2px 6px rgba(0,0,0,0.55), 0 20px 44px -10px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.06)", "purpose": "Console hover-lift depth (.console-panel-interactive)." },
+      { "name": "glow-cyan", "value": "0 0 1px rgba(51,225,255,0.5), 0 0 28px rgba(51,225,255,0.40), 0 6px 20px rgba(0,0,0,0.45)", "purpose": "Console primary-action glow at rest→hover." },
+      { "name": "glow-cyan-sm", "value": "0 0 14px rgba(51,225,255,0.35)", "purpose": "Console primary-action glow at rest." },
+      { "name": "glow-green", "value": "0 0 20px rgba(61,220,132,0.35)", "purpose": "Console success-state panel emphasis." },
+      { "name": "glow-amber", "value": "0 0 20px rgba(255,178,56,0.4)", "purpose": "Console urgency-state panel emphasis." },
+      { "name": "glow-red", "value": "0 0 20px rgba(255,92,92,0.4)", "purpose": "Console critical-state panel emphasis." },
+      { "name": "nav-rail-glow", "value": "0 0 8px rgba(51,225,255,0.7)", "purpose": "Console sidebar's one signature glow — the active route's left rail." },
+      { "name": "tag", "value": "0 1px 2px rgba(42,32,21,0.14), 0 8px 18px -6px rgba(42,32,21,0.22)", "purpose": "Gear Drop default paper elevation — .tag-card and .crate-panel at rest." },
+      { "name": "tag-hover", "value": "0 2px 4px rgba(42,32,21,0.16), 0 18px 32px -8px rgba(42,32,21,0.30)", "purpose": "Gear Drop hover-lift on .tag-card-interactive." },
+      { "name": "stamp", "value": "0 1px 1px rgba(42,32,21,0.25), 0 3px 8px rgba(42,32,21,0.18)", "purpose": "Gear Drop primary-button and stamp-badge elevation — reads as a rubber stamp pressed onto paper." }
     ],
     "overlayScale": {
-      "purpose": "White-alpha overlays used throughout for borders, dividers, hover fills, and the sheen sweep, graduated by emphasis rather than enumerated as named colors: 0.03/0.04 (subtle fill), 0.06 (default border/divider), 0.08 (panel border), 0.10 (hover fill / skeleton highlight), 0.14 (hover border), 0.22 (sheen highlight peak).",
+      "purpose": "White-alpha overlays on the console system, graduated by emphasis: 0.03/0.04 (subtle fill), 0.06 (default border/divider), 0.08 (panel border), 0.10 (hover fill/skeleton highlight), 0.14 (hover border), 0.22 (sheen highlight peak). The Gear Drop system uses ink-alpha shadows instead (see the tag/tag-hover/stamp shadow entries) rather than a white overlay scale, since its ground is light.",
       "steps": [0.03, 0.04, 0.05, 0.06, 0.08, 0.10, 0.14, 0.22]
     },
     "motion": [
-      { "name": "expo-out", "value": "cubic-bezier(0.16,1,0.3,1)", "purpose": "Standard entrance easing for every staggered reveal on rebuilt surfaces." },
-      { "name": "signal-pulse", "value": "1.8s cubic-bezier(0.16,1,0.3,1) infinite, opacity 1→0.45→1", "purpose": "The one reserved glow — a KPI icon ring pulsing only while it reports real, current urgency." }
+      { "name": "expo-out", "value": "cubic-bezier(0.16,1,0.3,1)", "purpose": "Standard entrance easing for staggered reveals on both systems." },
+      { "name": "signal-pulse", "value": "1.8s cubic-bezier(0.16,1,0.3,1) infinite, opacity 1→0.45→1", "purpose": "Console-only: a KPI icon ring pulsing while it reports real, current urgency." },
+      { "name": "ambient-drift", "value": "14-22s ease-in-out infinite (direction alternates per orb)", "purpose": "Shared grammar, different palette: two slow glow orbs behind every canvas on both systems — cyan/green on the console, marigold/teal on the Gear Drop." },
+      { "name": "crate-lid-reveal", "value": "rotateX 0→-115deg, opacity 1→0, 0.85s cubic-bezier(0.6,0.02,0.15,1), transform-origin top center", "purpose": "Gear Drop landing hero only: the one-time signature reveal, a crate lid tipping open on load. Never repeated elsewhere in the system." },
+      { "name": "twine-draw", "value": "SVG pathLength 0→1 on scroll-into-view, ~1.1s ease-in-out", "purpose": "Gear Drop: the dashed twine line connecting sequential steps (currently landing's How-It-Works) draws in once, desktop only." },
+      { "name": "stamp-thud", "value": "translateY(1px) scale(0.98) on :active", "purpose": "Gear Drop .stencil-btn press feedback — reads as a physical stamp landing, not just a color change." }
     ],
     "breakpoints": [
       { "name": "sm", "value": "640px" },
@@ -40,80 +55,110 @@
       "name": "Console Panel",
       "kind": "card",
       "refersTo": "console-panel",
-      "description": "The base dark surface for every grouped block of content — KPI tile, order manifest, quick actions.",
+      "description": "The base dark surface for every grouped block of content on Admin/Login — KPI tile, order manifest, quick actions.",
       "html": "<div class=\"ds-console-panel\">Panel content</div>",
       "css": ".ds-console-panel { background:#12151b; border:1px solid rgba(255,255,255,0.08); border-radius:0.5rem; color:#e3e5e9; font-family:'IBM Plex Sans',Inter,system-ui,sans-serif; }"
     },
     {
-      "name": "Primary Button",
+      "name": "Console Primary Button",
       "kind": "button",
       "refersTo": "button-console-primary",
-      "description": "The one interactive accent — cyan fill, near-black text for contrast, no gradient or shine sweep.",
+      "description": "Admin/Login's one interactive accent — cyan fill, near-black text for contrast.",
       "html": "<button class=\"ds-btn-primary\">+ Create Shop</button>",
       "css": ".ds-btn-primary { background:#33e1ff; color:#0a0c10; font-family:'IBM Plex Sans',Inter,sans-serif; font-weight:600; font-size:0.875rem; padding:0.5rem 1rem; border:none; border-radius:0.375rem; cursor:pointer; transition:background 0.2s, transform 0.15s; } .ds-btn-primary:hover { background:#a7f3ff; transform:translateY(-1px); } .ds-btn-primary:focus-visible { outline:2px solid #33e1ff; outline-offset:2px; }"
-    },
-    {
-      "name": "Secondary Button",
-      "kind": "button",
-      "refersTo": "button-console-secondary",
-      "description": "Low-emphasis action on the console canvas.",
-      "html": "<button class=\"ds-btn-secondary\">All Orders</button>",
-      "css": ".ds-btn-secondary { background:rgba(255,255,255,0.04); color:#c3c7d0; font-family:'IBM Plex Sans',Inter,sans-serif; font-weight:500; font-size:0.875rem; padding:0.5rem 1rem; border:1px solid rgba(255,255,255,0.10); border-radius:0.375rem; cursor:pointer; transition:background 0.2s; } .ds-btn-secondary:hover { background:rgba(255,255,255,0.08); border-color:rgba(255,255,255,0.20); }"
     },
     {
       "name": "Signal Lamp",
       "kind": "custom",
       "refersTo": "signal-lamp",
-      "description": "Status indicator — a colored dot plus its label, never a filled pill. Exactly four states, each one real meaning.",
+      "description": "Admin status indicator — a colored dot plus its label, never a filled pill. Exactly four states.",
       "html": "<span class=\"ds-lamp ds-lamp-amber\"><span class=\"ds-lamp-dot\"></span>Unfulfilled</span>",
-      "css": ".ds-lamp { display:inline-flex; align-items:center; gap:0.375rem; font-family:'IBM Plex Sans',Inter,sans-serif; font-size:0.75rem; font-weight:500; } .ds-lamp-dot { width:6px; height:6px; border-radius:9999px; flex-shrink:0; } .ds-lamp-amber { color:#ffb238; } .ds-lamp-amber .ds-lamp-dot { background:#ffb238; } .ds-lamp-green { color:#3ddc84; } .ds-lamp-green .ds-lamp-dot { background:#3ddc84; } .ds-lamp-red { color:#ff5c5c; } .ds-lamp-red .ds-lamp-dot { background:#ff5c5c; }"
+      "css": ".ds-lamp { display:inline-flex; align-items:center; gap:0.375rem; font-family:'IBM Plex Sans',Inter,sans-serif; font-size:0.75rem; font-weight:500; } .ds-lamp-dot { width:6px; height:6px; border-radius:9999px; flex-shrink:0; } .ds-lamp-amber { color:#ffb238; } .ds-lamp-amber .ds-lamp-dot { background:#ffb238; }"
     },
     {
       "name": "KPI Stat Tile",
       "kind": "card",
       "refersTo": "console-stat",
-      "description": "Instrument-style metric readout — uppercase label, icon chip, tabular-mono value.",
-      "html": "<div class=\"ds-stat\"><div class=\"ds-stat-head\"><span class=\"ds-stat-label\">Total Revenue</span><span class=\"ds-stat-icon\">$</span></div><div class=\"ds-stat-value\">$423.47</div><div class=\"ds-stat-sub\">All time gross</div></div>",
-      "css": ".ds-stat { background:#12151b; border:1px solid rgba(255,255,255,0.08); border-radius:0.5rem; padding:1.25rem; font-family:'IBM Plex Sans',Inter,sans-serif; } .ds-stat-head { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:0.875rem; } .ds-stat-label { font-size:11px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:#9aa0ac; } .ds-stat-icon { width:2rem; height:2rem; border-radius:0.5rem; background:rgba(51,225,255,0.10); color:#33e1ff; display:flex; align-items:center; justify-content:center; font-size:0.875rem; } .ds-stat-value { font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:1.5rem; color:#ffffff; font-variant-numeric:tabular-nums; } .ds-stat-sub { font-size:0.75rem; color:#9aa0ac; margin-top:0.375rem; }"
+      "description": "Admin instrument-style metric readout — uppercase label, icon chip, tabular-mono value.",
+      "html": "<div class=\"ds-stat\"><div class=\"ds-stat-head\"><span class=\"ds-stat-label\">Total Revenue</span><span class=\"ds-stat-icon\">$</span></div><div class=\"ds-stat-value\">$423.47</div></div>",
+      "css": ".ds-stat { background:#12151b; border:1px solid rgba(255,255,255,0.08); border-radius:0.5rem; padding:1.25rem; font-family:'IBM Plex Sans',Inter,sans-serif; } .ds-stat-head { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:0.875rem; } .ds-stat-label { font-size:11px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:#9aa0ac; } .ds-stat-icon { width:2rem; height:2rem; border-radius:0.5rem; background:rgba(51,225,255,0.10); color:#33e1ff; display:flex; align-items:center; justify-content:center; font-size:0.875rem; } .ds-stat-value { font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:1.5rem; color:#ffffff; font-variant-numeric:tabular-nums; }"
     },
     {
       "name": "Sidebar Nav Item",
       "kind": "nav",
       "refersTo": "nav-item-active",
-      "description": "Active route gets a glowing cyan left rail — the sidebar's one load-bearing signature glow.",
+      "description": "Admin active route gets a glowing cyan left rail — the sidebar's one load-bearing signature glow.",
       "html": "<a class=\"ds-nav-item ds-nav-item-active\">Dashboard</a>",
       "css": ".ds-nav-item { display:flex; align-items:center; gap:0.75rem; padding:0.625rem 0.75rem; border-radius:0.5rem; font-family:'IBM Plex Sans',Inter,sans-serif; font-size:0.8125rem; font-weight:500; color:#9aa0ac; position:relative; text-decoration:none; } .ds-nav-item-active { color:#eaf9ff; background:rgba(51,225,255,0.09); } .ds-nav-item-active::before { content:''; position:absolute; left:-0.75rem; top:50%; transform:translateY(-50%); width:2px; height:18px; background:#33e1ff; box-shadow:0 0 8px rgba(51,225,255,0.7); }"
+    },
+    {
+      "name": "Gear Drop Primary Button",
+      "kind": "button",
+      "refersTo": "button-gear-primary",
+      "description": "Storefront's one loud action — a stencil-red gradient with a stamped-thud press and a one-time sheen sweep on hover.",
+      "html": "<button class=\"ds-stencil-btn\">Browse Shops</button>",
+      "css": ".ds-stencil-btn { background:linear-gradient(180deg,#CB4A35 0%,#A82F1E 100%); color:#FBF6EC; font-family:'Barlow',system-ui,sans-serif; font-weight:700; font-size:0.875rem; padding:0.5rem 1.25rem; border:1px solid rgba(42,32,21,0.15); border-radius:0.625rem; box-shadow:0 1px 1px rgba(42,32,21,0.25),0 3px 8px rgba(42,32,21,0.18); cursor:pointer; transition:transform 0.15s,box-shadow 0.2s; } .ds-stencil-btn:hover { background:linear-gradient(180deg,#D65940 0%,#BE3B27 100%); transform:translateY(-1px); box-shadow:0 2px 4px rgba(42,32,21,0.16),0 18px 32px -8px rgba(42,32,21,0.30); } .ds-stencil-btn:active { transform:translateY(1px) scale(0.98); }"
+    },
+    {
+      "name": "Tag Card",
+      "kind": "card",
+      "refersTo": "tag-card",
+      "description": "The Gear Drop's signature object for a product or shop preview — a kraft luggage tag with a punched hole, scattered tilt, straightens and lifts on hover.",
+      "html": "<div class=\"ds-tag-card\"><span class=\"ds-tag-hole\"></span>Panthers Boosters<br><small>2 items</small></div>",
+      "css": ".ds-tag-card { position:relative; background:linear-gradient(180deg,#F2E4C6 0%,#E9D6AC 100%); border:1px solid #DEC9A0; border-radius:0.625rem; padding:1.25rem; color:#2A2015; font-family:'Barlow',system-ui,sans-serif; box-shadow:0 1px 2px rgba(42,32,21,0.14),0 8px 18px -6px rgba(42,32,21,0.22); transform:rotate(-0.7deg); transition:transform 0.3s cubic-bezier(0.16,1,0.3,1), box-shadow 0.3s ease; } .ds-tag-card:hover { transform:rotate(0deg) translateY(-4px); box-shadow:0 2px 4px rgba(42,32,21,0.16),0 20px 36px -8px rgba(42,32,21,0.30); } .ds-tag-hole { position:absolute; top:-7px; left:20px; width:14px; height:14px; border-radius:9999px; background:#F8F1E1; border:1.5px solid #C7AD7C; }"
+    },
+    {
+      "name": "Crate Panel — Manifest Ticket",
+      "kind": "custom",
+      "refersTo": "crate-panel",
+      "description": "The Gear Drop's flat structured-content surface: multi-item content divided by dashed tear-lines, replacing the same-size-icon-card grid the craft floor refuses.",
+      "html": "<div class=\"ds-crate-panel\"><div class=\"ds-ticket-row\">Screen Printing — vibrant, durable prints</div><div class=\"ds-ticket-row\">Embroidery — clean, professional stitching</div></div>",
+      "css": ".ds-crate-panel { background:linear-gradient(180deg,#F2E4C6 0%,#ECD9B2 100%); border:1px solid #DEC9A0; border-radius:0.75rem; overflow:hidden; font-family:'Barlow',system-ui,sans-serif; color:#2A2015; } .ds-ticket-row { padding:1.5rem; } .ds-ticket-row + .ds-ticket-row { border-top:1px dashed #C7AD7C; }"
+    },
+    {
+      "name": "Stamp Badge",
+      "kind": "chip",
+      "refersTo": "stamp-badge-red",
+      "description": "A rubber ink-stamp mark for status/urgency — Space Mono, outlined, permanently rotated like it landed slightly crooked.",
+      "html": "<span class=\"ds-stamp\">Rush</span>",
+      "css": ".ds-stamp { display:inline-flex; align-items:center; font-family:'Space Mono',monospace; font-weight:700; font-size:0.6875rem; letter-spacing:0.05em; text-transform:uppercase; padding:0.25rem 0.55rem; border-radius:0.3rem; border:1.5px solid #BE3B27; color:#BE3B27; background:rgba(190,59,39,0.10); transform:rotate(-1.5deg); }"
     }
   ],
   "narrative": {
-    "northStar": "The Manifest Line",
-    "overview": "The app reads as a live dispatch floor, not a SaaS analytics skin: every order is a manifest line moving from pick to pack to ship. Near-black graphite panels stand in for a night dispatch bay; a locked set of four signal colors (cyan for primary/live, green for fulfilled, amber for overdue, red for cancelled) carries every meaningful state. Rev. 2 (user-directed) adds real layered depth: gradient panels, true two-layer shadows, signal-colored glow on primary actions and emphasis panels, two slow ambient glow fields drifting behind every canvas, hover-lift everywhere interactive, and a one-time sheen sweep on primary buttons. Content fills the viewport (max-w-1800px, centered) instead of a narrow left-hugging column. Applies across the whole app now, not just the dashboard.",
+    "northStar": "The Manifest Line (Admin & Login) & The Gear Drop (Public Storefront)",
+    "overview": "Two systems, split by mode. Admin and Login read as a live dispatch floor: near-black graphite panels, four disciplined instrument signals (cyan/green/amber/red), real layered depth, two ambient glow fields, hover-lift everywhere. Unchanged by this revision. Landing, Group Shops, and Checkout read as the shop's own fulfillment made visible — a packed gear crate on a sunlit workbench, not a software product grid and not the console's night dispatch bay. Warm kraft/cardboard grounds, four stencil-ink accents (barn red/marigold/teal/forest green), every product or shop tile a punched-hole kraft tag at a scattered tilt, structured content as a flat manifest-ticket panel with dashed tear-lines rather than same-size icon cards, a dashed twine line stringing sequential steps together, a crate lid that tips open once on the landing hero's load. Allerta Stencil display, Barlow body, Space Mono data — deliberately a different stack from the console's IBM Plex. Chosen through a structured direction round (seed key 8bfab481, assigned candidate 6 of 7) after the user reported the console world felt 'lifeless and bleak' applied to the public storefront.",
     "keyCharacteristics": [
-      "Near-black graphite grounds, never pure white cards",
-      "Exactly four state signal colors, each meaning one real thing",
-      "Real layered depth — gradient panels, true shadows, glow on emphasis surfaces, hover-lift everywhere",
-      "Two slow ambient glow fields behind every canvas — the 'alive' feeling",
-      "IBM Plex Mono for all data; IBM Plex Sans for everything else",
-      "Sharp, small radii (6–8px) — engineered, not bubbly",
-      "Content fills the viewport at full screen — no dead space",
-      "One motion grammar: staggered exponential-ease-out, hover-lift, reserved lamp-pulse, one-time sheen on primary actions"
+      "Two systems, enforced in code by AdminShell's isPublic branch — they never mix on one page",
+      "Console: near-black graphite grounds, four locked signal colors, IBM Plex Mono for data",
+      "Console: two slow ambient glow fields (cyan/green), sharp 6-8px radii, hover-lift everywhere",
+      "Gear Drop: warm kraft grounds, never white/black, four expressive stencil accents",
+      "Gear Drop: punched-hole tag cards at a scattered tilt for anything selectable; flat manifest-ticket panels for structured content",
+      "Gear Drop: Allerta Stencil display / Barlow body / Space Mono data — a different type stack on purpose",
+      "Gear Drop: one unrepeated signature moment — the landing hero's crate-lid reveal"
     ],
     "rules": [
-      { "name": "The Locked Palette Rule", "body": "A signal color never appears for decoration — only to report the specific state it's assigned to.", "section": "colors" },
-      { "name": "The Graphite-300 Floor Rule", "body": "On the graphite-950 canvas, no real text drops below graphite-300 (≈7.5:1 contrast); graphite-400 is icon-only, never text.", "section": "colors" },
-      { "name": "The Mono-Means-Data Rule", "body": "IBM Plex Mono is reserved for numbers, dates, IDs, and status words — never a heading or a sentence.", "section": "typography" },
-      { "name": "The Earned Glow Rule", "body": "Glow and gradient are the default now, but every use still answers to something real: a primary action, a panel reporting genuine urgency, or the app's own ambient 'alive' fields — never sprinkled on for its own sake.", "section": "elevation" }
+      { "name": "The Locked Palette Rule", "body": "Console only: a signal color never appears for decoration — only to report the specific state it's assigned to.", "section": "colors" },
+      { "name": "The Graphite-300 Floor Rule", "body": "Console only: no real text drops below graphite-300 (≈7.5:1) on the graphite-950 canvas; graphite-400 is icon-only.", "section": "colors" },
+      { "name": "The Mono-Means-Data Rule", "body": "Console only: IBM Plex Mono is reserved for numbers, dates, IDs, and status words.", "section": "typography" },
+      { "name": "The Earned Glow Rule", "body": "Console only: glow and gradient answer to something real — a primary action, genuine urgency, or the app's own ambience.", "section": "elevation" },
+      { "name": "The Crate-Ink-Soft Floor Rule", "body": "Gear Drop only: no real text drops below crate-ink-soft, including inside a .crate-panel/.tag-card's deeper gradient tone; crate-ink-faint is icon-only.", "section": "colors" },
+      { "name": "The Gold-Carries-Dark-Text Rule", "body": "Gear Drop only: stencil-gold is the one accent too light for paper-cream text; anything on a gold fill uses crate-ink.", "section": "colors" },
+      { "name": "The Ticket-Means-Data Rule", "body": "Gear Drop only: Space Mono is reserved for prices, counts, dates, and SKUs.", "section": "typography" },
+      { "name": "The Stencil-Is-Display-Only Rule", "body": "Gear Drop only: Allerta Stencil never drops below section-headline size; body, labels, and buttons are always Barlow.", "section": "typography" },
+      { "name": "The Tag-vs-Ticket Rule", "body": "Gear Drop only: tilt and the punched hole are reserved for .tag-card (things a visitor selects); structured content is always a flat .crate-panel.", "section": "elevation" }
     ],
     "dos": [
-      "Do keep every signal color tied to its one real meaning",
-      "Do render all data in IBM Plex Mono with tabular-nums",
-      "Do use graphite-300 or lighter for any real reading text on the dark canvas"
+      "Do keep every console signal color tied to its one real meaning",
+      "Do render console data in IBM Plex Mono and Gear Drop data in Space Mono, both tabular-nums",
+      "Do keep the Gear Drop ground warm kraft — never white, never the console's near-black",
+      "Do recompose multi-item storefront content as one manifest ticket with dashed tear-lines, never three same-size icon cards"
     ],
     "donts": [
-      "Don't reintroduce gradients, glassmorphism, or the btn-shine sweep on any surface built in this system",
-      "Don't add a fifth accent color",
-      "Don't delete the legacy tokens/classes/components still used by unbuilt routes",
-      "Don't use a colored border-left/border-right accent above 1px on any panel or row"
+      "Don't add a fifth console accent color",
+      "Don't use a colored border-left/border-right accent above 1px on any panel or row, on either system",
+      "Don't use console tokens (IBM Plex, signal-*, graphite-*) anywhere on the Gear Drop, or Gear Drop tokens anywhere on the console",
+      "Don't put a kicker/eyebrow label above a heading on either system — craft-floor ban, no exception",
+      "Don't use crate-ink-faint for real text — icon-only, same discipline as the console's graphite-400 rule"
     ]
   }
 }

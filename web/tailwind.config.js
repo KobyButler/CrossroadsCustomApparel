@@ -9,7 +9,13 @@ module.exports = {
         extend: {
             fontFamily: {
                 sans: ["IBM Plex Sans", "Inter", "system-ui", "-apple-system", "sans-serif"],
-                mono: ["IBM Plex Mono", "ui-monospace", "SFMono-Regular", "monospace"]
+                mono: ["IBM Plex Mono", "ui-monospace", "SFMono-Regular", "monospace"],
+                // "The Gear Drop" — public storefront system (see DESIGN.md). Kept
+                // separate from the admin console's IBM Plex stack on purpose: the
+                // storefront is a different world (Persuade, not Operate).
+                display: ["Allerta Stencil", "Arial Narrow", "sans-serif"],
+                gear: ["Barlow", "system-ui", "-apple-system", "sans-serif"],
+                ticket: ["Space Mono", "ui-monospace", "SFMono-Regular", "monospace"],
             },
             colors: {
                 // Console/instrument system — "The Manifest Line" (see DESIGN.md).
@@ -33,6 +39,25 @@ module.exports = {
                     green: { DEFAULT: "#3ddc84", dim: "#146538", bright: "#b6f5d2" },
                     amber: { DEFAULT: "#ffb238", dim: "#7a4d0a", bright: "#ffdca3" },
                     red:   { DEFAULT: "#ff5c5c", dim: "#7a1f1f", bright: "#ffc2c2" },
+                },
+                // "The Gear Drop" — public storefront (landing, group shops,
+                // checkout). A warm kraft/cardboard neutral scale (never pure
+                // white, never black) plus four stencil-ink accents rotating
+                // across categories and state — see DESIGN.md.
+                crate: {
+                    paper:      "#F8F1E1", // page ground — raw manila/cardboard
+                    "paper-deep":"#EFE2C4", // card/panel ground, one shade deeper
+                    plywood:    "#DEC9A0", // hairline borders, dividers
+                    "plywood-dark": "#C7AD7C",
+                    ink:        "#2A2015", // primary text — warm near-black, never pure black
+                    "ink-soft": "#5B4B35", // secondary text
+                    "ink-faint":"#7C6A4E", // tertiary/placeholder text (≥4.5:1 on paper)
+                },
+                stencil: {
+                    red:  { DEFAULT: "#BE3B27", dim: "#7A2115", bright: "#E2694F" },
+                    gold: { DEFAULT: "#C98B22", dim: "#7A560F", bright: "#E8B45C" },
+                    teal: { DEFAULT: "#1D7268", dim: "#0F3F39", bright: "#4FA89C" },
+                    green:{ DEFAULT: "#4C7A34", dim: "#2C481F", bright: "#7FAE5C" },
                 },
             },
             backgroundImage: {
@@ -59,6 +84,12 @@ module.exports = {
                 "glow-green":   "0 0 20px rgba(61,220,132,0.35)",
                 "glow-amber":   "0 0 20px rgba(255,178,56,0.4)",
                 "glow-red":     "0 0 20px rgba(255,92,92,0.4)",
+                // "The Gear Drop" — paper/tag elevation, warm ink shadows instead
+                // of the console's neon glow. Two-layer like .console-panel's
+                // shadow-console, but warm-toned to read as paper on a table.
+                "tag":       "0 1px 2px rgba(42,32,21,0.14), 0 8px 18px -6px rgba(42,32,21,0.22)",
+                "tag-hover": "0 2px 4px rgba(42,32,21,0.16), 0 18px 32px -8px rgba(42,32,21,0.30)",
+                "stamp":     "0 1px 1px rgba(42,32,21,0.25), 0 3px 8px rgba(42,32,21,0.18)",
             },
             borderRadius: {
                 "2xl": "1rem",
