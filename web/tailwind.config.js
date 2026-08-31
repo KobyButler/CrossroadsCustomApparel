@@ -10,12 +10,14 @@ module.exports = {
             fontFamily: {
                 sans: ["IBM Plex Sans", "Inter", "system-ui", "-apple-system", "sans-serif"],
                 mono: ["IBM Plex Mono", "ui-monospace", "SFMono-Regular", "monospace"],
-                // "The Gear Drop" — public storefront system (see DESIGN.md). Kept
+                // "The Print Floor" — public storefront system (see DESIGN.md). Kept
                 // separate from the admin console's IBM Plex stack on purpose: the
-                // storefront is a different world (Persuade, not Operate).
-                display: ["Allerta Stencil", "Arial Narrow", "sans-serif"],
-                gear: ["Barlow", "system-ui", "-apple-system", "sans-serif"],
-                ticket: ["Space Mono", "ui-monospace", "SFMono-Regular", "monospace"],
+                // storefront is a different world (Persuade, not Operate). Condensed
+                // industrial display + a technical-form body face + a spec-sheet mono,
+                // none shared with the console and none reflexive AI-UI defaults.
+                display: ["Big Shoulders Display", "Arial Narrow", "sans-serif"],
+                press: ["Public Sans", "system-ui", "-apple-system", "sans-serif"],
+                spec: ["Fragment Mono", "ui-monospace", "SFMono-Regular", "monospace"],
             },
             colors: {
                 // Console/instrument system — "The Manifest Line" (see DESIGN.md).
@@ -40,24 +42,35 @@ module.exports = {
                     amber: { DEFAULT: "#ffb238", dim: "#7a4d0a", bright: "#ffdca3" },
                     red:   { DEFAULT: "#ff5c5c", dim: "#7a1f1f", bright: "#ffc2c2" },
                 },
-                // "The Gear Drop" — public storefront (landing, group shops,
-                // checkout). A warm kraft/cardboard neutral scale (never pure
-                // white, never black) plus four stencil-ink accents rotating
-                // across categories and state — see DESIGN.md.
-                crate: {
-                    paper:      "#F8F1E1", // page ground — raw manila/cardboard
-                    "paper-deep":"#EFE2C4", // card/panel ground, one shade deeper
-                    plywood:    "#DEC9A0", // hairline borders, dividers
-                    "plywood-dark": "#C7AD7C",
-                    ink:        "#2A2015", // primary text — warm near-black, never pure black
-                    "ink-soft": "#5B4B35", // secondary text
-                    "ink-faint":"#7C6A4E", // tertiary/placeholder text (≥4.5:1 on paper)
+                // "The Print Floor" — public storefront (landing, group shops,
+                // checkout). A dark light-table neutral scale (the pre-press
+                // darkroom a screen gets exposed and registered in) plus a fixed,
+                // technical-only process-color set. Each shop's own accent — its
+                // "spot color" — is dynamic, computed by lib/spot.ts and carried as
+                // CSS custom properties (--spot/--spot-bright/--spot-dim/--spot-on),
+                // never a static Tailwind color, so it is not declared here. See
+                // DESIGN.md.
+                plate: {
+                    50:  "#F7F8FA",
+                    100: "#E7E9ED",
+                    200: "#C9CDD6",
+                    300: "#A3AAB6", // text floor — 8.3:1 on plate-950
+                    400: "#7A8290", // icon-only floor
+                    500: "#5C6472",
+                    600: "#414855",
+                    700: "#2B303A",
+                    800: "#1B2029",
+                    900: "#121620", // panel ground
+                    950: "#0A0D14", // canvas ground — the darkroom
                 },
-                stencil: {
-                    red:  { DEFAULT: "#BE3B27", dim: "#7A2115", bright: "#E2694F" },
-                    gold: { DEFAULT: "#C98B22", dim: "#7A560F", bright: "#E8B45C" },
-                    teal: { DEFAULT: "#1D7268", dim: "#0F3F39", bright: "#4FA89C" },
-                    green:{ DEFAULT: "#4C7A34", dim: "#2C481F", bright: "#7FAE5C" },
+                proc: {
+                    // Fixed CMYK separation colors — technical marks only
+                    // (registration crosshairs, color-bar chrome), never a
+                    // decorative fill. See the Process-Marks-Are-Chrome rule.
+                    cyan:    "#00AEEF",
+                    magenta: "#EC008C",
+                    yellow:  "#FFE800",
+                    key:     "#0A0D14",
                 },
             },
             backgroundImage: {
@@ -84,12 +97,13 @@ module.exports = {
                 "glow-green":   "0 0 20px rgba(61,220,132,0.35)",
                 "glow-amber":   "0 0 20px rgba(255,178,56,0.4)",
                 "glow-red":     "0 0 20px rgba(255,92,92,0.4)",
-                // "The Gear Drop" — paper/tag elevation, warm ink shadows instead
-                // of the console's neon glow. Two-layer like .console-panel's
-                // shadow-console, but warm-toned to read as paper on a table.
-                "tag":       "0 1px 2px rgba(42,32,21,0.14), 0 8px 18px -6px rgba(42,32,21,0.22)",
-                "tag-hover": "0 2px 4px rgba(42,32,21,0.16), 0 18px 32px -8px rgba(42,32,21,0.30)",
-                "stamp":     "0 1px 1px rgba(42,32,21,0.25), 0 3px 8px rgba(42,32,21,0.18)",
+                // "The Print Floor" — light-table elevation: cards read as
+                // backlit film sitting on a glowing surface in a dark room,
+                // never a warm paper drop shadow. Spot-color glow is added
+                // inline via var(--spot-dim) since the accent is per-shop.
+                "plate":       "0 1px 2px rgba(0,0,0,0.5), 0 10px 26px -8px rgba(0,0,0,0.7)",
+                "plate-hover": "0 2px 6px rgba(0,0,0,0.55), 0 22px 46px -10px rgba(0,0,0,0.75), 0 0 0 1px rgba(247,248,250,0.06)",
+                "plate-lit":   "0 1px 2px rgba(0,0,0,0.5), 0 0 32px -6px rgba(247,248,250,0.20), 0 10px 26px -8px rgba(0,0,0,0.7)",
             },
             borderRadius: {
                 "2xl": "1rem",
@@ -153,6 +167,29 @@ module.exports = {
                     "0%":   { transform: "translateY(14px)", opacity: "0" },
                     "100%": { transform: "translateY(0)",    opacity: "1" },
                 },
+                // "The Print Floor" motion grammar — see DESIGN.md.
+                "registration-snap": {
+                    "0%":   { transform: "translate(-1.5px, 1.5px)", opacity: "0.6" },
+                    "60%":  { transform: "translate(0.5px, -0.5px)", opacity: "1" },
+                    "100%": { transform: "translate(0, 0)",          opacity: "1" },
+                },
+                "halftone-drift": {
+                    "0%, 100%": { backgroundPosition: "0px 0px" },
+                    "50%":      { backgroundPosition: "6px 6px" },
+                },
+                "exposure-flash": {
+                    "0%":   { opacity: "0" },
+                    "8%":   { opacity: "0.9" },
+                    "100%": { opacity: "0" },
+                },
+                "segment-glow": {
+                    "0%, 100%": { opacity: "1" },
+                    "50%":      { opacity: "0.88" },
+                },
+                "press-canvas-drift": {
+                    "0%, 100%": { transform: "translate(0, 0) scale(1)" },
+                    "50%":      { transform: "translate(-20px, 14px) scale(1.05)" },
+                },
             },
             animation: {
                 "signal-pulse": "signal-pulse 1.8s cubic-bezier(0.16,1,0.3,1) infinite",
@@ -160,6 +197,11 @@ module.exports = {
                 "scan-sweep":   "scan-sweep 6s linear infinite",
                 "ambient-drift":"ambient-drift 14s ease-in-out infinite",
                 "rise-in":      "rise-in 0.5s cubic-bezier(0.16,1,0.3,1) both",
+                "registration-snap": "registration-snap 0.4s cubic-bezier(0.16,1,0.3,1) both",
+                "halftone-drift":    "halftone-drift 5s ease-in-out infinite",
+                "exposure-flash":    "exposure-flash 0.5s ease-out both",
+                "segment-glow":      "segment-glow 2.2s ease-in-out infinite",
+                "press-canvas-drift":"press-canvas-drift 17s ease-in-out infinite",
                 "shimmer":        "shimmer 2s linear infinite",
                 "float":          "float 3s ease-in-out infinite",
                 "glow-pulse":     "glow-pulse 2s ease-in-out infinite",
