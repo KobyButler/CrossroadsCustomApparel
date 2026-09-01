@@ -109,6 +109,101 @@ async function aggregate(shopId: string | undefined, status: string) {
     return { orders, lines, byVendor, alreadyOrdered };
 }
 
+type ShopReportLine = {
+    productId: string; productName: string; sku: string; image: string | null;
+    color: string | null; size: string | null; quantity: number; sourceOrderIds: string[];
+};
+type ShopReportGroup = { shop: { id: string; name: string } | null; orderCount: number; lines: ShopReportLine[] };
+
+// Same order set as aggregate() above, grouped the opposite way: by shop,
+// then by our own Crossroads Product (not the underlying vendor style) —
+// so a shop that sells two different Crossroads products which both
+// happen to map to the same SanMar style (a duplicate/re-import, or just
+// two products built on the same blank) still shows as two separate
+// lines here, one per Crossroads product, which is the whole point of
+// this view versus the vendor-facing report above.
+async function aggregateByProduct(shopId: string | undefined, status: string) {
+    const where: any = { status };
+    if (shopId) where.shopId = shopId;
+
+    const orders = await prisma.order.findMany({
+        where,
+        include: { items: { include: { product: true } }, shop: { select: { id: true, name: true } } }
+    });
+
+    const shopMap = new Map<string, {
+        shop: { id: string; name: string } | null;
+        orderIds: Set<string>;
+        lineMap: Map<string, {
+            productId: string; productName: string; sku: string; image: string | null;
+            color: string | null; size: string | null; quantity: number; orderIds: Set<string>;
+        }>;
+    }>();
+
+    for (const o of orders) {
+        // Every real storefront order carries a shopId; '__none__' only
+        // catches the theoretical case of a shopless order (e.g. a manually
+        // created one) so it still shows up rather than being silently
+        // dropped from the report.
+        const shopKey = o.shopId ?? '__none__';
+        if (!shopMap.has(shopKey)) {
+            shopMap.set(shopKey, { shop: o.shop ? { id: o.shop.id, name: o.shop.name } : null, orderIds: new Set(), lineMap: new Map() });
+        }
+        const sg = shopMap.get(shopKey)!;
+        sg.orderIds.add(o.id);
+        for (const it of o.items) {
+            const key = `${it.productId}|${it.color ?? ''}|${it.size ?? ''}`;
+            if (!sg.lineMap.has(key)) {
+                sg.lineMap.set(key, {
+                    productId: it.productId, productName: it.product.name, sku: it.product.sku,
+                    image: firstImage(it.product.imagesJson), color: it.color, size: it.size,
+                    quantity: 0, orderIds: new Set()
+                });
+            }
+            const l = sg.lineMap.get(key)!;
+            l.quantity += it.quantity;
+            l.orderIds.add(o.id);
+        }
+    }
+
+    const shops: ShopReportGroup[] = [...shopMap.values()]
+        .map(sg => ({
+            shop: sg.shop,
+            orderCount: sg.orderIds.size,
+            lines: [...sg.lineMap.values()]
+                .map(l => ({
+                    productId: l.productId, productName: l.productName, sku: l.sku, image: l.image,
+                    color: l.color, size: l.size, quantity: l.quantity, sourceOrderIds: [...l.orderIds]
+                }))
+                .sort((a, b) => a.productName.localeCompare(b.productName) || (a.color ?? '').localeCompare(b.color ?? '') || (a.size ?? '').localeCompare(b.size ?? ''))
+        }))
+        // Shopless orders (theoretical — see the comment above) sort last,
+        // after every real shop, rather than competing alphabetically.
+        .sort((a, b) => {
+            if (!a.shop && !b.shop) return 0;
+            if (!a.shop) return 1;
+            if (!b.shop) return -1;
+            return a.shop.name.localeCompare(b.shop.name);
+        });
+
+    return { orders, shops };
+}
+
+// GET /api/order-report/shop-report?shopId=xxx&status=UNFULFILLED — the same
+// filters as the main report, grouped by Crossroads product per shop instead
+// of by vendor style across shops. See aggregateByProduct() above.
+router.get('/shop-report', async (req, res) => {
+    const shopId = (req.query.shopId as string) || undefined;
+    const status = (req.query.status as string) || 'UNFULFILLED';
+
+    const { orders, shops } = await aggregateByProduct(shopId, status);
+
+    res.json({
+        status, generatedAt: new Date().toISOString(),
+        orderCount: orders.length, shops
+    });
+});
+
 // GET /api/order-report?shopId=xxx&status=UNFULFILLED
 router.get('/', async (req, res) => {
     const shopId = (req.query.shopId as string) || undefined;

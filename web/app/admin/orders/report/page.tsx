@@ -34,6 +34,12 @@ type Receipt = {
     lines: { vendorStyle: string; color: string | null; size: string | null; quantity: number; productNames: string[] }[];
 };
 type HistoryLine = { vendorStyle: string; color: string | null; size: string | null; quantity: number; productNames: string[]; category?: string | null };
+type ShopReportLine = {
+    productId: string; productName: string; sku: string; image: string | null;
+    color: string | null; size: string | null; quantity: number; sourceOrderIds: string[];
+};
+type ShopReportGroup = { shop: { id: string; name: string } | null; orderCount: number; lines: ShopReportLine[] };
+type ShopReport = { status: string; generatedAt: string; orderCount: number; shops: ShopReportGroup[] };
 
 // SanMar's category feed joins garment type + fit/demographic modifiers with
 // semicolons in no consistent order (e.g. "T-Shirts;Youth" or "Youth;T-Shirts")
@@ -77,10 +83,12 @@ export default function OrderReportPage() {
     const [confirmVendor, setConfirmVendor] = useState<string | null>(null);
     const [receipt, setReceipt] = useState<Receipt | null>(null);
 
-    const [view, setView] = useState<"place" | "history">("place");
+    const [view, setView] = useState<"place" | "shop" | "history">("place");
     const [history, setHistory] = useState<HistoryEntry[]>([]);
     const [loadingHistory, setLoadingHistory] = useState(false);
     const [expandedHistory, setExpandedHistory] = useState<string | null>(null);
+    const [shopReport, setShopReport] = useState<ShopReport | null>(null);
+    const [loadingShopReport, setLoadingShopReport] = useState(false);
 
     useEffect(() => {
         api("/shops").then(d => setShops(Array.isArray(d) ? d : d?.data ?? [])).catch(() => {});
@@ -91,6 +99,8 @@ export default function OrderReportPage() {
 
     useEffect(() => { if (view === "history") fetchHistory(); }, [view]);
 
+    useEffect(() => { if (view === "shop") fetchShopReport(); }, [view, shopId, status]);
+
     async function fetchHistory() {
         setLoadingHistory(true);
         try {
@@ -98,6 +108,17 @@ export default function OrderReportPage() {
             setHistory(r.history ?? []);
         } catch (err: any) { toast(err.message || "Failed to load order history", "error"); }
         finally { setLoadingHistory(false); }
+    }
+
+    async function fetchShopReport() {
+        setLoadingShopReport(true);
+        try {
+            const params = new URLSearchParams({ status });
+            if (shopId) params.set("shopId", shopId);
+            const r = await api(`/order-report/shop-report?${params}`);
+            setShopReport(r);
+        } catch (err: any) { toast(err.message || "Failed to load shop report", "error"); }
+        finally { setLoadingShopReport(false); }
     }
 
     function exportHistoryEntryCSV(h: HistoryEntry) {
@@ -181,7 +202,22 @@ export default function OrderReportPage() {
     function printReport() {
         const shopName = report?.shop?.name ?? "All Shops";
         const dateStr = new Date().toISOString().split("T")[0];
-        printAs(`Order Report - ${shopName} - ${dateStr}`);
+        const label = view === "shop" ? "Shop Report" : "Order Report";
+        printAs(`${label} - ${shopName} - ${dateStr}`);
+    }
+
+    function exportShopReportCSV() {
+        if (!shopReport) return;
+        const header = ["Shop", "Product", "SKU", "Color", "Size", "Quantity"];
+        const rows = shopReport.shops.flatMap(g =>
+            g.lines.map(l => [g.shop?.name ?? "No shop", l.productName, l.sku, l.color ?? "", l.size ?? "", l.quantity])
+        );
+        const csv = [header, ...rows].map(row => row.map(csvCell).join(",")).join("\n");
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+        a.download = `shop-report-${status.toLowerCase()}-${new Date().toISOString().split("T")[0]}.csv`;
+        a.click();
+        toast("Shop report exported");
     }
 
     const vendors = report ? Object.keys(report.byVendor) : [];
@@ -200,15 +236,18 @@ export default function OrderReportPage() {
                     <p className="page-subtitle">See how many of each product you need to order, and place vendor orders directly</p>
                 </div>
                 <div className="flex gap-2.5">
+                    {view === "shop" && (
+                        <Button variant="outline" onClick={exportShopReportCSV} disabled={!shopReport || shopReport.shops.length === 0}>Export CSV</Button>
+                    )}
                     <Button variant="outline" onClick={printReport}>Print</Button>
                 </div>
             </motion.div>
 
             <div className="flex items-center gap-1 border-b border-white/[0.06] no-print">
-                {(["place", "history"] as const).map(v => (
+                {(["place", "shop", "history"] as const).map(v => (
                     <button key={v} type="button" onClick={() => setView(v)}
                         className={`relative px-4 py-2.5 text-sm font-medium transition-colors -mb-px ${view === v ? "text-signal-cyan border-b-2 border-signal-cyan" : "text-graphite-300 hover:text-graphite-100 border-b-2 border-transparent"}`}>
-                        {v === "place" ? "Place Orders" : "SanMar Order History"}
+                        {v === "place" ? "Place Orders" : v === "shop" ? "Shop Report" : "SanMar Order History"}
                     </button>
                 ))}
             </div>
@@ -348,6 +387,96 @@ export default function OrderReportPage() {
                                                     </tr>
                                                 );
                                             })}
+                                        </tbody>
+                                    </table></div>
+                                </div>
+                            </motion.div>
+                        );
+                    })}
+                </div>
+            )}
+            </>
+            )}
+
+            {view === "shop" && (
+            <>
+            <div className="flex items-center gap-3 flex-wrap no-print">
+                <Select value={shopId} onChange={e => setShopId(e.target.value)} className="w-full sm:w-52">
+                    <option value="">All shops</option>
+                    {shops.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </Select>
+                <Select value={status} onChange={e => setStatus(e.target.value)} className="w-full sm:w-44">
+                    {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </Select>
+            </div>
+
+            {/* Print header */}
+            <div className="hidden print:block">
+                <h1 className="text-xl font-bold">Shop Report — {shopReport?.shops.length === 1 ? (shopReport.shops[0].shop?.name ?? "All Shops") : "All Shops"}</h1>
+                <p className="text-sm text-slate-500">
+                    {status} orders · {shopReport?.orderCount ?? 0} order(s) · generated {shopReport ? new Date(shopReport.generatedAt).toLocaleString() : ""}
+                </p>
+            </div>
+
+            {loadingShopReport ? (
+                <div className="console-panel rounded-lg p-8 space-y-3 print:hidden">
+                    {[1,2,3].map(i => <div key={i} className="skeleton h-4" />)}
+                </div>
+            ) : !shopReport || shopReport.shops.length === 0 ? (
+                <div className="console-panel rounded-lg flex flex-col items-center justify-center py-16 text-graphite-500 print:hidden">
+                    <svg className="w-12 h-12 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17V7a2 2 0 012-2h6.5L21 9v8a2 2 0 01-2 2H11a2 2 0 01-2-2z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 7v10a2 2 0 002 2h9"/></svg>
+                    <p className="text-sm text-graphite-300 font-medium">Nothing to report</p>
+                    <p className="text-xs text-graphite-500 mt-0.5">No {status.toLowerCase()} orders match this selection</p>
+                </div>
+            ) : (
+                <div className="space-y-6">
+                    <p className="text-sm text-graphite-300 no-print">
+                        {shopReport.orderCount} order{shopReport.orderCount !== 1 ? "s" : ""} · generated {new Date(shopReport.generatedAt).toLocaleString()}
+                    </p>
+
+                    {shopReport.shops.map((g, gIdx) => {
+                        const totalQty = g.lines.reduce((a, l) => a + l.quantity, 0);
+                        return (
+                            <motion.div key={g.shop?.id ?? "__none__"} initial={{ opacity:0, y:8 }} animate={{ opacity:1, y:0 }}
+                                transition={{ duration: 0.35, ease: EASE, delay: gIdx * 0.05 }}
+                                className="console-panel rounded-lg overflow-hidden print:bg-white print:border print:border-slate-200 print:shadow-none print:rounded-none">
+                                <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06] print:border-slate-100">
+                                    <div>
+                                        <h2 className="text-sm font-bold text-white print:text-slate-900">{g.shop?.name ?? "No shop"}</h2>
+                                        <p className="text-xs text-graphite-300 print:text-slate-400">{g.orderCount} order{g.orderCount !== 1 ? "s" : ""} · {g.lines.length} line item{g.lines.length !== 1 ? "s" : ""} · {totalQty} unit{totalQty !== 1 ? "s" : ""} total</p>
+                                    </div>
+                                </div>
+                                <div className="overflow-x-auto">
+                                    <div className="table-wrap"><table className="data-table">
+                                        <thead><tr>
+                                            <th>Product</th><th>SKU</th><th>Color</th><th>Size</th><th className="text-right pr-5">Qty Ordered</th>
+                                        </tr></thead>
+                                        <tbody>
+                                            {g.lines.map(l => (
+                                                <tr key={`${l.productId}|${l.color ?? ""}|${l.size ?? ""}`}>
+                                                    <td>
+                                                        <div className="flex items-center gap-3">
+                                                            {l.image ? (
+                                                                <ZoomableImage src={imgUrl(l.image)} alt={l.productName}
+                                                                    wrapperClassName="no-print"
+                                                                    className="w-8 h-8 rounded-md object-cover ring-1 ring-white/10" />
+                                                            ) : null}
+                                                            <span className="text-sm font-medium text-white print:text-slate-800">{l.productName}</span>
+                                                        </div>
+                                                    </td>
+                                                    <td><code className="text-xs font-mono text-graphite-300 print:text-slate-500">{l.sku}</code></td>
+                                                    <td>
+                                                        {l.color ? (
+                                                            <span className="flex items-center gap-1.5 text-sm text-graphite-300 print:text-slate-600">
+                                                                <span className="w-3 h-3 rounded-full border border-white/10 inline-block no-print" style={{ backgroundColor: getColorCss(l.color) }} />
+                                                                {l.color}
+                                                            </span>
+                                                        ) : <span className="text-graphite-500 print:text-slate-300">—</span>}
+                                                    </td>
+                                                    <td><span className="text-sm text-graphite-300 print:text-slate-600">{l.size ?? "—"}</span></td>
+                                                    <td className="text-right pr-5"><span className="text-sm font-bold font-mono text-white tabular-nums print:text-slate-900">{l.quantity}</span></td>
+                                                </tr>
+                                            ))}
                                         </tbody>
                                     </table></div>
                                 </div>
