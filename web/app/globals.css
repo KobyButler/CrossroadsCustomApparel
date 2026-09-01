@@ -62,10 +62,19 @@
    on every card, panel, button, and field across the app so each one reads
    as if it's casting a little light onto the canvas's dot texture behind
    it. Centralized here so the two intensities (rest/hover) stay identical
-   everywhere instead of drifting between copies. See DESIGN.md. */
+   everywhere instead of drifting between copies. Two stacked layers per the
+   requested 0 0 100px / 0 0 50px geometry — a wide outer haze plus a
+   tighter, brighter inner core. Opacity is kept low specifically because a
+   100px blur is enormous relative to most of these surfaces; at
+   box-shadow-style alpha it would read as a flat wash rather than a glow.
+   See DESIGN.md. */
 :root {
-  --dot-glow: 0 0 44px 6px rgba(247,248,250,0.05);
-  --dot-glow-hover: 0 0 54px 8px rgba(247,248,250,0.09);
+  --dot-glow: 0 0 100px rgba(247,248,250,0.06), 0 0 50px rgba(247,248,250,0.10);
+  --dot-glow-hover: 0 0 100px rgba(247,248,250,0.10), 0 0 50px rgba(247,248,250,0.16);
+  /* Same geometry, applied as text-shadow (see body rule below) — opacity
+     dropped further since text-shadow at this blur radius reads as a soft
+     halo around whole paragraphs, not a per-letter effect. */
+  --text-glow: 0 0 100px rgba(247,248,250,0.18), 0 0 50px rgba(247,248,250,0.28);
 }
 
 /* ─── Base ─────────────────────────────────────────────────────────────────── */
@@ -87,6 +96,10 @@
   body {
     @apply bg-graphite-950 text-graphite-100 font-sans;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    /* text-shadow inherits by default, so one declaration here carries the
+       same dot-glow treatment onto every piece of text in the app — see
+       --text-glow above. */
+    text-shadow: var(--text-glow);
   }
 
   /* Belt-and-suspenders on top of color-scheme: dark above — Chrome/Firefox/

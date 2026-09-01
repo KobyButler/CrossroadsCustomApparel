@@ -186,7 +186,35 @@ a block that ends after the hero released the header early once that
 block scrolled out of view; hoisting it fixed that. Shop-detail's own
 cart-status bar and Checkout's step-aware back link now stack in a second
 sticky bar directly beneath it (`top-16`, the header's exact height)
-instead of duplicating header chrome. -->
+instead of duplicating header chrome.
+
+Rev. 6.1 (2026-09-01, same day), three more explicit follow-ups. (1) The
+hero garment now casts a soft ambient drop shadow onto the card beneath it
+(`SeparationHero`'s `#shirtShadow` SVG filter, `feDropShadow`), so it
+reads as sitting on the light table rather than pasted flat on top of it.
+(2) The squeegee pull was reversed from left-to-right to top-to-bottom by
+explicit request, which surfaced a real Framer Motion limitation worth
+recording: a `<clipPath>` child driven by Framer's declarative
+animate/initial silently never re-clips in this browser for ANY animated
+geometry attribute — the attribute lands on the element correctly, the
+clip just never recomputes from it, confirmed by DOM probes across
+several isolated tests (a hand-written `<rect>` mutated via plain
+`setAttribute` DOES re-clip correctly every time). The fix: the clip
+rect's `width` is now driven imperatively from a `useEffect`, via Framer's
+own `animate()` function calling `setAttribute` through a ref on every
+frame — same easing/timing, different application path. Direction itself
+comes from a static (non-animated) `rotate(-90 ...)` on the rect, applied
+directly on the shape rather than a wrapping `<g>` (a `<g>` wrapper inside
+`<clipPath>` isn't reliably honored either). See the comment at
+`SeparationHero.tsx`'s `squeegeeClip` definition for the full mechanism.
+(3) The dot-glow tokens (`--dot-glow`/`--dot-glow-hover`, Rev. 6 above)
+were widened to a two-layer 100px+50px blur by explicit spec, plus a new
+`--text-glow` variant of the same geometry applied once on `body` (`text-
+shadow` inherits, so this alone reaches every piece of text in the app).
+Opacity on both was kept low relative to the old 44–56px values
+specifically because blur radii this large read as a flat wash rather
+than a glow at typical box-shadow/text-shadow alpha. -->
+
 
 ## Overview
 
@@ -291,7 +319,7 @@ One canvas, one glow treatment, one sheen, both registers — only the panel obj
 **Persuade objects** are deliberately different registers, and neither ever tilts. **Separation cards** (`.separation-card`) sit dead square with a registration crosshair fixed at the top-left corner that snaps to `var(--spot-bright)` on hover, lifting 4px with a spot-colored glow (`shadow-plate-hover`). **Spec panels** (`.spec-panel`) share the same plate material but hold still, no crosshair — the register for structured content that should read as legible and calm.
 
 **Named Rules**
-**The Dot-Glow Rule.** Every shadowed surface in the app — panels, cards, buttons, badges, form fields, both registers — closes its box-shadow with one of two shared tokens, `--dot-glow` (rest) / `--dot-glow-hover` (hover/interactive), defined once in `globals.css` `:root` and reused everywhere, including inside the shared Tailwind `console`/`console-hover`/`glow-*`/`plate`/`plate-hover` shadow tokens. It's a wide, soft, low-opacity white halo — not a real drop shadow — that brightens the canvas's own dot texture in a ring just outside the surface's edge, so every object reads as if it's casting a little light onto the light table or instrument panel behind it. New shadowed components extend one of these tokens rather than inventing a new white glow value.
+**The Dot-Glow Rule.** Every shadowed surface in the app — panels, cards, buttons, badges, form fields, both registers — closes its box-shadow with one of two shared tokens, `--dot-glow` (rest) / `--dot-glow-hover` (hover/interactive), defined once in `globals.css` `:root` and reused everywhere, including inside the shared Tailwind `console`/`console-hover`/`glow-*`/`plate`/`plate-hover` shadow tokens. Each is a two-layer wide, soft, low-opacity white halo (0 0 100px + 0 0 50px, an outer haze and a tighter brighter core) — not a real drop shadow — that brightens the canvas's own dot texture in a ring just outside the surface's edge, so every object reads as if it's casting a little light onto the light table or instrument panel behind it. `--text-glow` is the same geometry applied once as `text-shadow` on `body` (inherited app-wide) since text-shadow reads as a halo around whole words at this blur radius rather than a per-letter effect, so its opacity runs lower than the box-shadow tokens'. New shadowed components extend one of these tokens rather than inventing a new white glow value.
 
 **The Earned Glow Rule.** Depth and glow answer to something real — a primary action, genuine urgency, the app's own ambience — never sprinkled on for its own sake, in either register.
 
