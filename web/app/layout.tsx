@@ -6,7 +6,7 @@ export const metadata = {
     metadataBase: new URL("https://crossroadscustomapparel.com"),
     title: "Crossroads Custom Apparel | Custom Screen Printing & Embroidery",
     description: "Custom screen printing and embroidery for tees, hoodies, hats, and more. Browse open shops or get in touch to start your order — locally owned in Castle Dale, Utah.",
-    icons: { icon: "/icon.svg" },
+    icons: { icon: "/icon.png" },
     openGraph: {
         title: "Crossroads Custom Apparel",
         description: "Custom screen printing & embroidery for teams, schools, and events.",
