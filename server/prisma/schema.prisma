@@ -45,6 +45,19 @@ model Product {
   youthProductId   String?     @unique
   youthProduct     Product?    @relation("AdultYouthLink", fields: [youthProductId], references: [id], onDelete: SetNull)
   adultProduct     Product?    @relation("AdultYouthLink")
+
+  // The price actually charged for the linked youth variant above, in cents.
+  // null (the default, and what every existing link now resolves to) means
+  // "mirror this product's own priceCents" — the youth version costs
+  // whatever the admin has this adult product priced at, and stays in sync
+  // automatically if that price changes. Set only when the admin
+  // deliberately wants the youth size to cost something different. This is
+  // NOT the same thing as youthProduct.priceCents, which is that other
+  // Product row's own raw price field (e.g. left over from a SanMar import
+  // at wholesale cost) and is never read for money purposes — see
+  // resolveProductPriceCents() in utils/pricing.ts, the one place this gets
+  // resolved into what a customer is actually shown and charged.
+  youthPriceCents  Int?
 }
 
 model Shop {

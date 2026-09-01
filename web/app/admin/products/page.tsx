@@ -16,7 +16,7 @@ import { getColorCss } from "@/lib/colors";
 const EASE = [0.16, 1, 0.3, 1] as [number, number, number, number];
 
 type Shop = { id: string; name: string; slug: string };
-type YouthProductRef = { id: string; name: string; vendorIdentifier?: string | null; sizeChartUrl?: string | null };
+type YouthProductRef = { id: string; name: string; vendorIdentifier?: string | null; sizeChartUrl?: string | null; priceCents?: number };
 type Product = {
     id: string; name: string; sku: string; vendor: string;
     vendorIdentifier?: string; brand?: string; description?: string;
@@ -25,6 +25,11 @@ type Product = {
     upchargeEnabled?: boolean; upchargeCents?: number; weightOz?: number | null;
     youthProductId?: string | null;
     youthProduct?: YouthProductRef | null;
+    // What the linked youth variant actually costs at checkout — null (the
+    // default) means it mirrors this product's own priceCents, kept in sync
+    // automatically; a number means the admin set a deliberate override. See
+    // resolveProductPriceCents on the server.
+    youthPriceCents?: number | null;
 };
 
 const VENDOR_LABELS: Record<string, string> = { SANMAR:"SanMar", SSACTIVEWEAR:"S&S Activewear", OTHER:"Other" };
@@ -32,7 +37,7 @@ const VENDOR_COLORS: Record<string, string> = { SANMAR:"info", SSACTIVEWEAR:"suc
 const EMPTY = {
     name:"", sku:"", vendor:"OTHER", vendorIdentifier:"", brand:"", description:"", priceDollars:"",
     shopIds:[] as string[], sizes:[] as string[], colors:[] as string[], images:[] as string[],
-    sizeChartUrl:"", youthLink: null as YouthProductRef | null, youthSizeChartUrl:"",
+    sizeChartUrl:"", youthLink: null as YouthProductRef | null, youthSizeChartUrl:"", youthPriceDollars:"",
     upchargeEnabled:false, upchargeDollars:"3.00", weightOz:""
 };
 
@@ -317,10 +322,11 @@ function SizeChartUploader({ url, onChange, label = "Size Chart (PDF)" }: { url:
 // from any shop until the admin decides otherwise. The link is edited from
 // the adult side only; a product already linked as someone's youth shows
 // read-only info instead, so there's one place to manage each pair.
-function YouthLinkPanel({ products, editProductId, adultColors, value, onChange, sizeChartUrl, onSizeChartChange }: {
-    products: Product[]; editProductId: string | null; adultColors: string[];
+function YouthLinkPanel({ products, editProductId, adultColors, adultPriceDollars, value, onChange, sizeChartUrl, onSizeChartChange, priceDollars, onPriceChange }: {
+    products: Product[]; editProductId: string | null; adultColors: string[]; adultPriceDollars: string;
     value: YouthProductRef | null; onChange: (v: YouthProductRef | null) => void;
     sizeChartUrl: string; onSizeChartChange: (url: string) => void;
+    priceDollars: string; onPriceChange: (dollars: string) => void;
 }) {
     const { toast } = useToast();
     const [query, setQuery] = useState("");
@@ -436,7 +442,28 @@ function YouthLinkPanel({ products, editProductId, adultColors, value, onChange,
                     </div>
                 </div>
                 <div className="mt-3">
-                    <SizeChartUploader url={sizeChartUrl} onChange={onSizeChartChange} label="Youth Size Chart (PDF)" />
+                    <label className="field-label">Youth Size Pricing</label>
+                    <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-graphite-500 text-sm pointer-events-none">$</span>
+                        <input
+                            type="number" min="0" step="0.01" inputMode="decimal"
+                            value={priceDollars}
+                            onChange={e => onPriceChange(e.target.value)}
+                            placeholder={`${adultPriceDollars || "0.00"} (same as Adult)`}
+                            className="w-full pl-6 pr-3 py-2 text-sm border border-white/10 rounded-md outline-none focus:border-signal-cyan/60 focus:ring-2 focus:ring-signal-cyan/30 bg-white/[0.03] text-white placeholder:text-graphite-500 transition-all"
+                        />
+                        {priceDollars && (
+                            <button type="button" onClick={() => onPriceChange("")}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-graphite-300 hover:text-white">
+                                Reset
+                            </button>
+                        )}
+                    </div>
+                    <p className="text-xs text-graphite-300 mt-1.5">
+                        {priceDollars
+                            ? "This youth size is priced separately from Adult."
+                            : `Defaults to Adult's price ($${adultPriceDollars || "0.00"}) and stays in sync with it automatically. Type a value above only if the youth size should cost something different.`}
+                    </p>
                 </div>
             </div>
         );
@@ -838,8 +865,9 @@ export default function ProductsPage() {
             sizes:p.sizesJson?JSON.parse(p.sizesJson):[], colors:p.colorsJson?JSON.parse(p.colorsJson):[],
             images:p.imagesJson?JSON.parse(p.imagesJson):[],
             sizeChartUrl: p.sizeChartUrl ?? "",
-            youthLink: p.youthProduct ? { id: p.youthProduct.id, name: p.youthProduct.name, vendorIdentifier: p.youthProduct.vendorIdentifier } : null,
+            youthLink: p.youthProduct ? { id: p.youthProduct.id, name: p.youthProduct.name, vendorIdentifier: p.youthProduct.vendorIdentifier, priceCents: p.youthProduct.priceCents } : null,
             youthSizeChartUrl: p.youthProduct?.sizeChartUrl ?? "",
+            youthPriceDollars: p.youthPriceCents != null ? (p.youthPriceCents / 100).toFixed(2) : "",
             upchargeEnabled: Boolean(p.upchargeEnabled), upchargeDollars: ((p.upchargeCents ?? 300)/100).toFixed(2),
             weightOz: p.weightOz != null ? String(p.weightOz) : "",
         });
@@ -889,6 +917,12 @@ export default function ProductsPage() {
                 sizeChartUrl: form.sizeChartUrl || null,
                 youthProductId: form.youthLink?.id || null,
                 youthSizeChartUrl: form.youthLink ? (form.youthSizeChartUrl || "") : undefined,
+                // Blank = inherit this product's own price (the default); a
+                // number = the admin's deliberate override. Only sent when a
+                // youth product is actually linked.
+                youthPriceCents: form.youthLink
+                    ? (form.youthPriceDollars.trim() ? Math.round(parseFloat(form.youthPriceDollars) * 100) : null)
+                    : undefined,
                 upchargeEnabled:form.upchargeEnabled,
                 upchargeCents:Math.round(parseFloat(form.upchargeDollars || "0")*100) || 300,
                 weightOz: form.weightOz.trim() ? Math.round(parseFloat(form.weightOz)) : null,
@@ -1203,9 +1237,10 @@ export default function ProductsPage() {
                     <SizeChartUploader url={form.sizeChartUrl} onChange={sizeChartUrl => setForm(p => ({ ...p, sizeChartUrl }))}
                         label={form.youthLink ? "Adult Size Chart (PDF)" : "Size Chart (PDF)"} />
 
-                    <YouthLinkPanel products={products} editProductId={editProduct?.id ?? null} adultColors={form.colors}
+                    <YouthLinkPanel products={products} editProductId={editProduct?.id ?? null} adultColors={form.colors} adultPriceDollars={form.priceDollars}
                         value={form.youthLink} onChange={youthLink => setForm(p => ({ ...p, youthLink }))}
-                        sizeChartUrl={form.youthSizeChartUrl} onSizeChartChange={youthSizeChartUrl => setForm(p => ({ ...p, youthSizeChartUrl }))} />
+                        sizeChartUrl={form.youthSizeChartUrl} onSizeChartChange={youthSizeChartUrl => setForm(p => ({ ...p, youthSizeChartUrl }))}
+                        priceDollars={form.youthPriceDollars} onPriceChange={youthPriceDollars => setForm(p => ({ ...p, youthPriceDollars }))} />
 
                     <ModalFooter>
                         <Button type="button" variant="outline" onClick={() => { setShowAdd(false); setEditProduct(null); }}>Cancel</Button>

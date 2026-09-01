@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { prisma } from '../prisma.js';
 import slugify from '../utils/slugify.js';
 import { requireAuth } from '../middleware/auth.js';
+import { resolveProductPriceCents } from '../utils/pricing.js';
 
 export const router = Router();
 
@@ -90,7 +91,15 @@ router.get('/:slug', async (req, res) => {
         ...s,
         products: s.products.map(({ youthProduct, adultProduct, ...p }) => ({
             ...p,
-            youthVariant: youthProduct ?? null,
+            // This product's own displayed price, resolved in case it's
+            // itself a linked youth variant (listed directly in the shop
+            // rather than only reached via its adult's toggle) — see
+            // resolveProductPriceCents.
+            priceCents: resolveProductPriceCents({ priceCents: p.priceCents, adultProduct }),
+            youthVariant: youthProduct
+                ? { ...youthProduct, priceCents: resolveProductPriceCents({ priceCents: youthProduct.priceCents, adultProduct: p }) }
+                : null,
+            // The adult side is never overridden — its own price is always authoritative.
             adultVariant: adultProduct ?? null
         }))
     });

@@ -2,8 +2,8 @@ import { Router } from 'express';
 import { prisma } from '../prisma.js';
 import { requireAuth, AuthUser } from '../middleware/auth.js';
 import { sendOrderConfirmation, sendOfflinePaymentNotification } from '../utils/email.js';
-import { computeItemPriceCents } from '../utils/pricing.js';
-import { buildShopGroups, applyDiscountAcrossGroups, allocateShippingAcrossGroups, newOrderGroupId, assertShippingAllowed } from '../utils/checkoutHelpers.js';
+import { computeItemPriceCents, resolveProductPriceCents } from '../utils/pricing.js';
+import { buildShopGroups, applyDiscountAcrossGroups, allocateShippingAcrossGroups, newOrderGroupId, assertShippingAllowed, assertShopsAvailable } from '../utils/checkoutHelpers.js';
 import { quoteShipping, buyLabelForOrder } from '../utils/shippingCalc.js';
 import { diffScalarFields, diffItems, recordOrderHistory } from '../utils/orderHistory.js';
 import { quoteOrderTax } from '../utils/tax.js';
@@ -74,14 +74,15 @@ router.post('/', async (req, res) => {
 
     const uniqueProductIds = [...new Set<string>(items.map((i: any) => i.productId))];
     const products = await prisma.product.findMany({
-        where: { id: { in: uniqueProductIds } }
+        where: { id: { in: uniqueProductIds } },
+        include: { adultProduct: { select: { priceCents: true, youthPriceCents: true } } }
     });
     if (products.length !== uniqueProductIds.length) return res.status(400).json({ error: 'invalid product(s)' });
 
     let subtotal = 0;
     const orderItems = items.map((i: any) => {
         const p = products.find(pp => pp.id === i.productId)!;
-        const price = computeItemPriceCents(p, i.size);
+        const price = computeItemPriceCents({ ...p, priceCents: resolveProductPriceCents(p) }, i.size);
         subtotal += price * i.quantity;
         return { productId: p.id, quantity: i.quantity, size: i.size ?? null, color: i.color ?? null, priceCents: price };
     });
@@ -188,6 +189,7 @@ router.post('/checkout', async (req, res) => {
     let groups;
     try {
         groups = await buildShopGroups(items);
+        assertShopsAvailable(groups);
         if (isShipping) assertShippingAllowed(groups);
     } catch (err: any) {
         return res.status(400).json({ error: err.message });
@@ -361,7 +363,10 @@ router.put('/:id', requireAuth, async (req, res) => {
     }
 
     const uniqueProductIds = [...new Set<string>(items.map((i: any) => i.productId))];
-    const products = await prisma.product.findMany({ where: { id: { in: uniqueProductIds } } });
+    const products = await prisma.product.findMany({
+        where: { id: { in: uniqueProductIds } },
+        include: { adultProduct: { select: { priceCents: true, youthPriceCents: true } } }
+    });
     if (products.length !== uniqueProductIds.length) return res.status(400).json({ error: 'invalid product(s)' });
     const productMap = new Map(products.map(p => [p.id, p]));
 
@@ -369,7 +374,7 @@ router.put('/:id', requireAuth, async (req, res) => {
         const p = productMap.get(i.productId)!;
         const priceCents = i.priceCents !== undefined && i.priceCents !== null && i.priceCents !== ''
             ? Math.round(Number(i.priceCents))
-            : computeItemPriceCents(p, i.size);
+            : computeItemPriceCents({ ...p, priceCents: resolveProductPriceCents(p) }, i.size);
         return {
             id: i.id ? String(i.id) : undefined,
             productId: p.id, productName: p.name,

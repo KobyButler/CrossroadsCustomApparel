@@ -24,7 +24,11 @@ const uploadPdf = multer({
 export const router = Router();
 
 const shopSelect = { select: { id: true, name: true, slug: true } };
-const youthSelect = { select: { id: true, name: true, vendorIdentifier: true, sizeChartUrl: true } };
+// priceCents here is the youth product's own raw stored price (e.g. a SanMar
+// import at wholesale cost) — shown in the admin UI only as reference next to
+// the "Youth Size Pricing" override field; it is never what a customer is
+// charged. See youthPriceCents on the adult product and resolveProductPriceCents.
+const youthSelect = { select: { id: true, name: true, vendorIdentifier: true, sizeChartUrl: true, priceCents: true } };
 
 // Writes a size chart URL onto a linked youth product (called after the adult
 // product's own save succeeds). undefined means "not touched by this save" —
@@ -123,7 +127,8 @@ router.post('/sizechart/upload', uploadPdf.single('sizechart'), async (req, res)
 router.post('/', async (req, res) => {
     const {
         name, sku, vendor, vendorIdentifier, brand, description, priceCents, images, sizes, colors,
-        shopIds, upchargeEnabled, upchargeCents, weightOz, sizeChartUrl, youthProductId, youthSizeChartUrl
+        shopIds, upchargeEnabled, upchargeCents, weightOz, sizeChartUrl, youthProductId, youthSizeChartUrl,
+        youthPriceCents
     } = req.body;
     if (!Array.isArray(colors) || colors.length === 0) {
         return res.status(400).json({ error: 'At least one color is required.' });
@@ -145,6 +150,11 @@ router.post('/', async (req, res) => {
                 ...(upchargeCents !== undefined ? { upchargeCents } : {}),
                 ...(weightOz !== undefined ? { weightOz: weightOz === null ? null : Number(weightOz) } : {}),
                 youthProductId: youthProductId || null,
+                // null/omitted/blank = inherit this product's own priceCents for
+                // the linked youth variant (the default); only a real number
+                // means the admin deliberately set a different youth price.
+                youthPriceCents: youthPriceCents === undefined || youthPriceCents === null || youthPriceCents === ''
+                    ? null : Math.round(Number(youthPriceCents)),
                 ...(Array.isArray(shopIds) && shopIds.length
                     ? { shops: { connect: shopIds.map((id: string) => ({ id })) } }
                     : {})
@@ -175,7 +185,8 @@ router.get('/:id', async (req, res) => {
 router.put('/:id', async (req, res) => {
     const {
         name, sku, vendor, vendorIdentifier, brand, description, priceCents, images, sizes, colors,
-        shopIds, upchargeEnabled, upchargeCents, weightOz, sizeChartUrl, youthProductId, youthSizeChartUrl
+        shopIds, upchargeEnabled, upchargeCents, weightOz, sizeChartUrl, youthProductId, youthSizeChartUrl,
+        youthPriceCents
     } = req.body;
     if (!Array.isArray(colors) || colors.length === 0) {
         return res.status(400).json({ error: 'At least one color is required.' });
@@ -205,6 +216,9 @@ router.put('/:id', async (req, res) => {
                 ...(upchargeCents !== undefined ? { upchargeCents } : {}),
                 ...(weightOz !== undefined ? { weightOz: weightOz === null ? null : Number(weightOz) } : {}),
                 ...(youthProductId !== undefined ? { youthProductId: youthProductId || null } : {}),
+                ...(youthPriceCents !== undefined
+                    ? { youthPriceCents: youthPriceCents === null || youthPriceCents === '' ? null : Math.round(Number(youthPriceCents)) }
+                    : {}),
                 ...(Array.isArray(shopIds)
                     ? { shops: { set: shopIds.map((id: string) => ({ id })) } }
                     : {})

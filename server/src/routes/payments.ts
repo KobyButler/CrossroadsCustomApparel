@@ -3,7 +3,7 @@ import Stripe from 'stripe';
 import { prisma } from '../prisma.js';
 import { config } from '../config.js';
 import { sendOrderConfirmation } from '../utils/email.js';
-import { buildShopGroups, applyDiscountAcrossGroups, allocateShippingAcrossGroups, newOrderGroupId, assertShippingAllowed } from '../utils/checkoutHelpers.js';
+import { buildShopGroups, applyDiscountAcrossGroups, allocateShippingAcrossGroups, newOrderGroupId, assertShippingAllowed, assertShopsAvailable } from '../utils/checkoutHelpers.js';
 import { quoteShipping } from '../utils/shippingCalc.js';
 import { quoteOrderTax } from '../utils/tax.js';
 import { getStripe } from '../utils/stripeClient.js';
@@ -82,6 +82,7 @@ router.post('/create-intent', async (req: Request, res: Response) => {
     let groups;
     try {
         groups = await buildShopGroups(items, shopSlug ?? null);
+        assertShopsAvailable(groups);
         if (isShipping) assertShippingAllowed(groups);
     } catch (err: any) {
         return res.status(400).json({ error: err.message });
