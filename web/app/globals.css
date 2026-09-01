@@ -102,6 +102,16 @@
     text-shadow: var(--text-glow);
   }
 
+  /* Headings get the requested glow directly and at full strength (no
+     color given, so it resolves to currentColor at that element's own
+     opacity — a real halo, not the toned-down body-wide --text-glow
+     above, which reads as near-invisible at heading sizes/colors). This
+     overrides the inherited --text-glow for h1-h5 specifically, both
+     registers, everywhere in the app. */
+  h1, h2, h3, h4, h5 {
+    text-shadow: 0 0 100px;
+  }
+
   /* Belt-and-suspenders on top of color-scheme: dark above — Chrome/Firefox/
      Edge all respect explicit color/background-color on <option>, and a
      dropdown's own popup doesn't inherit the closed <select> box's

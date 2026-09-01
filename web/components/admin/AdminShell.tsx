@@ -88,12 +88,14 @@ function SidebarContent({ onNav }: { onNav?: () => void }) {
         <div className="flex flex-col h-full">
             {/* Brand */}
             <div className="px-4 py-5 flex flex-col items-center gap-1.5">
+                {/* See PublicHeader.tsx for why this needs an explicit h-* / w-* —
+                    logo.png is actually square, not this landscape ratio. */}
                 <Image
                     src="/logo.png"
                     alt="Crossroads Custom Apparel"
-                    width={132}
+                    width={52}
                     height={52}
-                    className="object-contain"
+                    className="object-contain h-[52px] w-[52px] shrink-0"
                     priority
                 />
                 <div className="flex items-center gap-1.5 text-[10px] font-medium tracking-wide text-graphite-300">
@@ -266,7 +268,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
                             </svg>
                         </button>
-                        <Image src="/logo.png" alt="Crossroads Custom Apparel" width={100} height={40} className="object-contain" />
+                        <Image src="/logo.png" alt="Crossroads Custom Apparel" width={40} height={40} className="object-contain h-[40px] w-[40px] shrink-0" />
                     </div>
 
                     {/* overflow-x-clip (not overflow-x-hidden) on purpose: per the CSS overflow

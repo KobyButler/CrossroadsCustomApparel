@@ -49,7 +49,15 @@ export function PublicHeader({
                         </Link>
                     )}
                     <Link href="/" className="flex items-center gap-2 shrink-0">
-                        <Image src="/logo.png" alt="Crossroads Custom Apparel" width={110} height={44} className="object-contain" priority />
+                        {/* logo.png is actually a square (1024x1024) source, not the
+                            landscape ratio these props imply — with a mismatched
+                            width/height, Next's optimizer emits a square image and
+                            Tailwind preflight's `img { height: auto }` then renders the
+                            box at width×width instead of width×height, overflowing
+                            whatever container it's in. An explicit h-* / w-* pins the
+                            actual box regardless; object-contain still letterboxes the
+                            (slightly portrait) crest inside it. See DESIGN.md. */}
+                        <Image src="/logo.png" alt="Crossroads Custom Apparel" width={44} height={44} className="object-contain h-[44px] w-[44px] shrink-0" priority />
                     </Link>
                 </div>
 
