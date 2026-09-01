@@ -8,7 +8,9 @@ export function PublicFooter() {
         <footer className="relative z-10 border-t border-plate-800">
             <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 flex flex-col sm:flex-row items-center justify-between gap-4">
                 <Link href="/" className="flex items-center gap-3">
-                    <Image src="/logo.png" alt="Crossroads Custom Apparel" width={100} height={40} className="object-contain" />
+                    {/* See PublicHeader.tsx for why this needs an explicit h-* / w-* —
+                        logo.png is actually square, not this landscape ratio. */}
+                    <Image src="/logo.png" alt="Crossroads Custom Apparel" width={40} height={40} className="object-contain h-[40px] w-[40px] shrink-0" />
                 </Link>
                 <div className="text-center sm:text-right">
                     <p className="text-xs text-plate-300">

@@ -61,12 +61,14 @@ export default function LoginPage() {
                             transition={{ delay: 0.1, duration: 0.35, ease: EASE }}
                             className="mb-4 flex justify-center"
                         >
+                            {/* logo.png is actually square — see PublicHeader.tsx for
+                                why this needs an explicit h-* / w-*. */}
                             <Image
                                 src="/logo.png"
                                 alt="Crossroads Custom Apparel"
-                                width={160}
+                                width={80}
                                 height={80}
-                                className="object-contain mx-auto"
+                                className="object-contain mx-auto h-[80px] w-[80px]"
                                 priority
                             />
                         </motion.div>

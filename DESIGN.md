@@ -213,7 +213,29 @@ were widened to a two-layer 100px+50px blur by explicit spec, plus a new
 shadow` inherits, so this alone reaches every piece of text in the app).
 Opacity on both was kept low relative to the old 44–56px values
 specifically because blur radii this large read as a flat wash rather
-than a glow at typical box-shadow/text-shadow alpha. -->
+than a glow at typical box-shadow/text-shadow alpha.
+
+Rev. 6.2 (2026-09-01, same day), two bug fixes surfaced by explicit
+reports. (1) `logo.png` is actually a square 1024x1024 source (0.887:1
+content once you exclude its transparent padding), but all six `<Image>`
+call sites across the app passed it a wide landscape width/height (e.g.
+110×44). Tailwind preflight's `img { height: auto }` combined with
+Next.js's optimizer emitting a square output for a mismatched target
+meant every one of them actually rendered at width×width instead of
+width×height — invisible where there was headroom (the login card, the
+admin sidebar) but a hard overflow in `PublicHeader`'s fixed `h-16` bar,
+where a 110×110 box poked 23px above the sticky header's own bounds.
+Fixed by giving each instance a matching square width/height plus an
+explicit `h-[Npx] w-[Npx]` class, which overrides preflight's `height:
+auto` regardless of what the optimizer emits — the fix generalizes to any
+future `logo.png` placement, not just the six caught here. (2) The h1-h5
+text-shadow request (Rev. 6.1's `--text-glow`, tuned low specifically to
+avoid a "haze over paragraphs" look) wasn't visible enough on actual
+headings — white glow behind white text reads as far subtler than the
+same value on colored text, so a second explicit rule, `h1,h2,h3,h4,h5 {
+text-shadow: 0 0 100px; }` (no color given, so it resolves to that
+heading's own currentColor at full strength), now overrides the inherited
+`--text-glow` for headings specifically, both registers. -->
 
 
 ## Overview

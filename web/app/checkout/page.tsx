@@ -262,7 +262,7 @@ export default function CheckoutPage() {
                     </div>
                     <p className="text-xs text-plate-300 mb-6">A confirmation email will be sent to {form.customerEmail}</p>
                     <div className="border-t border-plate-700 pt-5 space-y-4">
-                        <Image src="/logo.png" alt="Crossroads Custom Apparel" width={120} height={48} className="mx-auto object-contain opacity-80" />
+                        <Image src="/logo.png" alt="Crossroads Custom Apparel" width={48} height={48} className="mx-auto object-contain opacity-80 h-[48px] w-[48px]" />
                         <Link href="/shops" className="text-sm text-proc-cyan hover:brightness-125 font-bold">← Back to all shops</Link>
                     </div>
                 </motion.div>
