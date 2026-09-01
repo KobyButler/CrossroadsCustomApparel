@@ -105,7 +105,7 @@ function SidebarContent({ onNav }: { onNav?: () => void }) {
             <div className="h-px bg-white/[0.06] mx-4 mb-2" />
 
             {/* Navigation */}
-            <nav className="flex-1 px-4 py-1 space-y-0.5 overflow-y-auto console-scroll">
+            <nav className="flex-1 px-4 py-1 space-y-0.5 overflow-y-auto press-scroll">
                 {NAV.map(item => {
                     const isActive = pathname === item.href ||
                         (item.href !== "/admin" && pathname?.startsWith(item.href));
@@ -190,10 +190,12 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
     const [mobileOpen, setMobileOpen] = useState(false);
 
     const isPublic = pathname === "/" || pathname?.startsWith("/shop/") || pathname === "/shops" || pathname === "/checkout" || pathname === "/login";
-    // "The Manifest Line" console world is the whole admin app's system — every
-    // /admin/* route renders on the dark console shell below. Public routes
+    // Every /admin/* route renders on the sidebar shell below. Public routes
     // (the landing page, storefront, checkout, login) render their own root
-    // directly, since they skip this shell entirely (see isPublic above).
+    // directly and skip this shell entirely (see isPublic above) — a
+    // structural split only. Since Rev. 5 (see DESIGN.md) admin/login and the
+    // public storefront share one visual identity ("The Print Floor"); login
+    // just has no sidebar to render, the same reason a public page doesn't.
 
     // Auth guard
     useEffect(() => {
@@ -213,7 +215,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
 
     return (
         <ToastProvider>
-            <div className="min-h-screen flex console-canvas text-graphite-100">
+            <div className="min-h-screen flex press-canvas text-graphite-100">
 
                 {/* ── Desktop sidebar (always visible ≥ lg) ── */}
                 <aside className="no-print console-sidebar hidden lg:flex w-[220px] xl:w-[248px] shrink-0 flex-col sticky top-0 h-screen overflow-y-auto scrollbar-none">
@@ -253,7 +255,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
                 <div className="flex-1 min-w-0 flex flex-col">
 
                     {/* Mobile top bar */}
-                    <div className="no-print lg:hidden sticky top-0 z-30 flex items-center gap-3 px-4 py-3 backdrop-blur-md border-b border-white/[0.06] bg-[#0a0c10]/85">
+                    <div className="no-print lg:hidden sticky top-0 z-30 flex items-center gap-3 px-4 py-3 backdrop-blur-md border-b border-white/[0.06] bg-[#0A0D14]/85">
                         <button
                             type="button"
                             onClick={() => setMobileOpen(true)}

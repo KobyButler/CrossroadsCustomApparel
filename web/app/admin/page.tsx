@@ -146,7 +146,7 @@ export default function Dashboard() {
                 className="flex flex-col sm:flex-row sm:items-end justify-between gap-3"
             >
                 <div>
-                    <h1 className="text-2xl font-semibold text-white tracking-tight">Dashboard</h1>
+                    <h1 className="page-title">Dashboard</h1>
                     <p className="text-sm text-graphite-300 mt-1">Here's what's happening with your print shop today.</p>
                 </div>
                 <div className="flex gap-2.5 flex-wrap">
