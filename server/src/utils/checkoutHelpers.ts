@@ -1,5 +1,5 @@
 import { prisma } from '../prisma.js';
-import { computeItemPriceCents } from './pricing.js';
+import { computeItemPriceCents, resolveProductPriceCents } from './pricing.js';
 
 export type CheckoutItemInput = {
     productId: string;
@@ -14,6 +14,13 @@ export type ShopGroup = {
     shopId: string | null;
     shopName: string | null;
     shopShippingEnabled: boolean;
+    // Whether this group's shop is still purchasable right now — false if the
+    // shop was found but has expired, gone inactive, or been archived since
+    // the item was added to the cart. null when the item has no shop context
+    // at all (e.g. an admin-created order not tied to any shop), which is
+    // never treated as unavailable. See assertShopsAvailable.
+    shopAvailable: boolean | null;
+    shopExpired: boolean;
     items: { productId: string; quantity: number; size: string | null; color: string | null; priceCents: number }[];
     subtotal: number;
     shippingCents: number;
@@ -31,7 +38,10 @@ export async function buildShopGroups(
     }
 
     const uniqueProductIds = [...new Set(items.map(i => i.productId))];
-    const products = await prisma.product.findMany({ where: { id: { in: uniqueProductIds } } });
+    const products = await prisma.product.findMany({
+        where: { id: { in: uniqueProductIds } },
+        include: { adultProduct: { select: { priceCents: true, youthPriceCents: true } } }
+    });
     if (products.length !== uniqueProductIds.length) {
         throw new Error('One or more products were not found');
     }
@@ -41,16 +51,20 @@ export async function buildShopGroups(
     const shops = slugs.length ? await prisma.shop.findMany({ where: { slug: { in: slugs } } }) : [];
     const shopBySlug = new Map(shops.map(s => [s.slug, s]));
 
+    const now = new Date();
     const groups = new Map<string | null, ShopGroup>();
     for (const i of items) {
         const slug = i.shopSlug ?? topLevelShopSlug ?? null;
         const product = productMap.get(i.productId)!;
-        const priceCents = computeItemPriceCents(product, i.size);
+        const priceCents = computeItemPriceCents({ ...product, priceCents: resolveProductPriceCents(product) }, i.size);
         if (!groups.has(slug)) {
             const shop = slug ? shopBySlug.get(slug) : undefined;
+            const shopExpired = !!shop?.expiresAt && shop.expiresAt <= now;
             groups.set(slug, {
                 slug, shopId: shop?.id ?? null, shopName: shop?.name ?? null,
                 shopShippingEnabled: shop?.shippingEnabled ?? true,
+                shopAvailable: shop ? (shop.active && !shop.archived && !shopExpired) : (slug ? false : null),
+                shopExpired,
                 items: [], subtotal: 0, shippingCents: 0
             });
         }
@@ -110,6 +124,27 @@ export function allocateShippingAcrossGroups(groups: ShopGroup[], totalShippingC
 
 export function newOrderGroupId(): string {
     return `og_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+}
+
+// Throws if any shop represented in the cart is no longer purchasable — most
+// commonly because an item sat in the customer's cart (persisted in
+// localStorage, so it can easily outlive the shop) past the shop's own
+// expiration date, but also covers a shop the admin deactivated or archived
+// in the meantime. Re-checked here, at the moment of checkout, since the
+// storefront's own shop page already 404s once a shop expires — a cart built
+// before that moment is otherwise the one path that never re-validates it.
+export function assertShopsAvailable(groups: ShopGroup[]): void {
+    const blocked = groups.find(g => g.shopAvailable === false);
+    if (blocked) {
+        if (blocked.shopExpired) {
+            throw new Error("This product's shop has expired. Please remove item from your cart before checking out");
+        }
+        throw new Error(
+            blocked.shopName
+                ? `"${blocked.shopName}" is no longer available. Please remove its items from your cart before checking out.`
+                : "This product's shop is no longer available. Please remove item from your cart before checking out"
+        );
+    }
 }
 
 // Throws if the customer chose "Ship" but any shop represented in the cart has
