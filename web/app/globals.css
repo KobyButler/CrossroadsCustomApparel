@@ -331,6 +331,12 @@
     radial-gradient(ellipse 900px 480px at 12% -10%, rgba(0,174,239,0.08), transparent 60%),
     radial-gradient(ellipse 760px 520px at 106% 28%, rgba(236,0,140,0.06), transparent 62%);
   background-size: 6px 6px, auto, auto;
+  /* background-attachment takes one value per background-image layer — only
+     the dot grid (the first layer) is pinned to the viewport, matching the
+     ::before/::after glow blobs below (which stay fixed because they ARE
+     fixed-position elements, not because of this). The two ellipse glows
+     keep scrolling with the page, unchanged. */
+  background-attachment: fixed, scroll, scroll;
   position: relative;
   isolation: isolate;
 }
@@ -554,7 +560,7 @@
    seven-segment challenger. */
 .segment-cell {
   position: relative;
-  width: 0.62em;
+  width: 0.82em;
   height: 1em;
   margin: 0 0.05em;
 }
