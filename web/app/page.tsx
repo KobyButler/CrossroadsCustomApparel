@@ -27,9 +27,11 @@ STORY: A parent or office manager taps a shared link and reads, in seconds,
 that this shop's gear is really decorated in-house by a real production
 floor — not a dropship template — and that their group's order batches
 into one real run.
-FIRST VIEWPORT: four misregistered CMYK halftone separations of a garment
-snap into alignment on a glowing light table beside the headline, closing
-with one exposure-unit flash — the mechanism demonstrated, not described.
+FIRST VIEWPORT: a real screen-print pull, beside the headline — a squeegee
+drags across the actual Crossroads logo, printed in black (the exposed
+screen, not yet inked), uncovering the true full-color logo already
+underneath as it passes, on a solid-color shirt sitting on a glowing light
+table — the mechanism demonstrated, not described.
 FORM: The Print Floor — IMPECCABLE'S PICK (top-ranked grounded candidate,
 not the roll's assigned index), locked by the user over "The Scorebug"
 (broadcast-graphics direction, seed key 95845a44) and 6 declined catalog
@@ -193,7 +195,7 @@ export default function HomePage() {
                         className="order-1 lg:order-2">
                         <SeparationHero />
                         <p className="text-center font-spec text-[11px] uppercase tracking-wider text-plate-500 mt-4 max-w-md mx-auto">
-                            Job #001 · 4/4 separations registered · ready for press
+                            Job #001 · screen registered · print pass complete
                         </p>
                     </motion.div>
                 </div>

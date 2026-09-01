@@ -43,9 +43,11 @@ direction, "The Scorebug"; the user locked IMPECCABLE'S PICK instead).
 One Pantone spot ink per shop (crimson/cobalt/marigold/emerald, hashed
 per shop id) carries every accent inside that shop's context. A true
 seven-segment mask carries the closing countdown and live counts. One
-signature load moment: four CMYK separations of a hand-drawn garment
-snap into register on the landing hero, closing with an exposure flash,
-never repeated. Full contract in app/page.tsx.
+signature load moment, updated 2026-09-01 by direct request: a real
+squeegee pull drags across the actual Crossroads logo on the landing
+hero, printed in black (the exposed screen) until the pass reveals the
+true full-color logo already underneath, never repeated. Full contract
+in app/page.tsx.
 
 OPERATE (Admin, Login): extended 2026-09-01 by explicit follow-up
 request ("extend it to the rest of the site... should look like this"),
