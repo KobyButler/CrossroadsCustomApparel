@@ -18,7 +18,39 @@ type Transaction = {
 };
 type Summary = { grossCents:number; netCents:number; orders:number };
 
+type StripeSummary = {
+    days: number; availableCents: number; pendingCents: number;
+    grossCents: number; feeCents: number; netCents: number; refundedCents: number;
+    chargeCount: number; refundCount: number;
+};
+type StripeTxRow = {
+    id: string; type: string; description: string | null;
+    grossCents: number; feeCents: number; netCents: number; createdAt: string;
+    orderId: string | null; orderCustomerName: string | null;
+};
+type StripePayout = {
+    id: string; amountCents: number; currency: string; status: string; method: string;
+    arrivalDate: string; createdAt: string; description: string | null;
+};
+
 const TYPE_VARIANT: Record<string, string> = { INCOME:"success", EXPENSE:"danger", REFUND:"info", FEE:"warning" };
+
+// Stripe's own balance-transaction type vocabulary is broader than our
+// simple INCOME/EXPENSE/REFUND/FEE enum (charge/refund/payout/transfer/
+// application_fee/adjustment/...) — labeled and colored on its own terms
+// rather than force-mapped into that narrower vocabulary.
+const STRIPE_TYPE_LABEL: Record<string, string> = {
+    charge: "Charge", refund: "Refund", payout: "Payout", transfer: "Transfer",
+    application_fee: "App Fee", adjustment: "Adjustment", stripe_fee: "Stripe Fee",
+};
+const STRIPE_TYPE_VARIANT: Record<string, string> = {
+    charge: "success", refund: "info", payout: "default", transfer: "warning",
+    application_fee: "warning", adjustment: "default", stripe_fee: "warning",
+};
+const STRIPE_DAY_OPTIONS = [30, 90, 180, 365];
+const PAYOUT_STATUS_VARIANT: Record<string, string> = {
+    paid: "success", pending: "warning", in_transit: "info", failed: "danger", canceled: "danger",
+};
 
 const fmt = (cents: number) =>
     new Intl.NumberFormat("en-US", { style:"currency", currency:"USD" }).format(cents / 100);
@@ -59,7 +91,21 @@ export default function FinancePage() {
     const [saving, setSaving]             = useState(false);
     const [form, setForm]                 = useState({ type:"INCOME", amount:"", note:"" });
 
+    // Real Stripe data — separate loading/error state from the manual ledger
+    // above, since Stripe being unreachable (or not configured) shouldn't
+    // block the rest of the page, which works fine without it.
+    const [stripeDays, setStripeDays]           = useState(90);
+    const [stripeSummary, setStripeSummary]     = useState<StripeSummary | null>(null);
+    const [stripeTx, setStripeTx]               = useState<StripeTxRow[]>([]);
+    const [stripeTxCursor, setStripeTxCursor]   = useState<string | null>(null);
+    const [stripeTxHasMore, setStripeTxHasMore] = useState(false);
+    const [stripePayouts, setStripePayouts]     = useState<StripePayout[]>([]);
+    const [loadingStripe, setLoadingStripe]     = useState(true);
+    const [loadingMoreTx, setLoadingMoreTx]     = useState(false);
+    const [stripeError, setStripeError]         = useState<string | null>(null);
+
     useEffect(() => { fetchData(); }, []);
+    useEffect(() => { fetchStripeData(); }, [stripeDays]);
 
     async function fetchData() {
         setLoading(true);
@@ -69,6 +115,43 @@ export default function FinancePage() {
             setSummary(sumData);
         } catch { /* ignore */ }
         finally { setLoading(false); }
+    }
+
+    async function fetchStripeData() {
+        setLoadingStripe(true);
+        setStripeError(null);
+        try {
+            const [sum, tx, payouts] = await Promise.all([
+                api(`/finance/stripe/summary?days=${stripeDays}`),
+                api(`/finance/stripe/transactions?limit=25&days=${stripeDays}`),
+                api("/finance/stripe/payouts?limit=10"),
+            ]);
+            setStripeSummary(sum);
+            setStripeTx(tx.data ?? []);
+            setStripeTxCursor(tx.nextCursor ?? null);
+            setStripeTxHasMore(Boolean(tx.hasMore));
+            setStripePayouts(payouts.data ?? []);
+        } catch (err: any) {
+            // Most likely cause: STRIPE_SECRET_KEY isn't set on the server.
+            // Shown inline in the Stripe section rather than a toast, since
+            // it's a standing state (not a one-off action failing), and the
+            // rest of the page (manual ledger) still works fine without it.
+            setStripeError(err.message || "Couldn't reach Stripe");
+        } finally {
+            setLoadingStripe(false);
+        }
+    }
+
+    async function loadMoreStripeTx() {
+        if (!stripeTxCursor) return;
+        setLoadingMoreTx(true);
+        try {
+            const tx = await api(`/finance/stripe/transactions?limit=25&days=${stripeDays}&startingAfter=${stripeTxCursor}`);
+            setStripeTx(prev => [...prev, ...(tx.data ?? [])]);
+            setStripeTxCursor(tx.nextCursor ?? null);
+            setStripeTxHasMore(Boolean(tx.hasMore));
+        } catch (err: any) { toast(err.message || "Failed to load more transactions", "error"); }
+        finally { setLoadingMoreTx(false); }
     }
 
     const filtered = transactions.filter(t => {
@@ -135,6 +218,10 @@ export default function FinancePage() {
                 ))}
             </div>
 
+            {/* Manual ledger — your own recorded income/expenses, unaffected by
+                whatever the Stripe section below finds (or doesn't). */}
+            <h2 className="text-xs font-bold text-graphite-300 uppercase tracking-wider">Manual Ledger</h2>
+
             {/* Filters */}
             <div className="flex flex-wrap items-center gap-3">
                 <div className="max-w-xs flex-1">
@@ -200,6 +287,147 @@ export default function FinancePage() {
                     </div>
                 )}
             </div>
+
+            {/* Stripe — real numbers pulled live from Stripe's own ledger
+                (balance-transactions/payouts APIs), separate from the manual
+                entries above. Reflects test-mode activity only until live
+                payments are enabled — same as everywhere else Stripe is used
+                in this app. */}
+            <div className="pt-2 flex items-center justify-between gap-3 flex-wrap">
+                <h2 className="text-xs font-bold text-graphite-300 uppercase tracking-wider">Stripe</h2>
+                {!stripeError && (
+                    <Select value={String(stripeDays)} onChange={e => setStripeDays(Number(e.target.value))} className="w-36">
+                        {STRIPE_DAY_OPTIONS.map(d => <option key={d} value={d}>Last {d} days</option>)}
+                    </Select>
+                )}
+            </div>
+
+            {stripeError ? (
+                <div className="console-panel rounded-lg flex flex-col items-center justify-center py-10 text-graphite-500">
+                    <svg className="w-10 h-10 mb-3 text-signal-amber" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/></svg>
+                    <p className="text-sm text-graphite-300 font-medium">Couldn&apos;t load Stripe data</p>
+                    <p className="text-xs text-graphite-500 mt-0.5 max-w-md text-center px-4">{stripeError}</p>
+                </div>
+            ) : (
+                <>
+                    {/* Stripe KPIs */}
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                        <KpiTile label="Stripe Balance (Available)" value={fmt(stripeSummary?.availableCents ?? 0)} tone="green" loading={loadingStripe} delay={0}
+                            icon={<svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4z"/><path fillRule="evenodd" d="M18 9H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1z" clipRule="evenodd"/></svg>} />
+                        <KpiTile label="Stripe Balance (Pending)" value={fmt(stripeSummary?.pendingCents ?? 0)} tone="cyan" loading={loadingStripe} delay={0.07}
+                            icon={<svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd"/></svg>} />
+                        <KpiTile label={`Stripe Fees (${stripeDays}d)`} value={fmt(stripeSummary?.feeCents ?? 0)} tone="red" loading={loadingStripe} delay={0.14}
+                            icon={<svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 9a1 1 0 000 2h6a1 1 0 100-2H7z" clipRule="evenodd"/></svg>} />
+                        <KpiTile label={`Net After Fees (${stripeDays}d)`} value={fmt((stripeSummary?.grossCents ?? 0) - (stripeSummary?.feeCents ?? 0))} tone="green" loading={loadingStripe} delay={0.21}
+                            icon={<svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"/></svg>} />
+                    </div>
+                    {stripeSummary && !loadingStripe && (
+                        <p className="text-xs text-graphite-500 -mt-2">
+                            {stripeSummary.chargeCount} charge{stripeSummary.chargeCount !== 1 ? "s" : ""} · {stripeSummary.refundCount} refund{stripeSummary.refundCount !== 1 ? "s" : ""} · {fmt(stripeSummary.refundedCents)} refunded in the last {stripeDays} days
+                        </p>
+                    )}
+
+                    {/* Stripe transaction ledger */}
+                    <div className="console-panel rounded-lg overflow-hidden">
+                        {loadingStripe ? (
+                            <div className="p-8 space-y-3">
+                                {[1,2,3,4].map(i => (
+                                    <div key={i} className="flex items-center gap-4">
+                                        <div className="h-5 w-16 skeleton rounded-full"/>
+                                        <div className="h-4 w-20 skeleton rounded"/>
+                                        <div className="flex-1 h-3 skeleton rounded"/>
+                                        <div className="h-3 w-20 skeleton rounded"/>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : stripeTx.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center py-16 text-graphite-600">
+                                <svg className="w-12 h-12 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17V7a2 2 0 012-2h6.5L21 9v8a2 2 0 01-2 2H11a2 2 0 01-2-2z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 7v10a2 2 0 002 2h9"/></svg>
+                                <p className="text-sm text-graphite-300 font-medium">No Stripe activity in the last {stripeDays} days</p>
+                                <p className="text-xs text-graphite-500 mt-0.5">Try a wider window above, or check back once real charges start coming in</p>
+                            </div>
+                        ) : (
+                            <div className="overflow-x-auto">
+                                <div className="table-wrap"><table className="data-table">
+                                    <thead><tr><th>Type</th><th>Gross</th><th>Fee</th><th>Net</th><th>Order</th><th>Date</th></tr></thead>
+                                    <tbody>
+                                        {stripeTx.map((tx, idx) => (
+                                            <motion.tr key={tx.id} initial={{ opacity:0, y:4 }} animate={{ opacity:1, y:0 }} transition={{ delay:Math.min(idx*0.02, 0.3), duration:0.2 }}>
+                                                <td>
+                                                    <Badge variant={(STRIPE_TYPE_VARIANT[tx.type] ?? "default") as any} size="sm">
+                                                        {STRIPE_TYPE_LABEL[tx.type] ?? (tx.type.charAt(0).toUpperCase() + tx.type.slice(1).replace(/_/g, " "))}
+                                                    </Badge>
+                                                </td>
+                                                <td><span className="text-sm font-mono tabular-nums text-graphite-200">{fmt(tx.grossCents)}</span></td>
+                                                <td><span className="text-sm font-mono tabular-nums text-graphite-400">{tx.feeCents > 0 ? `−${fmt(tx.feeCents)}` : "—"}</span></td>
+                                                <td>
+                                                    <span className={`text-sm font-bold font-mono tabular-nums ${tx.netCents >= 0 ? "text-signal-green" : "text-signal-red"}`}>
+                                                        {tx.netCents >= 0 ? "+" : ""}{fmt(tx.netCents)}
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    {tx.orderId ? (
+                                                        <div>
+                                                            <p className="text-sm text-graphite-200">{tx.orderCustomerName}</p>
+                                                            <p className="text-xs font-mono text-graphite-300">#{tx.orderId.slice(-8).toUpperCase()}</p>
+                                                        </div>
+                                                    ) : <span className="text-graphite-500">{tx.description ?? "—"}</span>}
+                                                </td>
+                                                <td><span className="text-xs font-mono text-graphite-300">{new Date(tx.createdAt).toLocaleDateString("en-US", { month:"short", day:"numeric", year:"2-digit" })}</span></td>
+                                            </motion.tr>
+                                        ))}
+                                    </tbody>
+                                </table></div>
+                                {stripeTxHasMore && (
+                                    <div className="flex justify-center p-3 border-t border-white/[0.06]">
+                                        <Button variant="outline" size="sm" loading={loadingMoreTx} onClick={loadMoreStripeTx}>Load more</Button>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Payouts — kept separate from the ledger above; a payout is
+                        Stripe moving money the charges/fees already accounted for,
+                        not new revenue in its own right. */}
+                    <h3 className="text-xs font-bold text-graphite-300 uppercase tracking-wider">Recent Payouts</h3>
+                    <div className="console-panel rounded-lg overflow-hidden">
+                        {loadingStripe ? (
+                            <div className="p-8 space-y-3">
+                                {[1,2].map(i => (
+                                    <div key={i} className="flex items-center gap-4">
+                                        <div className="h-5 w-16 skeleton rounded-full"/>
+                                        <div className="h-4 w-20 skeleton rounded"/>
+                                        <div className="flex-1 h-3 skeleton rounded"/>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : stripePayouts.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center py-10 text-graphite-600">
+                                <p className="text-sm text-graphite-300 font-medium">No payouts yet</p>
+                                <p className="text-xs text-graphite-500 mt-0.5">Stripe pays out your available balance on its usual schedule</p>
+                            </div>
+                        ) : (
+                            <div className="overflow-x-auto">
+                                <div className="table-wrap"><table className="data-table">
+                                    <thead><tr><th>Status</th><th>Amount</th><th>Method</th><th>Arrival</th><th>Description</th></tr></thead>
+                                    <tbody>
+                                        {stripePayouts.map(p => (
+                                            <tr key={p.id}>
+                                                <td><Badge variant={(PAYOUT_STATUS_VARIANT[p.status] ?? "default") as any} size="sm">{p.status.charAt(0).toUpperCase() + p.status.slice(1).replace(/_/g, " ")}</Badge></td>
+                                                <td><span className="text-sm font-bold font-mono tabular-nums text-white">{fmt(p.amountCents)}</span></td>
+                                                <td><span className="text-sm text-graphite-300 capitalize">{p.method}</span></td>
+                                                <td><span className="text-xs font-mono text-graphite-300">{new Date(p.arrivalDate).toLocaleDateString("en-US", { month:"short", day:"numeric", year:"2-digit" })}</span></td>
+                                                <td><span className="text-sm text-graphite-300">{p.description ?? <span className="text-graphite-500">—</span>}</span></td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table></div>
+                            </div>
+                        )}
+                    </div>
+                </>
+            )}
 
             {/* Add Modal */}
             <Modal open={showAdd} onClose={() => setShowAdd(false)} title="Add Transaction" size="sm">
