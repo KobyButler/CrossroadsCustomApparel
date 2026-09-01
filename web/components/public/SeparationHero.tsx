@@ -4,20 +4,26 @@
 // exposed screen, not yet inked) — the true full-color logo is already
 // there underneath, and the blade's pass is what reveals it, exactly the
 // way a real screen-print pull deposits ink through a screen onto a shirt.
-// The garment itself is an honest flat silhouette in one solid fabric
-// tone — the halftone-separation concept this hero used before is retired
-// in favor of dramatizing the actual printing motion instead.
+// The garment is a real product photo (public/TSHIRT.webp, a flat-lay
+// blank tee with genuine alpha transparency around it) rather than a
+// hand-drawn silhouette — swapped in by explicit request; the coordinate
+// system below (LOGO_X/Y/SIZE, the viewBox, the shadow filter) is all
+// measured against that photo's own 832x832 pixel space, found by
+// scanning its alpha channel for the collar/sleeve/torso geometry rather
+// than eyeballed.
 import { useEffect, useRef, useState } from "react";
 import { motion, animate } from "framer-motion";
 import { RegistrationMark } from "./RegistrationMark";
 
 const BAR_COLORS = ["#487b74", "#4c6383", "#c65f24", "#eeeade"];
 
-// Logo bounding box inside the 320x340 shirt viewBox — square, centered
-// roughly where the old emblem sat (cx 160, cy 195).
-const LOGO_X = 100;
-const LOGO_Y = 105;
-const LOGO_SIZE = 115;
+// The photo's torso column is flat and stable (left≈184, right≈656,
+// center≈420) from about y=405 down to the hem at y=750, well clear of
+// the sleeves both above and beside it. The print sits centered on that
+// column, starting just below the collar/shoulder transition.
+const LOGO_X = 320;
+const LOGO_Y = 180;
+const LOGO_SIZE = 200;
 
 const sweep = { duration: 1.05, ease: [0.45, 0.05, 0.55, 0.95] as [number, number, number, number] };
 
@@ -57,22 +63,14 @@ export function SeparationHero() {
                     boxShadow: "0 1px 2px rgba(0,0,0,0.6), 0 0 70px -6px rgba(247,248,250,0.4), 0 40px 70px -24px rgba(0,0,0,0.75)",
                 }}
             >
-                {/* Cropped tight around the full garment silhouette (shoulder line at
-                    y=85 through hem at y=292, sleeve tip to sleeve tip at x=34..286)
-                    plus a slim margin — as tight as the shape can go without losing
-                    the collar/shoulder line that reads it as a shirt, centered near
-                    the logo (160,195) so the logo lands dead center. */}
-                <svg viewBox="24 67 272 246" className="w-full h-full p-5" aria-hidden="true">
+                {/* The photo's own alpha bbox is x:[10,822] y:[86,750] (812x664,
+                    aspect 1.22 — close to this card's own 4/3.6≈1.11), so a small
+                    padding around the full bbox both keeps the whole garment in
+                    frame (collar through hem, sleeve tip to sleeve tip) and reads
+                    as a confident, filled close-up rather than a small product
+                    thumbnail floating in empty space. */}
+                <svg viewBox="-4 44 828 748" className="w-full h-full p-5" aria-hidden="true">
                     <defs>
-                        <mask id="garmentMask" maskUnits="userSpaceOnUse">
-                            <rect width="320" height="340" fill="black" />
-                            <g fill="white">
-                                <path d="M98,98 L130,85 C138,100 172,100 180,85 L222,98 Q160,126 90,105 Z" />
-                                <rect x="85" y="96" width="150" height="196" rx="22" />
-                                <polygon points="95,100 34,150 60,190 85,177" />
-                                <polygon points="225,100 286,150 260,190 235,177" />
-                            </g>
-                        </mask>
                         {/* Maps every opaque logo pixel to solid black while keeping its
                             real alpha — the "screen exposed, not yet pulled" state. */}
                         <filter id="toBlack" colorInterpolationFilters="sRGB">
@@ -80,13 +78,14 @@ export function SeparationHero() {
                         </filter>
                         {/* A soft ambient shadow cast by the garment itself onto the light
                             table beneath it, so it reads as sitting on the surface rather
-                            than pasted flat on top of it. */}
+                            than pasted flat on top of it. Scaled up from the old hand-
+                            drawn version's values to match this photo's much larger
+                            (832x832) coordinate space. */}
                         <filter id="shirtShadow" x="-30%" y="-30%" width="160%" height="160%">
-                            <feDropShadow dx="0" dy="9" stdDeviation="7" floodColor="#14161c" floodOpacity="0.28" />
+                            <feDropShadow dx="0" dy="18" stdDeviation="14" floodColor="#14161c" floodOpacity="0.3" />
                         </filter>
-                        {/* Vertical now (top-to-bottom pull) — the bright stop sits at
-                            100%, the blade's bottom/leading edge in the direction of
-                            travel. */}
+                        {/* Vertical (top-to-bottom pull) — the bright stop sits at 100%,
+                            the blade's bottom/leading edge in the direction of travel. */}
                         <linearGradient id="squeegeeBlade" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="0%" stopColor="#3A3D42" />
                             <stop offset="35%" stopColor="#0A0A0C" />
@@ -115,15 +114,16 @@ export function SeparationHero() {
                         <clipPath id="squeegeeClip">
                             <rect
                                 ref={clipRectRef}
-                                x={LOGO_X} y={LOGO_Y - 6} width={LOGO_SIZE} height={LOGO_SIZE + 12}
+                                x={LOGO_X} y={LOGO_Y - 10} width={LOGO_SIZE} height={LOGO_SIZE + 20}
                                 transform={`rotate(-90 ${LOGO_X + LOGO_SIZE / 2} ${LOGO_Y + LOGO_SIZE / 2})`}
                             />
                         </clipPath>
                     </defs>
 
-                    {/* Shirt — one honest flat fabric tone, no separations. */}
-                    <g mask="url(#garmentMask)" filter="url(#shirtShadow)">
-                        <rect width="320" height="340" fill="#AFB4BC" />
+                    {/* Shirt — the real product photo, alpha-cut, casting its own
+                        soft shadow onto the card. */}
+                    <g filter="url(#shirtShadow)">
+                        <image href="/TSHIRT.webp" x="0" y="0" width="832" height="832" />
                     </g>
 
                     {/* The printed logo group — the true full-color logo underneath
@@ -142,7 +142,7 @@ export function SeparationHero() {
                         <image href="/logo.png" x={LOGO_X} y={LOGO_Y} width={LOGO_SIZE} height={LOGO_SIZE} />
 
                         {/* The black "unprinted screen" layer, clipped away from the
-                            left as the squeegee passes. */}
+                            top as the squeegee passes. */}
                         <g clipPath="url(#squeegeeClip)">
                             <image href="/logo.png" x={LOGO_X} y={LOGO_Y} width={LOGO_SIZE} height={LOGO_SIZE} filter="url(#toBlack)" />
                         </g>
@@ -150,16 +150,17 @@ export function SeparationHero() {
 
                     {/* The squeegee itself — a slight rubber-blade gradient with a
                         bright leading edge, dragging top to bottom in exact sync with
-                        the clip boundary above. */}
+                        the clip boundary above. Held perfectly flat/horizontal by
+                        explicit request (no skew), instead of a printer's usual
+                        drag-angle lean. */}
                     <motion.g
                         initial={{ y: LOGO_Y }}
                         animate={printing ? { y: LOGO_Y + LOGO_SIZE } : {}}
                         transition={sweep}
                     >
                         <motion.rect
-                            x={LOGO_X - 14} y={-7} width={LOGO_SIZE + 28} height={14} rx="3"
+                            x={LOGO_X - 20} y={-11} width={LOGO_SIZE + 40} height={22} rx="5"
                             fill="url(#squeegeeBlade)"
-                            transform="skewY(-8)"
                             initial={{ opacity: 0 }}
                             animate={printing ? { opacity: [0, 1, 1, 0] } : {}}
                             transition={{ ...sweep, times: [0, 0.08, 0.92, 1] }}
