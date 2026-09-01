@@ -103,20 +103,25 @@ module.exports = {
                 "modal":      "0 25px 60px rgba(0,0,0,0.25), 0 10px 24px rgba(0,0,0,0.15)",
                 "inner-glow": "inset 0 1px 0 rgba(255,255,255,0.08)",
                 // Console depth system — real elevation, cyan/signal glow, no violet.
-                "console":       "0 1px 2px rgba(0,0,0,0.5), 0 10px 24px -8px rgba(0,0,0,0.6)",
-                "console-hover": "0 2px 6px rgba(0,0,0,0.55), 0 20px 44px -10px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.06)",
+                // Every token below closes with var(--dot-glow)/--dot-glow-hover (see
+                // globals.css :root) — the same wide, soft, low-opacity white halo the
+                // hand-authored .console-panel/.separation-card/.spec-panel/.press-btn-*
+                // rules carry, so every shadowed surface in the app (panels, modals,
+                // toasts, buttons, badges) casts the same light onto the dot grid.
+                "console":       "0 1px 2px rgba(0,0,0,0.5), 0 10px 24px -8px rgba(0,0,0,0.6), var(--dot-glow)",
+                "console-hover": "0 2px 6px rgba(0,0,0,0.55), 0 20px 44px -10px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.06), var(--dot-glow-hover)",
                 "console-inset": "inset 0 1px 0 rgba(255,255,255,0.05), inset 0 0 0 1px rgba(255,255,255,0.06)",
-                "glow-cyan":    "0 0 1px rgba(0,174,239,0.5), 0 0 28px rgba(0,174,239,0.40), 0 6px 20px rgba(0,0,0,0.45)",
-                "glow-cyan-sm": "0 0 14px rgba(0,174,239,0.35)",
-                "glow-green":   "0 0 20px rgba(22,122,77,0.4)",
-                "glow-amber":   "0 0 20px rgba(231,162,46,0.4)",
-                "glow-red":     "0 0 20px rgba(201,52,32,0.4)",
+                "glow-cyan":    "0 0 1px rgba(0,174,239,0.5), 0 0 28px rgba(0,174,239,0.40), 0 6px 20px rgba(0,0,0,0.45), var(--dot-glow)",
+                "glow-cyan-sm": "0 0 14px rgba(0,174,239,0.35), var(--dot-glow)",
+                "glow-green":   "0 0 20px rgba(22,122,77,0.4), var(--dot-glow)",
+                "glow-amber":   "0 0 20px rgba(231,162,46,0.4), var(--dot-glow)",
+                "glow-red":     "0 0 20px rgba(201,52,32,0.4), var(--dot-glow)",
                 // "The Print Floor" — light-table elevation: cards read as
                 // backlit film sitting on a glowing surface in a dark room,
                 // never a warm paper drop shadow. Spot-color glow is added
                 // inline via var(--spot-dim) since the accent is per-shop.
-                "plate":       "0 1px 2px rgba(0,0,0,0.5), 0 10px 26px -8px rgba(0,0,0,0.7)",
-                "plate-hover": "0 2px 6px rgba(0,0,0,0.55), 0 22px 46px -10px rgba(0,0,0,0.75), 0 0 0 1px rgba(247,248,250,0.06)",
+                "plate":       "0 1px 2px rgba(0,0,0,0.5), 0 10px 26px -8px rgba(0,0,0,0.7), var(--dot-glow)",
+                "plate-hover": "0 2px 6px rgba(0,0,0,0.55), 0 22px 46px -10px rgba(0,0,0,0.75), 0 0 0 1px rgba(247,248,250,0.06), var(--dot-glow-hover)",
                 "plate-lit":   "0 1px 2px rgba(0,0,0,0.5), 0 0 32px -6px rgba(247,248,250,0.20), 0 10px 26px -8px rgba(0,0,0,0.7)",
             },
             borderRadius: {

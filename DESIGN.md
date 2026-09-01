@@ -150,7 +150,43 @@ edit. `.console-canvas` was retired in favor of the shared `.press-canvas`
 (same file, same rules, one definition instead of two that only ever
 existed to match each other). SCOPE: every route in the app now shares one
 palette, one type system, and one canvas — the only remaining split is
-register (Operate vs Persuade, see Overview), not identity. -->
+register (Operate vs Persuade, see Overview), not identity.
+
+Rev. 6 (2026-09-01, same day) is a polish pass over Rev. 5's unified
+system, in four parts, all by explicit request. (1) The landing hero's
+garment crop was tightened from the whole shirt with generous margin to a
+close-up centered on the logo (`SeparationHero`'s `viewBox`), reading
+noticeably larger while still keeping the full shoulder line in frame — a
+tighter crop that loses the collar reads as an unrecognizable gray blob,
+not a bigger shirt, so the crop stops exactly at the shoulder line, no
+tighter. (2) The soft white "dot-glow" halo first added to
+`.separation-card`/`.spec-panel`/`.console-panel` (an ambient shadow term
+that brightens the canvas's dot texture just outside a surface's edge, not
+a real drop shadow) now runs on every shadowed surface in the app —
+buttons (`.press-btn-*`, both `Button` variants), badges
+(`.colorbar-badge`), and form fields (`Input`/`Select`) — via two shared
+tokens, `--dot-glow`/`--dot-glow-hover` (`globals.css` `:root`), appended
+as the last term of every relevant shadow, including the shared Tailwind
+`console`/`console-hover`/`glow-*`/`plate`/`plate-hover` tokens so Modal,
+Toast, and AdminShell's mobile sidebar inherited it for free. See the
+Dot-Glow Rule under Elevation & Depth. (3) Size and color selection in a
+Group Shop now answers to the shop's own `var(--spot)` ink on hover and
+selection, the same register `.separation-card-interactive` already uses
+— new `.spot-chip`/`.spot-swatch` classes, replacing bespoke per-instance
+inline styling at all four call sites (product-grid and detail-drawer,
+size and color). (4) `PublicHeader` was elevated from a per-page logo/cart
+strip into the one persistent navigation banner for every Persuade page
+(Home, Shops, How It Works, Contact, plus the cart pill and a
+route-specific back link), `position: sticky` so it never leaves the
+viewport regardless of scroll depth, with its own mobile slide-down menu
+below `md`. It is now a direct child of each page's `min-h-screen` root
+rather than nested inside a shorter hero-only wrapper — sticky's
+containing block is its nearest block-level ancestor, so nesting it inside
+a block that ends after the hero released the header early once that
+block scrolled out of view; hoisting it fixed that. Shop-detail's own
+cart-status bar and Checkout's step-aware back link now stack in a second
+sticky bar directly beneath it (`top-16`, the header's exact height)
+instead of duplicating header chrome. -->
 
 ## Overview
 
@@ -242,7 +278,7 @@ The shell is a fixed 220px (248px at `xl`) dark sidebar on desktop plus a fluid 
 
 ### Persuade (Public Storefront)
 
-No sidebar — a full-bleed canvas with a centered `max-w-5xl`–`max-w-6xl` content column and a simple top header (logo, optional back link, cart pill), consistent with browsing rather than operating. Section rhythm is generous (`py-16`–`py-20`, more space above a heading than below it) except the landing hero (`py-12`–`py-14`, kept tight to hold the squeegee-pull hero visual near the fold). Grids collapse `sm:grid-cols-3 → grid-cols-1`; a shop/product grid with fewer than three real items fills remaining slots with a dashed `GhostSlot` rather than bare canvas (capped to one on mobile). Fixed-position registration-mark corners (`PressFrame`) sit pinned to every viewport's four corners on every page, both registers — structural chrome, not decoration.
+No sidebar — a full-bleed canvas with a centered `max-w-5xl`–`max-w-6xl` content column and one persistent sticky navigation banner (`PublicHeader`: logo, Home/Shops/How It Works/Contact, cart pill, optional route back-link, a slide-down menu below `md`) pinned to the top of every Persuade page regardless of scroll depth — consistent with browsing rather than operating. `PublicHeader` is always a direct child of the page's own `min-h-screen` root, never nested inside a shorter block, so `position: sticky` has the full page as its containing block. A page with its own contextual sub-bar (Shop-detail's cart-status strip, Checkout's step-aware back link) stacks it directly beneath the header in a second `sticky top-16` bar rather than replacing the header. Section rhythm is generous (`py-16`–`py-20`, more space above a heading than below it) except the landing hero (`py-12`–`py-14`, kept tight to hold the squeegee-pull hero visual near the fold). Grids collapse `sm:grid-cols-3 → grid-cols-1`; a shop/product grid with fewer than three real items fills remaining slots with a dashed `GhostSlot` rather than bare canvas (capped to one on mobile). Fixed-position registration-mark corners (`PressFrame`) sit pinned to every viewport's four corners on every page, both registers — structural chrome, not decoration.
 
 ## Elevation & Depth
 
@@ -255,6 +291,8 @@ One canvas, one glow treatment, one sheen, both registers — only the panel obj
 **Persuade objects** are deliberately different registers, and neither ever tilts. **Separation cards** (`.separation-card`) sit dead square with a registration crosshair fixed at the top-left corner that snaps to `var(--spot-bright)` on hover, lifting 4px with a spot-colored glow (`shadow-plate-hover`). **Spec panels** (`.spec-panel`) share the same plate material but hold still, no crosshair — the register for structured content that should read as legible and calm.
 
 **Named Rules**
+**The Dot-Glow Rule.** Every shadowed surface in the app — panels, cards, buttons, badges, form fields, both registers — closes its box-shadow with one of two shared tokens, `--dot-glow` (rest) / `--dot-glow-hover` (hover/interactive), defined once in `globals.css` `:root` and reused everywhere, including inside the shared Tailwind `console`/`console-hover`/`glow-*`/`plate`/`plate-hover` shadow tokens. It's a wide, soft, low-opacity white halo — not a real drop shadow — that brightens the canvas's own dot texture in a ring just outside the surface's edge, so every object reads as if it's casting a little light onto the light table or instrument panel behind it. New shadowed components extend one of these tokens rather than inventing a new white glow value.
+
 **The Earned Glow Rule.** Depth and glow answer to something real — a primary action, genuine urgency, the app's own ambience — never sprinkled on for its own sake, in either register.
 
 **The Nothing-Tilts Rule.** No card, badge, or tile in this system ever rotates, in either register — registration crosshairs snapping square is the whole depth vocabulary. This is the deliberate opposite of the retired kraft-crate world's scattered tag tilt, not an oversight.
@@ -306,6 +344,10 @@ Precise, technical radii — `0.5rem` (buttons) to `0.625rem` (separation cards)
 **Ghost Slot** (`components/public/GhostSlot.tsx`) — a dashed, unfilled grid slot ("Next job opening soon") that fills a sparse shop grid honestly rather than fabricating shops. Capped to one on mobile.
 
 **Press Frame** (`components/public/PressFrame.tsx`) — four fixed-position registration crosshairs pinned to the viewport's corners on every page, both registers.
+
+**Public Header** (`components/public/PublicHeader.tsx`) — the one persistent, sticky navigation banner for every Persuade page: logo, Home/Shops/How It Works/Contact (the active route underlined in `proc-cyan`), the cart pill, an optional route-specific back link, and a slide-down mobile menu below `md`. Always a direct child of the page's own `min-h-screen` root so its `sticky` positioning spans the full page.
+
+**Spot Chip / Spot Swatch** (`.spot-chip`, `.spot-swatch`, `globals.css`) — size and color selection in a Group Shop. Same hover/selected language as `.separation-card-interactive`: `var(--spot)` border and glow on hover, a filled `var(--spot)` background once selected — never a hardcoded accent color.
 
 ## Do's and Don'ts
 

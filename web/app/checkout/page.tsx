@@ -16,6 +16,7 @@ import { getColorCss } from "@/lib/colors";
 import { StripePaymentForm } from "@/components/storefront/StripePaymentForm";
 import { PressButton } from "@/components/public/PressButton";
 import { PressFrame } from "@/components/public/PressFrame";
+import { PublicHeader } from "@/components/public/PublicHeader";
 
 const EASE = [0.16, 1, 0.3, 1] as [number, number, number, number];
 
@@ -174,8 +175,10 @@ export default function CheckoutPage() {
     /* ── Empty cart ── */
     if (cart.length === 0 && step === "review") {
         return (
-            <div className="press-canvas min-h-screen flex items-center justify-center p-4 font-press">
+            <div className="press-canvas min-h-screen flex flex-col font-press">
                 <PressFrame />
+                <PublicHeader />
+                <div className="flex-1 flex items-center justify-center p-4">
                 <motion.div initial={{ opacity:0, scale:0.95 }} animate={{ opacity:1, scale:1 }} transition={{ duration:0.35, ease:EASE }}
                     className="spec-panel rounded-lg p-8 text-center max-w-md">
                     <div className="w-16 h-16 bg-plate-950 border border-plate-700 rounded-lg flex items-center justify-center mx-auto mb-4">
@@ -185,6 +188,7 @@ export default function CheckoutPage() {
                     <p className="text-sm text-plate-300 mb-5">Browse a group shop to add items to your cart.</p>
                     <Link href="/shops"><PressButton type="button">Browse Shops</PressButton></Link>
                 </motion.div>
+                </div>
             </div>
         );
     }
@@ -269,15 +273,20 @@ export default function CheckoutPage() {
     return (
         <div className="press-canvas min-h-screen flex flex-col font-press">
             <PressFrame />
-            {/* Header */}
-            <div className="sticky top-0 z-20 bg-plate-950/90 backdrop-blur-md border-b border-plate-800">
-                <div className="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
+
+            {/* ── Nav — persistent across every public page, see PublicHeader.
+                Checkout suppresses its own cart pill (itemCount omitted) since
+                the pill's whole job is "go to checkout," which is redundant
+                here. ── */}
+            <PublicHeader />
+
+            {/* ── STEP-AWARE BACK BAR — stacks directly below the persistent
+                PublicHeader (top-16 = its 64px height), never overlapping it ── */}
+            <div className="sticky top-16 z-20 bg-plate-950/90 backdrop-blur-md border-b border-plate-800">
+                <div className="max-w-5xl mx-auto px-4 sm:px-6 h-11 flex items-center">
                     <Link href="/shops" className="text-sm font-bold text-plate-300 hover:text-plate-50 flex items-center gap-1 transition-colors">
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/></svg>
                         {step === "payment" ? "Edit order" : "Continue shopping"}
-                    </Link>
-                    <Link href="/">
-                        <Image src="/logo.png" alt="Crossroads Custom Apparel" width={100} height={40} className="object-contain" />
                     </Link>
                 </div>
             </div>

@@ -11,6 +11,8 @@ import { SeparationHero } from "@/components/public/SeparationHero";
 import { PressFrame } from "@/components/public/PressFrame";
 import { GhostSlot } from "@/components/public/GhostSlot";
 import { PublicFooter } from "@/components/public/PublicFooter";
+import { PublicHeader } from "@/components/public/PublicHeader";
+import { useCart } from "@/lib/cart";
 import { getShopSpot, spotVars, SPOTS } from "@/lib/spot";
 
 /*
@@ -134,6 +136,7 @@ function ShopTile({ shop, idx }: { shop: ShopListing; idx: number }) {
 
 export default function HomePage() {
     const [shops, setShops] = useState<ShopListing[] | null>(null);
+    const { itemCount, subtotalCents } = useCart();
 
     useEffect(() => {
         publicFetch("/shops/directory").then(setShops).catch(() => setShops([]));
@@ -145,21 +148,8 @@ export default function HomePage() {
         <div className="press-canvas min-h-screen flex flex-col font-press">
             <PressFrame />
 
-            {/* ── Nav ────────────────────────────────────────────────────────── */}
-            <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease: EASE }}
-                className="relative z-30 border-b border-plate-800">
-                <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-                    <Link href="/" className="shrink-0">
-                        <Image src="/logo.png" alt="Crossroads Custom Apparel" width={44} height={44} className="object-contain rounded-md" priority />
-                    </Link>
-                    <nav aria-label="Primary" className="hidden sm:flex items-center gap-7 text-sm font-bold text-plate-300">
-                        <a href="#how-it-works" className="hover:text-plate-100 transition-colors">How It Works</a>
-                        <a href="#shops" className="hover:text-plate-100 transition-colors">Shops</a>
-                        <a href="#contact" className="hover:text-plate-100 transition-colors">Contact</a>
-                    </nav>
-                    <Link href="/shops"><PressButton variant="primary" size="sm">Browse Shops</PressButton></Link>
-                </div>
-            </motion.div>
+            {/* ── Nav — persistent across every public page, see PublicHeader ── */}
+            <PublicHeader itemCount={itemCount} subtotalCents={subtotalCents} />
 
             {/* ── Hero ───────────────────────────────────────────────────────── */}
             <header className="relative overflow-hidden">
@@ -229,7 +219,7 @@ export default function HomePage() {
                 </section>
 
                 {/* ── How It Works — a registration guide strings the three stops ── */}
-                <section id="how-it-works" className="border-y border-plate-800 bg-plate-900/40">
+                <section id="how-it-works" className="scroll-mt-20 border-y border-plate-800 bg-plate-900/40">
                     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-16 sm:py-20">
                         <motion.div initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-80px" }}
                             transition={{ duration: 0.4, ease: [0.32, 0.72, 0, 1] }} className="text-center max-w-xl mx-auto mb-14">
@@ -262,7 +252,7 @@ export default function HomePage() {
                 </section>
 
                 {/* ── Shops preview ──────────────────────────────────────────── */}
-                <section id="shops" className="max-w-6xl mx-auto px-4 sm:px-6 py-16 sm:py-20">
+                <section id="shops" className="scroll-mt-20 max-w-6xl mx-auto px-4 sm:px-6 py-16 sm:py-20">
                     <motion.div initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-80px" }}
                         transition={{ duration: 0.4, ease: [0.32, 0.72, 0, 1] }}
                         className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 mb-10">
@@ -298,7 +288,7 @@ export default function HomePage() {
                 </section>
 
                 {/* ── Contact — a spec plate over the real Castle Dale scenery ── */}
-                <section id="contact" className="relative overflow-hidden border-t border-plate-800">
+                <section id="contact" className="scroll-mt-20 relative overflow-hidden border-t border-plate-800">
                     <div className="absolute inset-0">
                         <Image src="/san-rafael-swell.jpg" alt="The San Rafael Swell near Castle Dale, Utah" fill sizes="100vw"
                             className="object-cover grayscale" style={{ objectPosition: "center 60%" }} />

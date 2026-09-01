@@ -45,9 +45,13 @@ export default function ShopsLandingPage() {
     return (
         <div className="press-canvas min-h-screen flex flex-col relative font-press">
             <PressFrame />
+            {/* PublicHeader is a direct child of this min-h-screen root — not
+                nested inside the (short) hero block below — so its sticky
+                positioning stays anchored for the full scroll length of the
+                page instead of releasing once the hero's own container
+                scrolls out of view. See DESIGN.md. */}
+            <PublicHeader itemCount={itemCount} subtotalCents={subtotalCents} />
             <div className="relative z-10">
-                <PublicHeader itemCount={itemCount} subtotalCents={subtotalCents} />
-
                 <div className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 py-12 sm:py-16 text-center">
                     <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease: EASE }}>
                         <h1 className="font-display uppercase text-3xl sm:text-4xl lg:text-5xl text-plate-50 leading-tight mb-3 tracking-tight">Shops</h1>
