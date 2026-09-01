@@ -23,38 +23,45 @@ export const metadata = {
 // one reliable way React actually emits a literal <!-- --> comment node
 // into shipped markup instead of silently discarding it.
 const DIRECTION_CONTRACT = `<!--
-Two visual worlds now share this app, split by mode, both recorded in
-DESIGN.md -- this comment is the audit trail for both.
+One visual world now covers the whole app, in two registers, recorded in
+DESIGN.md -- this comment is the audit trail.
 
-ADMIN/LOGIN -- "The Manifest Line" (Operate). THESIS: every order is a
-manifest line moving through the shop. OWN-WORLD: near-black graphite
-panels, four disciplined instrument signals (cyan/green/amber/red),
-layered shadows, cyan-family gradients, two ambient glow fields, hover-
-lift everywhere. IBM Plex Sans/Mono. Sharp 6px corners, full-viewport
-content (max-w-1800px). FORM: assigned, index 5 of 7, seed key 6153ece7.
+THESIS: the shop looks like the actual production file that will print
+it -- because in-house, it is -- and the console that runs the shop looks
+like the floor that room sits on. OWN-WORLD: a dark pre-press light-table
+system -- film-positive cards glowing on a backlit table, registration
+crosshairs instead of decoration, a fixed CMYK set reserved for technical
+marks only. Nothing tilts -- everything registers precisely. Big
+Shoulders Display, Public Sans, Fragment Mono, app-wide.
 
-LANDING/GROUP SHOPS/CHECKOUT -- "The Print Floor" (Persuade), replaced
-2026-08-31 by explicit request for a full redesign toward "clean, sleek,
-modern, futuristic... full... not AI feel" -- a hard pivot away from the
-warm kraft-crate world above, retired same-day. THESIS: the shop looks
-like the actual production file that will print it -- because in-house,
-it is. OWN-WORLD: a dark pre-press light-table system -- film-positive
-cards glowing on a backlit table, registration crosshairs instead of
-decoration, one Pantone spot ink per shop (crimson/cobalt/marigold/
-emerald, hashed per shop id), a fixed CMYK set reserved for technical
-marks only. Nothing tilts -- everything registers precisely, the
-opposite signature from the retired world. Big Shoulders Display,
-Public Sans, Fragment Mono; a true seven-segment mask for the closing
-countdown and live counts. FORM: IMPECCABLE'S PICK -- the user locked
-the top-ranked grounded candidate over the roll's assigned direction
-("The Scorebug", a live-broadcast-graphics system, seed key 95845a44)
-and 6 declined catalog challengers. Full contract in app/page.tsx.
+PERSUADE (Landing, Group Shops, Checkout): established 2026-08-31 by
+explicit request for a full public-storefront redesign toward "clean,
+sleek, modern, futuristic... full... not AI feel," replacing a warm
+kraft-crate world retired same-day -- chosen through a structured
+direction round (seed key 95845a44; the roll assigned a live-broadcast
+direction, "The Scorebug"; the user locked IMPECCABLE'S PICK instead).
+One Pantone spot ink per shop (crimson/cobalt/marigold/emerald, hashed
+per shop id) carries every accent inside that shop's context. A true
+seven-segment mask carries the closing countdown and live counts. One
+signature load moment: four CMYK separations of a hand-drawn garment
+snap into register on the landing hero, closing with an exposure flash,
+never repeated. Full contract in app/page.tsx.
 
-SCOPE: Admin and Login render through AdminShell's console branch and
-keep the console system exclusively. Landing, Group Shops, and Checkout
-render through AdminShell's isPublic branch (components/admin/
-AdminShell.tsx) and use the Print Floor system exclusively -- the two
-never mix on one page.
+OPERATE (Admin, Login): extended 2026-09-01 by explicit follow-up
+request ("extend it to the rest of the site... should look like this"),
+retiring "The Manifest Line" as a separate palette/type system. Same
+ground, same process set, same type stack, denser and calmer where the
+storefront is expressive: a persistent sidebar, sharper small radii, no
+per-shop dynamic spot (admin has no single shop) -- instead the same
+four inks run as a locked four-state system (cyan=interactive,
+emerald=success, marigold=needs-action, crimson=critical), the exact
+role the console's original signal colors held. Executed as a token
+value swap, not a markup rewrite: graphite/signal now resolve to the
+same hex as plate/spot-derived inks.
+
+SCOPE: every route shares one palette, one type system, one canvas
+(.press-canvas, .console-canvas retired). The only remaining split is
+register (Operate vs Persuade), never identity.
 FINISH: unreviewed and undocumented is unfinished; this build ends with
 the finish review, the verdict, DESIGN.md, and every shipping raster
 carrying its provenance.

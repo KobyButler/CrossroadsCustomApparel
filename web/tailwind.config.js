@@ -8,48 +8,62 @@ module.exports = {
     theme: {
         extend: {
             fontFamily: {
-                sans: ["IBM Plex Sans", "Inter", "system-ui", "-apple-system", "sans-serif"],
-                mono: ["IBM Plex Mono", "ui-monospace", "SFMono-Regular", "monospace"],
-                // "The Print Floor" — public storefront system (see DESIGN.md). Kept
-                // separate from the admin console's IBM Plex stack on purpose: the
-                // storefront is a different world (Persuade, not Operate). Condensed
-                // industrial display + a technical-form body face + a spec-sheet mono,
-                // none shared with the console and none reflexive AI-UI defaults.
+                // One shared type system app-wide now (see DESIGN.md Rev. 5) — the
+                // console (admin/login) and "The Print Floor" (public storefront)
+                // read as one identity everywhere, not two rooms. `sans`/`mono` are
+                // what the console's own markup calls by default (body text, every
+                // `font-mono` data value); `display`/`press`/`spec` are the same
+                // three faces under the storefront's own names, kept so existing
+                // storefront call sites (`font-display`, `font-press`, `font-spec`)
+                // don't need touching. Condensed industrial display + a
+                // technical-form body face + a spec-sheet mono — none reflexive
+                // AI-UI defaults.
+                sans: ["Public Sans", "system-ui", "-apple-system", "sans-serif"],
+                mono: ["Fragment Mono", "ui-monospace", "SFMono-Regular", "monospace"],
                 display: ["Big Shoulders Display", "Arial Narrow", "sans-serif"],
                 press: ["Public Sans", "system-ui", "-apple-system", "sans-serif"],
                 spec: ["Fragment Mono", "ui-monospace", "SFMono-Regular", "monospace"],
             },
             colors: {
                 // Console/instrument system — "The Manifest Line" (see DESIGN.md).
-                // Graphite is the panel scale; signal colors are semantic only
-                // (never decorative) and named for what they mean, not what they look like.
+                // `graphite` is now the exact same neutral scale as `plate` below,
+                // just kept under its original name since the console's markup
+                // (hundreds of call sites) already addresses it that way — the two
+                // names are one scale, not two. Signal colors are semantic only
+                // (never decorative), named for what they mean, and now resolve to
+                // "The Print Floor"'s own process/spot hues instead of a separate
+                // palette: cyan is the shared process-cyan brand accent; green/
+                // amber/red borrow the storefront's emerald/marigold/crimson spot
+                // inks as this app's own fixed four-state system (admin has no
+                // per-shop context, so these read as constants here, unlike the
+                // storefront's dynamic --spot).
                 graphite: {
-                    50:  "#f3f4f6",
-                    100: "#e3e5e9",
-                    200: "#c3c7d0",
-                    300: "#9aa0ac",
-                    400: "#6f7684",
-                    500: "#4d5563",
-                    600: "#363c48",
-                    700: "#262b35",
-                    800: "#191d25",
-                    900: "#12151b",
-                    950: "#0a0c10",
+                    50:  "#F7F8FA",
+                    100: "#E7E9ED",
+                    200: "#C9CDD6",
+                    300: "#A3AAB6",
+                    400: "#7A8290",
+                    500: "#5C6472",
+                    600: "#414855",
+                    700: "#2B303A",
+                    800: "#1B2029",
+                    900: "#121620",
+                    950: "#0A0D14",
                 },
                 signal: {
-                    cyan:  { DEFAULT: "#33e1ff", dim: "#0f6478", bright: "#a7f3ff" },
-                    green: { DEFAULT: "#3ddc84", dim: "#146538", bright: "#b6f5d2" },
-                    amber: { DEFAULT: "#ffb238", dim: "#7a4d0a", bright: "#ffdca3" },
-                    red:   { DEFAULT: "#ff5c5c", dim: "#7a1f1f", bright: "#ffc2c2" },
+                    cyan:  { DEFAULT: "#00AEEF", dim: "#0a4a63", bright: "#7DDBFF" },
+                    green: { DEFAULT: "#167A4D", dim: "#0c4029", bright: "#8FE0BB" },
+                    amber: { DEFAULT: "#E7A22E", dim: "#6b4813", bright: "#FFD37A" },
+                    red:   { DEFAULT: "#C93420", dim: "#5c1810", bright: "#FF8A73" },
                 },
-                // "The Print Floor" — public storefront (landing, group shops,
-                // checkout). A dark light-table neutral scale (the pre-press
-                // darkroom a screen gets exposed and registered in) plus a fixed,
-                // technical-only process-color set. Each shop's own accent — its
-                // "spot color" — is dynamic, computed by lib/spot.ts and carried as
-                // CSS custom properties (--spot/--spot-bright/--spot-dim/--spot-on),
-                // never a static Tailwind color, so it is not declared here. See
-                // DESIGN.md.
+                // "The Print Floor" — a dark light-table neutral scale (the
+                // pre-press darkroom a screen gets exposed and registered in) plus
+                // a fixed, technical-only process-color set, now shared by every
+                // surface in the app (public storefront and admin/login alike).
+                // Each shop's own accent — its "spot color" — is dynamic, computed
+                // by lib/spot.ts and carried as CSS custom properties
+                // (--spot/--spot-bright/--spot-dim/--spot-on), never a static
+                // Tailwind color, so it is not declared here. See DESIGN.md.
                 plate: {
                     50:  "#F7F8FA",
                     100: "#E7E9ED",
@@ -76,12 +90,12 @@ module.exports = {
             backgroundImage: {
                 "shine": "linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.18) 50%, transparent 60%)",
                 // Console/instrument gradients — cyan-family only, never violet.
-                "console-gradient":        "linear-gradient(180deg, #161b23 0%, #0d1015 100%)",
-                "console-gradient-raised": "linear-gradient(180deg, #1a2029 0%, #12151b 100%)",
-                "signal-cyan-gradient":      "linear-gradient(135deg, #6df0ff 0%, #33e1ff 45%, #0f9dbd 100%)",
-                "signal-cyan-gradient-soft": "linear-gradient(135deg, #33e1ff 0%, #1c8fae 100%)",
+                "console-gradient":        "linear-gradient(180deg, #171B21 0%, #0F1319 100%)",
+                "console-gradient-raised": "linear-gradient(180deg, #1F2530 0%, #171B21 100%)",
+                "signal-cyan-gradient":      "linear-gradient(135deg, #7DDBFF 0%, #00AEEF 45%, #0a6f94 100%)",
+                "signal-cyan-gradient-soft": "linear-gradient(135deg, #00AEEF 0%, #086e91 100%)",
                 "console-sheen": "linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.12) 50%, transparent 60%)",
-                "scan-sweep": "linear-gradient(90deg, transparent, rgba(51,225,255,0.55), transparent)",
+                "scan-sweep": "linear-gradient(90deg, transparent, rgba(0,174,239,0.55), transparent)",
             },
             boxShadow: {
                 "card":       "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)",
@@ -92,11 +106,11 @@ module.exports = {
                 "console":       "0 1px 2px rgba(0,0,0,0.5), 0 10px 24px -8px rgba(0,0,0,0.6)",
                 "console-hover": "0 2px 6px rgba(0,0,0,0.55), 0 20px 44px -10px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.06)",
                 "console-inset": "inset 0 1px 0 rgba(255,255,255,0.05), inset 0 0 0 1px rgba(255,255,255,0.06)",
-                "glow-cyan":    "0 0 1px rgba(51,225,255,0.5), 0 0 28px rgba(51,225,255,0.40), 0 6px 20px rgba(0,0,0,0.45)",
-                "glow-cyan-sm": "0 0 14px rgba(51,225,255,0.35)",
-                "glow-green":   "0 0 20px rgba(61,220,132,0.35)",
-                "glow-amber":   "0 0 20px rgba(255,178,56,0.4)",
-                "glow-red":     "0 0 20px rgba(255,92,92,0.4)",
+                "glow-cyan":    "0 0 1px rgba(0,174,239,0.5), 0 0 28px rgba(0,174,239,0.40), 0 6px 20px rgba(0,0,0,0.45)",
+                "glow-cyan-sm": "0 0 14px rgba(0,174,239,0.35)",
+                "glow-green":   "0 0 20px rgba(22,122,77,0.4)",
+                "glow-amber":   "0 0 20px rgba(231,162,46,0.4)",
+                "glow-red":     "0 0 20px rgba(201,52,32,0.4)",
                 // "The Print Floor" — light-table elevation: cards read as
                 // backlit film sitting on a glowing surface in a dark room,
                 // never a warm paper drop shadow. Spot-color glow is added

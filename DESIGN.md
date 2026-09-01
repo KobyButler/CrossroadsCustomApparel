@@ -1,27 +1,29 @@
 ---
-name: Crossroads Custom Apparel — The Manifest Line & The Print Floor
-description: Two systems split by mode — a dark dispatch console for the sole-operator admin/login ("The Manifest Line") and a pre-press light-table storefront for the public landing, group shops, and checkout ("The Print Floor").
+name: Crossroads Custom Apparel — The Print Floor
+description: One dark pre-press light-table system across the whole app — a denser, calmer Operate register for the sole-operator admin console and login, a fuller Persuade register for the public landing page, group shops, and checkout.
 colors:
-  graphite-950: "#0a0c10"
-  graphite-900: "#12151b"
-  graphite-800: "#191d25"
-  graphite-700: "#262b35"
-  graphite-600: "#363c48"
-  graphite-500: "#4d5563"
-  graphite-400: "#6f7684"
-  graphite-300: "#9aa0ac"
-  graphite-200: "#c3c7d0"
-  graphite-100: "#e3e5e9"
-  signal-cyan: "#33e1ff"
-  signal-cyan-dim: "#0f6478"
-  signal-cyan-bright: "#a7f3ff"
-  signal-green: "#3ddc84"
-  signal-green-dim: "#146538"
-  signal-amber: "#ffb238"
-  signal-amber-dim: "#7a4d0a"
-  signal-amber-bright: "#ffdca3"
-  signal-red: "#ff5c5c"
-  signal-red-dim: "#7a1f1f"
+  graphite-950: "#0A0D14"
+  graphite-900: "#121620"
+  graphite-800: "#1B2029"
+  graphite-700: "#2B303A"
+  graphite-600: "#414855"
+  graphite-500: "#5C6472"
+  graphite-400: "#7A8290"
+  graphite-300: "#A3AAB6"
+  graphite-200: "#C9CDD6"
+  graphite-100: "#E7E9ED"
+  signal-cyan: "#00AEEF"
+  signal-cyan-dim: "#0a4a63"
+  signal-cyan-bright: "#7DDBFF"
+  signal-green: "#167A4D"
+  signal-green-dim: "#0c4029"
+  signal-green-bright: "#8FE0BB"
+  signal-amber: "#E7A22E"
+  signal-amber-dim: "#6b4813"
+  signal-amber-bright: "#FFD37A"
+  signal-red: "#C93420"
+  signal-red-dim: "#5c1810"
+  signal-red-bright: "#FF8A73"
   plate-950: "#0A0D14"
   plate-900: "#121620"
   plate-800: "#1B2029"
@@ -47,33 +49,19 @@ colors:
   spot-emerald-bright: "#8FE0BB"
 typography:
   display:
-    fontFamily: "IBM Plex Sans, Inter, system-ui, sans-serif"
-    fontWeight: 600
-    letterSpacing: "-0.01em"
-  body:
-    fontFamily: "IBM Plex Sans, Inter, system-ui, sans-serif"
-    fontWeight: 400
-  data:
-    fontFamily: "IBM Plex Mono, ui-monospace, monospace"
-    fontWeight: 500
-  label:
-    fontFamily: "IBM Plex Sans, Inter, system-ui, sans-serif"
-    fontWeight: 600
-    letterSpacing: "0.08em"
-  storefront-display:
     fontFamily: "Big Shoulders Display, Arial Narrow, sans-serif"
     fontWeight: 700
     letterSpacing: "-0.01em"
-  storefront-body:
+  body:
     fontFamily: "Public Sans, system-ui, -apple-system, sans-serif"
     fontWeight: 400
-  storefront-data:
+  data:
     fontFamily: "Fragment Mono, ui-monospace, monospace"
     fontWeight: 400
-  storefront-label:
+  label:
     fontFamily: "Fragment Mono, ui-monospace, monospace"
     fontWeight: 400
-    letterSpacing: "0.04em"
+    letterSpacing: "0.06em"
 rounded:
   sm: "0.375rem"
   md: "0.5rem"
@@ -104,7 +92,7 @@ components:
     rounded: "{rounded.sm}"
     padding: "0.5rem 1rem"
   nav-item-active:
-    backgroundColor: "rgba(51,225,255,0.09)"
+    backgroundColor: "rgba(0,174,239,0.09)"
     textColor: "{colors.signal-cyan-bright}"
   button-press-primary:
     backgroundColor: "{colors.spot-crimson}"
@@ -133,266 +121,228 @@ components:
     padding: "0.3rem 0.6rem"
 ---
 
-# Design System: Crossroads Custom Apparel — Two Systems, One App
+# Design System: Crossroads Custom Apparel — The Print Floor
 
-<!-- Rev. 4. Rev. 1 established the admin dashboard 2026-08-29. Rev. 2
-extended that same console system app-wide on 2026-08-30. Rev. 3 (2026-08-31,
-morning) split it into two systems after feedback that the console world read
-as "lifeless and bleak" for the public storefront, introducing a warm
-kraft-crate world, "The Gear Drop." Rev. 4 (2026-08-31, same day) replaces
-The Gear Drop outright after an explicit follow-up request for a full
-redesign toward "clean, sleek, modern, futuristic... full... not a ton of
-empty space or AI feel": Admin and Login keep "The Manifest Line" unchanged
-for a second revision running; Landing, Group Shops, and Checkout move to
-"The Print Floor," a pre-press/screen-print-production world chosen through
-a structured direction round (seed key `95845a44`) — the roll assigned a
-live-broadcast-graphics direction ("The Scorebug"), and the user instead
-locked IMPECCABLE'S PICK, the top-ranked grounded candidate, over that
-assigned card and six declined catalog challengers. The two systems never
-mix on one page — the split is enforced in code at
-`components/admin/AdminShell.tsx`'s `isPublic` branch, not just in this
-document. This build was code-led (no image generation was available in the
-session that built it), reviewed against the written direction contract
-rather than a visual comp, and closed with disposition `fix` after five
-material corrections: two banned kicker/eyebrow labels removed, one
-generic whileInView fade-up varied across sections, a redundant trust-panel
-repeated three times reduced to two genuinely different layouts, and
-inconsistent icon stroke widths unified to 2. -->
+<!-- Rev. 5. Rev. 1 established the admin dashboard 2026-08-29 as a violet SaaS
+theme. Rev. 2 (2026-08-30) restyled it into "The Manifest Line," a near-black
+instrument console, and extended it app-wide. Rev. 3 (2026-08-31 morning)
+split the app into two unrelated systems after feedback that the console
+world read as "lifeless and bleak" for the public storefront, introducing a
+warm kraft-crate world for Landing/Group Shops/Checkout, "The Gear Drop."
+Rev. 4 (2026-08-31, same day) replaced The Gear Drop outright with "The
+Print Floor," a pre-press/screen-print-production world, after an explicit
+request for a full public-storefront redesign toward "clean, sleek,
+modern, futuristic... full... not a ton of empty space or AI feel" — chosen
+through a structured direction round (seed key `95845a44`; the roll assigned
+a live-broadcast direction, "The Scorebug," and the user locked IMPECCABLE'S
+PICK instead). Rev. 5 (2026-09-01) is not a new world: it is Rev. 4's
+already-approved Print Floor identity extended over the admin console and
+login by explicit request ("extend it to the rest of the site... should
+look like this"), retiring The Manifest Line as a separate palette and
+type system. The console keeps its own denser Operate-mode shape language
+(sharper, smaller radii; a persistent sidebar shell; dense data tables) —
+what changed is color and type, not structure or density. This revision
+was executed as a token-value swap rather than a markup rewrite: `graphite`
+and `signal` (the console's original Tailwind color names) now resolve to
+the exact same hex values as `plate` and the storefront's process/spot
+inks, so every admin page inherited the new identity without a per-page
+edit. `.console-canvas` was retired in favor of the shared `.press-canvas`
+(same file, same rules, one definition instead of two that only ever
+existed to match each other). SCOPE: every route in the app now shares one
+palette, one type system, and one canvas — the only remaining split is
+register (Operate vs Persuade, see Overview), not identity. -->
 
 ## Overview
 
-**Creative North Star — Admin & Login: "The Manifest Line."** **Creative North Star — Public Storefront: "The Print Floor."**
+**Creative North Star: "The Print Floor."** One dark pre-press light-table world — the shop reads like the actual production file that prints it, and the tool that runs the shop reads like the floor that room sits on — expressed in two registers rather than two rooms.
 
-The app reads as two different rooms in the same shop, because its two audiences are in genuinely different scenes. Admin and Login are Koby, alone, running the whole business from a console — the app reads as a live dispatch floor, every order a manifest line moving from pick to pack to ship, near-black graphite panels lit by four disciplined instrument signals (cyan/green/amber/red). That system is unchanged by this revision; see its Overview text preserved below.
+The public storefront (Landing, Group Shops, Checkout) is a parent in a carpool line or an office manager at their desk, tapping a shared link — not operating anything, but wanting the shop to feel like a real, current, well-made production floor rather than a template or a dropship storefront. This is the **Persuade** register: full commitment, a signature load-in moment (four misregistered CMYK halftone separations of a hand-drawn garment snapping into register on the landing hero, closing with one exposure flash, never repeated), a dynamic Pantone-style spot ink per shop, generous rhythm.
 
-Landing, Group Shops, and Checkout are a parent in a carpool line or an office manager at their desk, tapping a shared link to grab their group's size and color — not operating anything, but wanting the shop to feel like a real, current, well-made production floor rather than a template or a dropship storefront. The Print Floor renders the storefront as the shop's own pre-press process made visible: a dark room lit by a glowing light table, where a screen gets registered before it's exposed. Near-black plate grounds (never pure white, never the console's exact graphite hue); a fixed CMYK set (cyan/magenta/yellow/key) reserved for technical marks — registration crosshairs, calibration color bars — never a decorative fill; one Pantone-style "spot" ink per shop (crimson, cobalt, marigold, or emerald, hashed deterministically from the shop's id) carrying every button, price, and selected state inside that shop's context; every product/shop tile is a film positive on the light table with a registration crosshair at its corner, holding dead square — nothing tilts, the deliberate opposite of the retired world's scattered kraft tags; structured content renders as a flat spec panel with dashed divider lines between items, never a row of same-size icon cards; a true seven-segment digit mask (ghost cells included) carries every countdown and live count instead of a plain numeral; four misregistered CMYK halftone separations of a hand-drawn garment snap into alignment on the landing hero's light table, once, closing with a single exposure-unit flash. Big Shoulders Display carries headlines, Public Sans carries body text, Fragment Mono carries every price/count/SKU — deliberately a different stack from the console's IBM Plex and the retired world's Allerta Stencil/Barlow/Space Mono, so a screenshot never confuses the two rooms.
+Admin and Login are Koby, alone, running the whole business from a console — an operator who lives inside registration marks, calibration bars, and spot-color job tickets all day, so the same pre-press vocabulary is simply what surrounds a press operator's own station. This is the **Operate** register: the identical dark plate ground, the identical fixed CMYK process set, the identical Big Shoulders Display / Public Sans / Fragment Mono type stack — but denser, calmer, and restrained where the storefront is expressive. A persistent sidebar instead of a full-bleed canvas. Small, sharp radii instead of the storefront's slightly warmer ones. No hero theatrics, no per-shop dynamic spot color (admin has no single shop context) — instead the four spot inks (crimson/cobalt/marigold/emerald) do double duty as a **locked four-state semantic system**, filling the exact role the console's original signal colors held: cyan for the one interactive/brand accent, emerald for fulfilled/paid/success, marigold for needs-action/overdue, crimson for cancelled/critical. Scanability, consistency, and native table/form/sidebar expectations still outrank expression here — brand lives in the material (the same near-black plate, the same registration crosshair, the same mono for every number), not in animated flourish.
 
-**Key Characteristics — The Manifest Line (Admin & Login):**
-- Near-black graphite grounds, never pure white cards
-- Exactly four signal colors, each meaning one real thing
-- Real layered depth — gradient panels, true shadows, signal-color glow on emphasis surfaces, hover-lift everywhere interactive
-- Two slow ambient glow fields drifting behind every canvas (cyan + green, `.console-canvas::before/::after`)
-- IBM Plex Mono for all data; IBM Plex Sans for everything else
+**Key Characteristics — shared everywhere:**
+- A near-black plate ground (`#0A0D14`), never pure white, never a different near-black between registers
+- Big Shoulders Display for page-level headlines only, Public Sans for body, Fragment Mono for every price/count/ID/SKU
+- A fixed four-color process set (cyan/magenta/yellow/key) reserved for technical marks and small informational chrome, never a large decorative fill
+- Two soft blurred glow fields behind every canvas — white top-right, steel-blue bottom-left (`.press-canvas::before/::after`) — over a faint halftone dot texture
+- A one-time light sheen sweep on primary actions (`.console-sheen`, theme-agnostic, used by both registers)
+
+**Key Characteristics — Operate (Admin & Login):**
+- Persistent 220–248px dark sidebar; content fills the viewport (`max-w-[1800px]`) instead of a narrow column
+- The four spot inks run as a locked, meaning-per-hue system (cyan=interactive, emerald=success, marigold=needs-action, crimson=critical) — never decorative, never a fifth hue added
 - Sharp, small radii (6–8px) — engineered, not bubbly
-- Content fills the viewport (`max-w-[1800px]`, centered) instead of a narrow left-hugging column
-- One motion grammar: staggered exponential-ease-out entrances, hover-lift with a real shadow, a reserved lamp-pulse, a one-time sheen sweep on primary actions
+- Dense data tables, real hover-lift + shadow on every interactive row/panel/button
+- Registration-mark tilt discipline still applies: nothing in this system rotates
 
-**Key Characteristics — The Print Floor (Public Storefront):**
-- Near-black plate grounds lit like a light table in a dark room, never pure white, never the console's exact graphite hue
-- A fixed CMYK set (proc-cyan/magenta/yellow/key) reserved for technical marks and small informational badges only — never a decorative fill (the Process-Marks-Are-Chrome rule)
-- One dynamic Pantone "spot" color per shop (crimson/cobalt/marigold/emerald, hashed from the shop id, `lib/spot.ts`) drives every button, price, and selected state once inside that shop's context (the Spot-Carries-Everything rule)
-- Every product/shop tile is a film-positive `.separation-card` with a registration crosshair at its corner; nothing tilts anywhere in this system (the Nothing-Tilts rule — the deliberate opposite of the retired world's scattered kraft-tag tilt)
-- Structured content renders as a flat `.spec-panel` with dashed divider lines between items, never a row of same-size icon cards
-- A true seven-segment digit mask (`SegmentReadout`, ghost cells included) carries every countdown and live count — never a plain bold numeral
-- One signature load moment: four misregistered CMYK halftone separations of a hand-drawn garment snap into register on the landing hero's light table, closing with one exposure-unit flash — never repeated elsewhere
-- Big Shoulders Display / Public Sans / Fragment Mono — a different stack from the console on purpose
+**Key Characteristics — Persuade (Public Storefront):**
+- No sidebar — a full-bleed canvas, `max-w-5xl`–`max-w-6xl` content column, generous section rhythm
+- Each shop's own dynamic Pantone spot color (crimson/cobalt/marigold/emerald, hashed per shop id, `lib/spot.ts`) drives every button/price/selection once inside that shop's context
+- Film-positive `.separation-card` tiles with a registration crosshair at the corner — nothing tilts
+- A true seven-segment digit mask for every countdown and live count
+- The one signature load moment: the landing hero's CMYK separation-and-flash sequence, never reprised elsewhere
 
 ## Colors
 
-### The Manifest Line (Admin & Login)
+One neutral scale and one process-color set now cover the whole app; only the semantic layer on top differs by register.
 
-The palette is deliberately locked: four signal hues, each carrying exactly one semantic meaning, over a ten-step graphite neutral scale. No fifth semantic-state accent may be introduced without revisiting this file. (Non-state categorical tags — e.g. `Badge`'s `purple`/`pink`/`orange`/`teal` variants used for things like vendor labels — may use a few additional non-violet hues; see Badge in Components.)
+**Neutral (`plate` / `graphite` — the same scale under two historical names)**
+- **950** (`#0A0D14`): the base canvas everywhere — the darkroom.
+- **900** (`#121620`): panel surfaces, itself a subtle gradient toward `#171B21`.
+- **700–600** (`#2B303A`–`#414855`): borders, dividers.
+- **300** (`#A3AAB6`, ≈8.3:1 on 950): the floor for any real text on this canvas, both registers.
+- **400** (`#7A8290`, ≈5.0:1): icon-only, never real text.
+- **50/100**: primary headings and values (`#F7F8FA` / `#E7E9ED`).
 
-**Primary**
-- **Signal Cyan** (`#33e1ff`): the one interactive/brand accent — primary buttons, active nav state, links, the "live" KPI icon tint. Rendered as a gradient plus a glow shadow on primary actions. Bright text on cyan uses `graphite-950`, never white.
+**Process (technical marks only, both registers)**
+- **Cyan** (`#00AEEF`): registration crosshairs, the calibration bar, links, informational badges — and, in Operate, the one interactive/brand accent (buttons, active nav, focus rings), directly inheriting the console's original one-accent role.
+- **Magenta** (`#EC008C`): the calibration bar's second swatch, a secondary informational badge tone.
+- **Yellow** (`#FFE800`): the calibration bar's third swatch only — never a UI fill.
 
-**Secondary**
-- **Signal Green** (`#3ddc84`): fulfilled/paid/success state only.
-- **Signal Amber** (`#ffb238`): overdue/needs-action state only, most often paired with a pulse.
-- **Signal Red** (`#ff5c5c`): cancelled/critical state only.
-
-**Neutral**
-- **Graphite 950** (`#0a0c10`): the base canvas.
-- **Graphite 900** (`#12151b`): panel/card surfaces, itself a subtle gradient toward `#161b23`.
-- **Graphite 700–600** (`#262b35`–`#363c48`): borders, dividers, scrollbar thumb.
-- **Graphite 300** (`#9aa0ac`): the floor for any real body/secondary text on this canvas.
-- **White / Graphite 100**: primary headings and values.
-
-**Named Rules**
-**The Locked Palette Rule.** A signal color never appears for decoration — only to report the specific state it's assigned to. Reuse one of the four, or stay graphite; never add a fifth state color.
-
-**The Graphite-300 Floor Rule.** No real text drops below `graphite-300` (≈7.5:1) on the graphite-950 canvas. `graphite-400` (≈4.3:1) is icon-only, never text.
-
-**The Earned Glow Rule.** Glow and gradient answer to something real — a primary action, genuine urgency, or the app's own ambience — never sprinkled on for its own sake.
-
-### The Print Floor (Public Storefront)
-
-A near-black plate neutral scale carries the ground and structure — the darkroom a screen gets registered and exposed in. A fixed four-color process set (proc-cyan/magenta/yellow/key) is technical chrome only: registration crosshairs, the calibration color bar, small informational badges (item counts, "secure checkout"). Everything expressive or categorical — a shop's own identity — comes from its one dynamic spot color instead, computed by `lib/spot.ts` and carried as CSS custom properties (`--spot`/`--spot-top`/`--spot-bright`/`--spot-dim`/`--spot-on`) rather than a static token, since a shop's ink is data, not a fixed brand hue.
-
-**Neutral**
-- **Plate 950** (`#0A0D14`): the base canvas — the darkroom.
-- **Plate 900** (`#121620`): panel surfaces, itself a subtle gradient toward `#171B21`.
-- **Plate 700–600** (`#2B303A`–`#414855`): borders, dividers.
-- **Plate 300** (`#A3AAB6`, ≈8.3:1 on plate-950): the floor for any real text on this canvas.
-- **Plate 400** (`#7A8290`, ≈5.0:1): icon-only, never real text.
-- **Plate 50 / 100**: primary headings and values (`#F7F8FA` / `#E7E9ED`).
-
-**Process (technical marks only)**
-- **Proc Cyan** (`#00AEEF`): registration crosshairs, the sticky-nav accent, links, informational badges.
-- **Proc Magenta** (`#EC008C`): the calibration color bar's second swatch, a secondary informational badge tone.
-- **Proc Yellow** (`#FFE800`): the calibration color bar's third swatch only — never a UI fill, its contrast is too extreme for text or backgrounds at normal size.
-- **Proc Key**: identical to plate-950; the "K" plate in the color bar.
-
-**Spot (one per shop, dynamic)**
-- **Crimson** (`#C93420`, bright `#FF8A73`): also the platform's own default ink wherever no shop context applies (checkout, which can span multiple shops, and every `PressButton` with no `--spot` in scope).
-- **Cobalt** (`#2657C7`, bright `#8FB4FF`).
-- **Marigold** (`#E7A22E`, bright `#FFD37A`): the one spot color too light for off-white fill text — see the Marigold-Carries-Dark-Text rule below.
-- **Emerald** (`#167A4D`, bright `#8FE0BB`).
+**The four inks (`spot` in Persuade, `signal` in Operate — same hexes, two roles)**
+- **Crimson** (`#C93420`, bright `#FF8A73`): a shop's dynamic ink in Persuade, or fixed *critical/cancelled* in Operate; also the platform's own default ink wherever no shop context applies (checkout spanning multiple shops, any `PressButton` outside a shop).
+- **Cobalt** (`#2657C7`, bright `#8FB4FF`): Persuade-only dynamic spot ink — not part of Operate's locked four (Operate reuses cyan for its interactive role instead, so cobalt has no fixed Operate meaning).
+- **Marigold** (`#E7A22E`, bright `#FFD37A`): a shop's dynamic ink in Persuade, or fixed *needs-action/overdue* in Operate. The one ink too light for off-white fill text — see the Marigold-Carries-Dark-Text rule.
+- **Emerald** (`#167A4D`, bright `#8FE0BB`): a shop's dynamic ink in Persuade, or fixed *fulfilled/paid/success* in Operate.
 
 **Named Rules**
-**The Plate-300 Floor Rule.** No real text drops below `plate-300` (≈8.3:1) on the plate-950/900 canvas — the same discipline as the console's Graphite-300 Floor Rule, independently verified for this palette. `plate-400` is icon-only.
+**The Plate-300 Floor Rule.** No real text drops below `plate-300`/`graphite-300` (≈8.3:1) on the 950/900 canvas, in either register. `plate-400`/`graphite-400` is icon-only.
 
-**The Process-Marks-Are-Chrome Rule.** `proc-cyan`/`magenta`/`yellow`/`key` mark technical state (registration, calibration, a small count) — never a large decorative fill. A shop's expressive color is always its spot ink, never a process color.
+**The Process-Marks-Are-Chrome Rule.** `proc-cyan`/`magenta`/`yellow` mark technical state and small informational chrome — never a large decorative fill — in both registers. (Operate's use of cyan as its interactive/brand accent is the one deliberate exception, inherited directly from the console's original Locked Palette Rule.)
 
-**The Spot-Carries-Everything Rule.** Once a page or section sits inside a shop's context, `--spot`/`--spot-bright`/`--spot-dim`/`--spot-on` (set once via `spotVars()`) drive every accent, button, price, and selection state in that context — never a hardcoded hex reintroduced alongside it.
+**The Locked-Four Rule (Operate only).** In admin/login, the four inks carry exactly one meaning each (cyan=interactive, emerald=success, marigold=needs-action, crimson=critical) and never decorate. No fifth state color without revisiting this file. (Non-state categorical tags — `Badge`'s `purple`/`pink`/`orange`/`teal` variants for things like vendor labels — may still use a few additional non-violet hues.)
 
-**The Marigold-Carries-Dark-Text Rule.** `spot-marigold` is the one spot color too light for off-white fill text (`#E7A22E` reaches only ≈2.1:1 with `plate-50`; ≈8.9:1 with `plate-950`) — anything set on a marigold fill uses `--spot-on` resolved to `plate-950`, mirroring the retired world's analogous gold rule.
+**The Spot-Carries-Everything Rule (Persuade only).** Once a public page or section sits inside a shop's context, `--spot`/`--spot-bright`/`--spot-dim`/`--spot-on` (set once via `spotVars()`) drive every accent, button, price, and selection state in that context — never a hardcoded hex reintroduced alongside it.
+
+**The Marigold-Carries-Dark-Text Rule.** `marigold`/`signal-amber` is the one ink too light for off-white fill text (`#E7A22E` reaches only ≈2.1:1 with `plate-50`; ≈8.9:1 with `plate-950`) — anything set on a marigold fill uses dark text, in both registers.
 
 ## Typography
 
-### The Manifest Line (Admin & Login)
+One type system, one hierarchy, both registers.
 
-**Display/Body Font:** IBM Plex Sans (Inter is a fallback name only, not downloaded) · **Data/Mono Font:** IBM Plex Mono
+**Display Font:** Big Shoulders Display (Arial Narrow fallback) · **Body Font:** Public Sans · **Data/Mono Font:** Fragment Mono
 
-A technical, workhorse instrument face — legible and calm in prose, exact and tabular wherever a number or status word needs to be scanned at speed.
+A condensed, heavy industrial display face at page-title/hero size only, paired with Public Sans — a body face drawn from federal technical-form typography, the spec-sheet register the whole product lives in, chosen deliberately over reflexive AI-UI defaults (Inter, Plus Jakarta Sans, DM Sans, Space Grotesk, IBM Plex). Fragment Mono carries every number app-wide — order totals, SKUs, customer counts, KPI values — and every digit that actually counts something live (a shop's closing countdown, a How-It-Works step) renders through `SegmentReadout`'s seven-segment mask instead, never plain Fragment Mono digits.
 
-- **Headline** (600, 1.5–1.75rem, tight tracking): page titles.
-- **Title** (600, 0.875rem): panel headers.
-- **Body** (400–500, 0.875rem): names, labels, descriptions.
-- **Data** (500–600, IBM Plex Mono, `tabular-nums`): every dollar amount, count, date, ID.
-- **Label** (600, 11px, 0.08em tracking, uppercase, `graphite-300`): eyebrow-style field names above a value only, never a decorative kicker over a heading.
-
-**Named Rules**
-**The Mono-Means-Data Rule.** IBM Plex Mono is reserved for numbers, dates, IDs, and status words — never a heading or a sentence.
-
-### The Print Floor (Public Storefront)
-
-**Display Font:** Big Shoulders Display (Arial Narrow fallback) · **Body Font:** Public Sans · **Data/Spec Font:** Fragment Mono
-
-A condensed, heavy industrial display face at large sizes only, paired with Public Sans — a body face drawn from federal technical-form typography, the same spec-sheet register as the pre-press world, chosen deliberately over reflexive AI-UI defaults (Inter, Plus Jakarta Sans, DM Sans, Space Grotesk). Fragment Mono carries every number, the storefront's own version of the console's Mono-Means-Data discipline, and every digit that actually counts something (a countdown, a live total) renders through `SegmentReadout`'s seven-segment mask instead, never plain Fragment Mono digits.
-
-- **Display** (Big Shoulders Display, 700–900, uppercase, clamp ~2.25rem–3.5rem, tight leading): the landing hero headline only.
-- **Section headline** (Big Shoulders Display, uppercase, 1.5–1.875rem): "What We Do," "How It Works," "Shops Open Now," "Shops," "Checkout," a shop's own name.
-- **Body** (Public Sans, 400–500, 0.875rem–1.125rem): names, descriptions, form labels, copy.
-- **Data/Spec** (Fragment Mono, 400, `tabular-nums`): every price, item count, SKU, "ITEM 0X" label, job caption.
-- **Segment readout** (`SegmentReadout`, seven-segment mask, ghost cells included): the shop-closing countdown and live order/step counts specifically — never these numbers in plain type.
+- **Display** (Big Shoulders Display, 700–900, uppercase, tight leading): the landing hero headline and every `.page-title` in admin (`Dashboard`, `Orders`, `Products`, …) — display never drops below page-title/hero size.
+- **Section headline** (Big Shoulders Display, uppercase, 1.5–1.875rem): storefront section H2s ("What We Do," "How It Works") only — admin panel headers stay Public Sans bold, since Operate's density means a condensed display face at every panel/table header would cost scanability the storefront's sparser hierarchy doesn't pay.
+- **Body** (Public Sans, 400–500): names, descriptions, form labels, copy, table cell text, sidebar nav — both registers.
+- **Data/Mono** (Fragment Mono, `tabular-nums`): every price, count, date, SKU, ID, KPI value, field label — both registers. Field/section labels (`.console-label`, storefront `ColorBar`) use Fragment Mono at 11px specifically so a scanned label and a scanned value share one register.
+- **Segment readout** (`SegmentReadout`, seven-segment mask, ghost cells included): storefront-only — a live countdown or step count, never plain type.
 
 **Named Rules**
-**The Spec-Means-Data Rule.** Fragment Mono is reserved for prices, counts, dates, and SKUs — the storefront's version of the console's Mono-Means-Data Rule, kept as a deliberately different mono face so the two systems are never mistaken for one another in a screenshot.
+**The Mono-Means-Data Rule.** Fragment Mono is reserved for numbers, dates, IDs, and SKUs, app-wide — never a heading or a sentence. (Unifies the console's original Mono-Means-Data rule and the storefront's Spec-Means-Data rule into one rule, since they're now the same face.)
 
-**The Segment-Means-Countdown Rule.** A number that counts down or ticks live (a shop's closing date, a How-It-Works step) renders as a true seven-segment mask, not Fragment Mono digits — the raise this direction kept from its seven-segment catalog challenger.
+**The Display-Is-Titles-Only Rule.** Big Shoulders Display never drops below a page title or section headline; body copy, table content, labels, and buttons are set in Public Sans everywhere, even directly beside a display-set heading.
 
 ## Layout
 
-### The Manifest Line (Admin & Login)
+### Operate (Admin & Login)
 
 The shell is a fixed 220px (248px at `xl`) dark sidebar on desktop plus a fluid content column collapsing to a slide-in drawer below `lg`. Content runs `w-full max-w-[1800px] mx-auto`, padding scaling `p-4 → sm:p-6 → lg:p-8 → xl:p-10`. Verify every surface at phone, tablet, laptop, and full-screen/ultrawide widths.
 
-### The Print Floor (Public Storefront)
+### Persuade (Public Storefront)
 
-No sidebar — a full-bleed canvas with a centered `max-w-5xl`–`max-w-6xl` content column and a simple top header (logo, optional back link, cart pill), consistent with the storefront being a browsing surface, not an operating console. Section rhythm is generous (`py-16`–`py-20` between major sections, more space above a heading than below it), except the landing hero itself, tightened to `py-12`–`py-14` specifically to keep the signature separations-hero visual close to the fold. Grids collapse `sm:grid-cols-3 → grid-cols-1` for product/shop tiles and `lg:grid-cols-5 (3+2) → grid-cols-1` for the Checkout review step. A shop/product grid with fewer than three real items fills the remaining slots with a dashed `GhostSlot` ("Next job opening soon") rather than leaving bare canvas — capped to one ghost slot on mobile so the pattern doesn't itself read as repetitive filler. Fixed-position registration-mark corners (`PressFrame`) sit pinned to every viewport's four corners on every page, purely structural chrome that answers the brief's "full, not empty" requirement without competing with content. The mobile cart bar is a fixed bottom sheet on Group Shop pages; the desktop equivalent lives in the sticky top nav bar.
+No sidebar — a full-bleed canvas with a centered `max-w-5xl`–`max-w-6xl` content column and a simple top header (logo, optional back link, cart pill), consistent with browsing rather than operating. Section rhythm is generous (`py-16`–`py-20`, more space above a heading than below it) except the landing hero (`py-12`–`py-14`, kept tight to hold the separations-hero visual near the fold). Grids collapse `sm:grid-cols-3 → grid-cols-1`; a shop/product grid with fewer than three real items fills remaining slots with a dashed `GhostSlot` rather than bare canvas (capped to one on mobile). Fixed-position registration-mark corners (`PressFrame`) sit pinned to every viewport's four corners on every page, both registers — structural chrome, not decoration.
 
 ## Elevation & Depth
 
-### The Manifest Line (Admin & Login)
+One canvas, one glow treatment, one sheen, both registers — only the panel object differs.
 
-Panels (`.console-panel`) sit on a subtle top-to-bottom gradient (`#161b23` → `#12151b`) with a hairline border and a true two-layer shadow (`shadow-console`). Interactive panels/rows lift 2–3px on hover with the shadow deepening (`shadow-console-hover`). Primary actions and urgent panels carry a signal-colored glow (`shadow-glow-cyan`/`-amber`/`-green`/`-red`). Two soft, slow-drifting radial glow fields (cyan top-left, green bottom-right) sit behind every canvas. A one-time light sheen sweeps across primary buttons on hover (`.console-sheen`).
+`.press-canvas` (the single canvas class for the whole app — `.console-canvas` was retired in Rev. 5) carries a faint halftone dot texture plus two soft blurred glow fields behind the content: a white wash top-right (`inset: 10% -10% auto auto; width/height: 60vw; radial-gradient(circle, rgba(255,255,255,0.08), transparent 70%); blur(10px)`) and a steel-blue wash bottom-left (`inset: auto auto -20% -10%; width/height: 50vw; radial-gradient(circle, rgba(64,110,165,0.2), transparent 70%); blur(20px)`), both `position: fixed` so they stay pinned to the viewport rather than scrolling with the page. A one-time light sheen sweeps across primary buttons on hover (`.console-sheen`, theme-agnostic, shared by both registers).
 
-**Named Rules**
-**The Earned Glow Rule.** Depth and glow are the default now, but every instance still answers to something real.
+**Operate panels** (`.console-panel`, `<Card>`) sit on the plate gradient (`#171B21 → #121620`) with a hairline white-alpha border and a true two-layer shadow (`shadow-console`); interactive panels/rows lift 2–3px on hover with the shadow deepening (`shadow-console-hover`, `.console-panel-interactive`). Primary actions and urgent panels carry a signal-colored glow (`shadow-glow-cyan`/`-amber`/`-green`/`-red`, `.console-panel-glow-*`).
 
-### The Print Floor (Public Storefront)
-
-Two elevation objects, deliberately different registers, and neither ever tilts. **Separation cards** (`.separation-card`) sit dead square with a true two-layer dark shadow (`shadow-plate`), a registration crosshair fixed at the top-left corner that snaps into a brighter, spot-colored register on hover, and lift 4px with the shadow deepening plus a spot-colored glow (`shadow-plate-hover`) — the signature object for anything a visitor picks (a shop, a product). **Spec panels** (`.spec-panel`) share the same plate-gradient material and shadow language but hold still, no crosshair — the register for structured content (forms, order summaries, trust info) that should read as legible and calm. Two soft, slow-drifting process-color glow fields (cyan top-left, magenta bottom-right, `.press-canvas::before/::after`) sit behind every canvas — the storefront's own version of the console's ambient glow, same discipline, process-tinted instead of neon. A one-time light sheen (shared `.console-sheen`, theme-agnostic) sweeps primary buttons on hover. One unrepeated signature moment: the landing hero's four CMYK halftone separations of a hand-drawn garment snap into register on load, closing with a single exposure-unit flash overlay.
+**Persuade objects** are deliberately different registers, and neither ever tilts. **Separation cards** (`.separation-card`) sit dead square with a registration crosshair fixed at the top-left corner that snaps to `var(--spot-bright)` on hover, lifting 4px with a spot-colored glow (`shadow-plate-hover`). **Spec panels** (`.spec-panel`) share the same plate material but hold still, no crosshair — the register for structured content that should read as legible and calm.
 
 **Named Rules**
-**The Nothing-Tilts Rule.** No card, badge, or tile in this system ever rotates — registration crosshairs snapping square is the whole depth vocabulary. This is the deliberate opposite of the retired kraft-crate world's scattered tag tilt, not an oversight.
+**The Earned Glow Rule.** Depth and glow answer to something real — a primary action, genuine urgency, the app's own ambience — never sprinkled on for its own sake, in either register.
+
+**The Nothing-Tilts Rule.** No card, badge, or tile in this system ever rotates, in either register — registration crosshairs snapping square is the whole depth vocabulary. This is the deliberate opposite of the retired kraft-crate world's scattered tag tilt, not an oversight.
 
 ## Shapes
 
-### The Manifest Line (Admin & Login)
+### Operate (Admin & Login)
 
-Small, sharp radii throughout — `0.375rem` (buttons, icon chips, nav items) to `0.5rem` (panels). No `rounded-2xl`/`rounded-3xl` bubble radii anywhere.
+Small, sharp radii throughout — `0.375rem` (buttons, icon chips, nav items) to `0.5rem` (panels). No `rounded-2xl`/`rounded-3xl` bubble radii anywhere. Deliberately sharper than Persuade's own scale — Operate's density and native-table expectations want engineered edges, not the storefront's slightly warmer ones.
 
-### The Print Floor (Public Storefront)
+### Persuade (Public Storefront)
 
-Precise, technical radii — `0.5rem` (buttons) to `0.625rem` (separation cards) to `0.75rem` (spec panels) — legible as "registered production plate," not sharp instrument-panel edges and not bubbly SaaS cards. The one recurring mark is the registration crosshair (⊕): a small circle-plus-ticks glyph (`RegistrationMark`) at a separation card's top-left corner, a spec panel's corners implicitly, and pinned to every page's four viewport corners via `PressFrame`.
+Precise, technical radii — `0.5rem` (buttons) to `0.625rem` (separation cards) to `0.75rem` (spec panels). The one recurring mark is the registration crosshair (⊕): a small circle-plus-ticks glyph (`RegistrationMark`) at a separation card's top-left corner, a spec panel's corners implicitly, and pinned to every page's four viewport corners via `PressFrame` — both registers use `PressFrame`.
 
 ## Components
 
-### The Manifest Line (Admin & Login)
+### Operate (Admin & Login)
 
-**Buttons** (`components/ui/button.tsx`, admin/login only)
+**Buttons** (`components/ui/button.tsx`)
 - **Shape:** `rounded-md` (6px) `xs`/`sm`/`md`, `rounded-lg` `lg`.
-- **Primary:** `signal-cyan` gradient, `graphite-950` text, `shadow-glow-cyan-sm` deepening to `shadow-glow-cyan` on hover, `.console-sheen` sweep.
+- **Primary:** cyan gradient (`bg-signal-cyan-gradient`), `graphite-950` text, `shadow-glow-cyan-sm` deepening to `shadow-glow-cyan` on hover, `.console-sheen` sweep.
 - **Secondary:** `white/[0.06]` fill, `white/10` ring, `graphite-100` text.
 - **Focus:** `signal-cyan` ring, 2px offset.
 
-**Console Panels** (`.console-panel`, `<Card>`) — `rounded-lg`, graphite gradient, `white/[0.08]` hairline border, `shadow-console` at rest, `.console-panel-interactive` for hover-lift, `.console-panel-glow-{cyan,amber,green}` for urgency emphasis.
+**Console Panels** (`.console-panel`, `<Card>`) — `rounded-lg`, plate gradient, `white/[0.08]` hairline border, `shadow-console` at rest, `.console-panel-interactive` for hover-lift, `.console-panel-glow-{cyan,amber,green}` for urgency emphasis.
 
-**Badge** (`components/ui/badge.tsx`) — tinted-dark fill + bright signal-color text + matching ring; `purple`/`pink`/`orange`/`teal` reserved for non-state category tags.
+**Badge** (`components/ui/badge.tsx`) — tinted-dark fill + bright signal-color text + matching ring; `success`/`warning`/`danger`/`info` map to emerald/marigold/crimson/cyan per the Locked-Four Rule; `purple`/`pink`/`orange`/`teal` reserved for non-state category tags.
 
-**Signal Lamp** (`app/page.tsx`'s `SignalLamp`) — colored dot + label, the preferred pattern for order/fulfillment/payment state specifically.
+**Console Label** (`.console-label`) — Fragment Mono, 11px, uppercase, `plate-300` — the admin's field/section-label voice, matching the storefront's own mono-label discipline.
 
-**Navigation** (sidebar, `components/admin/AdminShell.tsx`) — `graphite-950` ground, faint cyan top wash; active item gets `signal-cyan` text, `signal-cyan/[0.09]` background, and a 2px glowing cyan left rail (the sidebar's one load-bearing glow).
+**Navigation** (sidebar, `components/admin/AdminShell.tsx`) — `plate-950` ground, faint cyan top wash; active item gets `signal-cyan-bright` text, `signal-cyan/[0.09]` background, and a 2px glowing cyan left rail (the sidebar's one load-bearing glow).
 
-### The Print Floor (Public Storefront)
+### Persuade (Public Storefront)
 
 **Buttons** (`components/public/PressButton.tsx`) — same variant/size API as the console's `Button` so call sites are a drop-in swap, styled entirely differently.
 - **Shape:** `rounded-[0.5rem]` (`.press-btn`).
-- **Primary:** a gradient from `var(--spot-top)` to `var(--spot)`, `var(--spot-on)` text, glow shadow tinted `var(--spot-dim)`, `.console-sheen` sweep, a real mechanical thud on `:active` (`translateY(1px) scale(0.98)`). Falls back to the platform's crimson ink wherever no shop context sets `--spot`.
+- **Primary:** a gradient from `var(--spot-top)` to `var(--spot)`, `var(--spot-on)` text, glow shadow tinted `var(--spot-dim)`, `.console-sheen` sweep, a real mechanical thud on `:active`. Falls back to the platform's crimson ink wherever no shop context sets `--spot`.
 - **Secondary:** `plate-800` fill, `plate-700` border, `plate-100` text.
 - **Focus:** `proc-cyan` ring, 2px offset.
 
-**Separation Card** (`components/public/SeparationCard.tsx`, `.separation-card`) — the signature object for a product or shop preview. `rounded-[0.625rem]`, plate gradient, 1px `plate-700` border, `shadow-plate`, a registration crosshair (`::before`/`::after`) fixed at the top-left corner that snaps to `var(--spot-bright)` on hover. Never tilts.
+**Separation Card** (`components/public/SeparationCard.tsx`, `.separation-card`) — the signature object for a product or shop preview. `rounded-[0.625rem]`, plate gradient, 1px `plate-700` border, `shadow-plate`, a registration crosshair fixed at the top-left corner. Never tilts.
 
-**Spec Panel** (`.spec-panel`) — the flat structured-content surface (checkout sections, order summaries, "What We Do," trust info). Same plate material as `.separation-card`, no crosshair. Multi-line content inside one panel is divided by a dashed line (`border-dashed border-plate-700`) between items, never split into same-size icon cards.
+**Spec Panel** (`.spec-panel`) — the flat structured-content surface. Same plate material as `.separation-card`, no crosshair. Multi-line content is divided by a dashed line between items, never same-size icon cards.
 
-**Color Bar** (`components/public/ColorBar.tsx`, `.colorbar-badge`) — a printer's calibration-strip badge for status/count (item count, "secure checkout," a shop's spot-job label). Fragment Mono, a small solid dot before the label, dead square — never rotated. `cyan`/`magenta` tones are process-chrome only; `spotKey` tints it with a shop's own ink for identity-carrying badges.
+**Color Bar** (`components/public/ColorBar.tsx`, `.colorbar-badge`) — a calibration-strip badge for status/count. Fragment Mono, a small solid dot before the label, dead square. `cyan`/`magenta` tones are process-chrome only; `spotKey` tints it with a shop's own ink.
 
-**Segment Readout** (`components/public/SegmentReadout.tsx`, `.segment-cell`) — a true seven-segment digit mask with designed-off ghost cells, used for the shop-closing countdown and How-It-Works step numbers. Always paired with a plain-text `aria-label`; the mask is decorative typography, not the accessible name.
+**Segment Readout** (`components/public/SegmentReadout.tsx`) — a true seven-segment digit mask for the shop-closing countdown and How-It-Works step numbers.
 
-**Ghost Slot** (`components/public/GhostSlot.tsx`) — a dashed, unfilled grid slot ("Next job opening soon") that fills out a shop grid with fewer than three real items, honestly rather than fabricating shops. Capped to one instance on mobile.
+**Ghost Slot** (`components/public/GhostSlot.tsx`) — a dashed, unfilled grid slot ("Next job opening soon") that fills a sparse shop grid honestly rather than fabricating shops. Capped to one on mobile.
 
-**Press Frame** (`components/public/PressFrame.tsx`) — four fixed-position registration crosshairs pinned to the viewport's corners on every page; purely structural, `pointer-events-none`, hidden below `sm`.
-
-**Public Header/Footer** (`components/public/PublicHeader.tsx`, `PublicFooter.tsx`) — shared across Group Shops and Checkout; the logo, an optional back link, and the cart pill (a `.press-btn-secondary` styled chip). Landing keeps its own richer nav; Checkout keeps its own step-aware back link.
+**Press Frame** (`components/public/PressFrame.tsx`) — four fixed-position registration crosshairs pinned to the viewport's corners on every page, both registers.
 
 ## Do's and Don'ts
 
-### The Manifest Line (Admin & Login)
+### Shared (both registers)
 
 **Do:**
-- **Do** keep every state signal color tied to its one real meaning (cyan/green/amber/red).
-- **Do** render all data in IBM Plex Mono with `tabular-nums`.
-- **Do** use `graphite-300` or lighter for any real text on the graphite-950/900 canvas.
+- **Do** keep the ground a near-black plate tone (`#0A0D14`) — never pure white, never a second near-black.
+- **Do** render every price, count, date, SKU, and ID in Fragment Mono with `tabular-nums`.
+- **Do** use `plate-300`/`graphite-300` or lighter for any real text on the 950/900 canvas.
+- **Do** hold every drawn icon in the system to one consistent stroke width (2px) — `RegistrationMark`'s own thinner default is the one deliberate exception, a separate "technical mark" glyph family.
+- **Do** vary a repeated whileInView entrance by section register rather than stamping the identical fade-up on every section of a page.
+
+**Don't:**
+- **Don't** reintroduce violet/purple as a brand or state color.
+- **Don't** tilt or rotate any card, badge, or tile in this system — the Nothing-Tilts Rule.
+- **Don't** put a kicker/eyebrow label above a heading (craft-floor ban, no exception).
+- **Don't** fake a material the page doesn't actually render (embossed/stamped-metal CSS, photographic textures).
+
+### Operate only (Admin & Login)
+
+**Do:**
+- **Do** keep every one of the four locked signal colors tied to its one real meaning (cyan/green/amber/red — see the Locked-Four Rule).
 - **Do** give interactive panels, rows, and buttons a real hover-lift + shadow change.
 - **Do** prefer `components/ui/*` (`Button`, `Card`, `Badge`, `Input`, `Select`, `Modal`, `Toast`) over hand-rolled markup.
 
 **Don't:**
-- **Don't** reintroduce violet/purple as a brand or state color.
 - **Don't** add a fifth semantic/state accent color.
-- **Don't** use a colored `border-left`/`border-right` accent above 1px on any panel or list row (craft-floor ban).
-- **Don't** reintroduce glassmorphism/backdrop-blur as pure decoration.
-- **Don't** cap primary content width narrowly without centering it.
-- **Don't** use `components/public/*` (PressButton, SeparationCard, ColorBar, the plate/spot palette) on any admin or login surface — the two systems never mix on one page.
+- **Don't** use a colored `border-left`/`border-right` accent above 1px on any panel or list row.
+- **Don't** use `components/public/*` (PressButton, SeparationCard, ColorBar) on any admin or login surface, or vice versa — the two component libraries stay separate even though the tokens beneath them match.
 
-### The Print Floor (Public Storefront)
+### Persuade only (Public Storefront)
 
 **Do:**
-- **Do** keep the ground a near-black plate tone — never pure white, never the console's exact graphite hue.
-- **Do** render every price, count, date, and SKU in Fragment Mono with `tabular-nums`; render every countdown or live count as a true `SegmentReadout` seven-segment mask instead.
-- **Do** use `plate-300` or lighter for any real text on the plate-950/900 canvas.
-- **Do** set a shop's own spot color once (`spotVars()`) at the top of that shop's context and let every button, price, and selection state inherit it via CSS custom properties — never hardcode a spot hex inline.
-- **Do** reserve the process colors (proc-cyan/magenta/yellow) for technical marks and small informational badges; a shop's expressive color is always its spot ink.
-- **Do** recompose multi-item content as one spec panel with dashed dividers, never as three same-size icon cards — and when reusing that panel pattern on a second or third page, give each instance genuinely different content and, where reasonable, a different internal layout, not a near-duplicate of the first.
+- **Do** set a shop's own spot color once (`spotVars()`) at the top of that shop's context and let every button, price, and selection state inherit it via CSS custom properties.
+- **Do** reserve the process colors for technical marks and small informational badges; a shop's expressive color is always its spot ink.
 - **Do** fill a shop/product grid with fewer than three real items using a `GhostSlot`, never bare canvas.
-- **Do** use `components/public/PressButton.tsx` for every storefront action so the sheen/thud behavior stays consistent.
-- **Do** hold every drawn icon in this system to one consistent stroke width (2px) — `RegistrationMark`'s own default (a deliberately thinner, separate "technical mark" glyph family, not a feature icon) is the one exception.
 
 **Don't:**
-- **Don't** use IBM Plex Sans/Mono, `signal-*` colors, or `graphite-*` neutrals anywhere on Landing, Group Shops, or Checkout — that's the console system, a different room.
-- **Don't** tilt or rotate any card, badge, or tile in this system — the Nothing-Tilts Rule, checked on every new component before it ships.
-- **Don't** put a kicker/eyebrow label above a heading (craft-floor ban, no exception) — a "spot job" label and an "in-house production" label were both cut from directly above their headings during the finish review; the same information now lives in the badge row below the heading, and inline in the heading itself, instead.
-- **Don't** give every whileInView section on a page the identical fade-up entrance — vary the reveal by section register (a spring "register-pop" for How It Works, a scale "develop-in" for shop tiles, a scale-in for the closing CTA) the way this revision's finish review required.
-- **Don't** fake a material the page doesn't actually render (embossed/stamped-metal CSS, photographic textures) — the light-table material here is an honest gradient-and-shadow language plus a real animated halftone-separation effect, not a skeuomorphic imitation.
+- **Don't** hardcode a spot hex inline where `var(--spot)` should be inherited instead.
+- **Don't** set Allerta Stencil, Barlow, or Space Mono anywhere — that world is fully retired.
