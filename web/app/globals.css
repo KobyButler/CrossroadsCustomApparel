@@ -66,11 +66,28 @@
     scroll-behavior: smooth;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    /* Every surface in the app is dark now (see DESIGN.md Rev. 5) — this
+       tells the browser to default its own native chrome (a <select>'s
+       dropdown popup, date pickers, the scrollbar) to dark UA styling
+       instead of light, so it doesn't hand back light-on-light or
+       white-on-white chrome we never asked for and can't fully restyle. */
+    color-scheme: dark;
   }
 
   body {
     @apply bg-graphite-950 text-graphite-100 font-sans;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  /* Belt-and-suspenders on top of color-scheme: dark above — Chrome/Firefox/
+     Edge all respect explicit color/background-color on <option>, and a
+     dropdown's own popup doesn't inherit the closed <select> box's
+     Tailwind classes (that part is native chrome), so without this an
+     <option> was resolving to inherited white text over the browser's
+     default white popup background — invisible until hovered. */
+  select option, select optgroup {
+    background-color: #121620; /* graphite-900/plate-900 */
+    color: #E7E9ED; /* graphite-100/plate-100 */
   }
 
   ::selection {
