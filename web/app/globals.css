@@ -58,6 +58,16 @@
   }
 }
 
+/* The dot-grid glow — one wide, soft, low-opacity white shadow term reused
+   on every card, panel, button, and field across the app so each one reads
+   as if it's casting a little light onto the canvas's dot texture behind
+   it. Centralized here so the two intensities (rest/hover) stay identical
+   everywhere instead of drifting between copies. See DESIGN.md. */
+:root {
+  --dot-glow: 0 0 44px 6px rgba(247,248,250,0.05);
+  --dot-glow-hover: 0 0 54px 8px rgba(247,248,250,0.09);
+}
+
 /* ─── Base ─────────────────────────────────────────────────────────────────── */
 @layer base {
   *, *::before, *::after { box-sizing: border-box; }
@@ -190,7 +200,7 @@
      halo just outside the panel's own edge, so the panel reads as if it's
      casting a little light onto the light table behind it. See the
      matching term on .separation-card/.spec-panel and DESIGN.md. */
-  box-shadow: 0 1px 2px rgba(0,0,0,0.5), 0 10px 24px -8px rgba(0,0,0,0.6), 0 0 46px 6px rgba(247,248,250,0.05);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.5), 0 10px 24px -8px rgba(0,0,0,0.6), var(--dot-glow);
   transition: box-shadow 0.25s ease, border-color 0.25s ease, transform 0.25s cubic-bezier(0.16,1,0.3,1);
 }
 
@@ -198,7 +208,7 @@
    not static layout chrome like the sidebar). */
 .console-panel-interactive:hover {
   border-color: rgba(255,255,255,0.14);
-  box-shadow: 0 2px 6px rgba(0,0,0,0.55), 0 20px 44px -10px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.06), 0 0 56px 8px rgba(247,248,250,0.08);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.55), 0 20px 44px -10px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.06), var(--dot-glow-hover);
   transform: translateY(-2px);
 }
 
@@ -355,13 +365,13 @@
      the card's edge, so the card reads as if it's casting a little light
      onto the light table behind it. See the matching term on .console-
      panel/.spec-panel and DESIGN.md. */
-  box-shadow: 0 1px 2px rgba(0,0,0,0.5), 0 10px 24px -8px rgba(0,0,0,0.65), 0 0 46px 6px rgba(247,248,250,0.05);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.5), 0 10px 24px -8px rgba(0,0,0,0.65), var(--dot-glow);
   transition: transform 0.3s cubic-bezier(0.16,1,0.3,1), box-shadow 0.3s ease, border-color 0.3s ease;
 }
 .separation-card-interactive:hover {
   transform: translateY(-4px);
   border-color: var(--spot, #C93420);
-  box-shadow: 0 2px 4px rgba(0,0,0,0.55), 0 22px 42px -10px rgba(0,0,0,0.7), 0 0 26px -6px var(--spot-dim, rgba(201,52,32,0.35)), 0 0 56px 8px rgba(247,248,250,0.07);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.55), 0 22px 42px -10px rgba(0,0,0,0.7), 0 0 26px -6px var(--spot-dim, rgba(201,52,32,0.35)), var(--dot-glow-hover);
 }
 /* The registration crosshair — a real pre-press alignment mark, not a
    decorative corner flourish. Two strokes (::before + ::after) offset by a
@@ -406,11 +416,11 @@
   /* Same wide, soft, low-opacity white glow as .separation-card/.console-
      panel — brightens the dot texture in a halo around the panel rather
      than reading as a real drop shadow. See DESIGN.md. */
-  box-shadow: 0 1px 2px rgba(0,0,0,0.45), 0 8px 20px -8px rgba(0,0,0,0.55), 0 0 46px 6px rgba(247,248,250,0.05);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.45), 0 8px 20px -8px rgba(0,0,0,0.55), var(--dot-glow);
 }
 .spec-panel-interactive:hover {
   border-color: #414855;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.5), 0 16px 32px -8px rgba(0,0,0,0.6), 0 0 56px 8px rgba(247,248,250,0.08);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.5), 0 16px 32px -8px rgba(0,0,0,0.6), var(--dot-glow-hover);
 }
 
 /* Press button — the primary interactive object. Color comes from
@@ -435,22 +445,23 @@
   background: linear-gradient(180deg, var(--spot-top, #DE4A34) 0%, var(--spot, #C93420) 100%);
   color: var(--spot-on, #F7F8FA);
   border: 1px solid rgba(0,0,0,0.3);
-  box-shadow: 0 1px 1px rgba(0,0,0,0.4), 0 3px 10px -2px var(--spot-dim, rgba(201,52,32,0.35));
+  box-shadow: 0 1px 1px rgba(0,0,0,0.4), 0 3px 10px -2px var(--spot-dim, rgba(201,52,32,0.35)), var(--dot-glow);
 }
 .press-btn-primary:hover {
-  box-shadow: 0 2px 4px rgba(0,0,0,0.45), 0 18px 34px -10px var(--spot-dim, rgba(201,52,32,0.35)), 0 0 0 1px var(--spot, #C93420);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.45), 0 18px 34px -10px var(--spot-dim, rgba(201,52,32,0.35)), 0 0 0 1px var(--spot, #C93420), var(--dot-glow-hover);
   transform: translateY(-1px);
 }
 .press-btn-secondary {
   background: #1B2029;
   border: 1.5px solid #2B303A;
   color: #E7E9ED;
+  box-shadow: var(--dot-glow);
 }
 .press-btn-secondary:hover {
   background: #232A35;
   border-color: #414855;
   transform: translateY(-1px);
-  box-shadow: 0 1px 2px rgba(0,0,0,0.4), 0 8px 18px -6px rgba(0,0,0,0.5);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.4), 0 8px 18px -6px rgba(0,0,0,0.5), var(--dot-glow-hover);
 }
 .press-btn-ghost {
   background: transparent;
@@ -484,6 +495,7 @@
   border-radius: 0.25rem;
   border: 1px solid currentColor;
   white-space: nowrap;
+  box-shadow: var(--dot-glow);
 }
 .colorbar-badge::before {
   content: "";
@@ -559,4 +571,52 @@
   background: #F7F8FA;
   pointer-events: none;
   mix-blend-mode: screen;
+}
+
+/* Spot chip — a size selector, styled like a die-cut swatch on the light
+   table rather than a generic pill: it picks up the shop's own spot ink
+   on hover/selection (var(--spot*), set by lib/spot.ts), the same register
+   .separation-card-interactive already answers to, so choosing a size feels
+   like the same light-table world as everything around it. */
+.spot-chip {
+  border: 1.5px solid #2B303A;
+  color: #A3AAB6;
+  background: rgba(255,255,255,0.02);
+  transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s cubic-bezier(0.16,1,0.3,1);
+}
+.spot-chip:hover:not(:disabled) {
+  border-color: var(--spot, #C93420);
+  color: var(--spot-bright, #FF8A73);
+  box-shadow: 0 0 0 1px var(--spot, #C93420), 0 0 18px -4px var(--spot-dim, rgba(201,52,32,0.4));
+  transform: translateY(-1px);
+}
+.spot-chip-selected,
+.spot-chip-selected:hover:not(:disabled) {
+  border-color: var(--spot, #C93420);
+  background: var(--spot, #C93420);
+  color: var(--spot-on, #F7F8FA);
+  box-shadow: 0 0 0 1px var(--spot, #C93420), 0 3px 10px -2px var(--spot-dim, rgba(201,52,32,0.35));
+  transform: none;
+}
+.spot-chip:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* Spot swatch — the color-circle equivalent of .spot-chip, for a product's
+   colorway picker. Same hover/selected language, ring-based since the
+   swatch's own fill already carries the actual garment color. */
+.spot-swatch {
+  transition: box-shadow 0.15s ease, transform 0.15s cubic-bezier(0.16,1,0.3,1), border-color 0.15s ease;
+}
+.spot-swatch:hover:not(:disabled) {
+  border-color: var(--spot-bright, #FF8A73);
+  box-shadow: 0 0 0 2px #0A0D14, 0 0 0 3.5px var(--spot, #C93420), 0 0 16px -4px var(--spot-dim, rgba(201,52,32,0.4));
+  transform: scale(1.08);
+}
+.spot-swatch-selected,
+.spot-swatch-selected:hover:not(:disabled) {
+  border-color: var(--spot, #C93420);
+  box-shadow: 0 0 0 2px #0A0D14, 0 0 0 3.5px var(--spot, #C93420);
+  transform: none;
 }

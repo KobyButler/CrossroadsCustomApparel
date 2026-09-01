@@ -30,6 +30,7 @@ export function Input({ label, error, hint, leftIcon, className, id, ...props }:
                     className={cn(
                         "w-full rounded-md border bg-white/[0.03] text-sm text-white",
                         "placeholder:text-graphite-500 transition-all duration-200",
+                        "shadow-[var(--dot-glow)] hover:shadow-[var(--dot-glow-hover)]",
                         "focus:outline-none focus:ring-2 focus:ring-signal-cyan/30 focus:border-signal-cyan/60",
                         "disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-white/[0.02]",
                         error

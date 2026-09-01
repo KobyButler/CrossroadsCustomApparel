@@ -40,7 +40,12 @@ export function SeparationHero() {
                     boxShadow: "0 1px 2px rgba(0,0,0,0.6), 0 0 70px -6px rgba(247,248,250,0.4), 0 40px 70px -24px rgba(0,0,0,0.75)",
                 }}
             >
-                <svg viewBox="0 0 320 340" className="w-full h-full p-8" aria-hidden="true">
+                {/* Cropped tight around the full garment silhouette (shoulder line at
+                    y=85 through hem at y=292, sleeve tip to sleeve tip at x=34..286)
+                    plus a slim margin — as tight as the shape can go without losing
+                    the collar/shoulder line that reads it as a shirt, centered near
+                    the logo (160,195) so the logo lands dead center. */}
+                <svg viewBox="24 67 272 246" className="w-full h-full p-5" aria-hidden="true">
                     <defs>
                         <mask id="garmentMask" maskUnits="userSpaceOnUse">
                             <rect width="320" height="340" fill="black" />

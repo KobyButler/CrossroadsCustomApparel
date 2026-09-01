@@ -247,7 +247,7 @@ function ProductDetailDrawer({
                                         return (
                                             <button key={c} type="button" title={c}
                                                 onClick={() => setSelColor(prev => prev === c ? "" : c)}
-                                                className={`relative w-8 h-8 rounded-full border-2 transition-all ${isSelected ? "scale-110 shadow-plate" : isWhite ? "border-plate-600 hover:border-plate-500" : "border-transparent hover:scale-105"}`}
+                                                className={`relative w-8 h-8 rounded-full border-2 spot-swatch ${isSelected ? "spot-swatch-selected" : isWhite ? "border-plate-600" : "border-transparent"}`}
                                                 style={{ backgroundColor: css, borderColor: isSelected ? "var(--spot)" : undefined }}>
                                                 {isSelected && (
                                                     <svg className={`absolute inset-0 m-auto w-4 h-4 ${isWhite || css.startsWith("#f") || css.startsWith("#e") || css.startsWith("#d") ? "text-plate-950" : "text-white"}`}
@@ -278,10 +278,7 @@ function ProductDetailDrawer({
                                     {sizes.map(s => (
                                         <button key={s} type="button"
                                             onClick={() => setSelSize(prev => prev === s ? "" : s)}
-                                            className="px-3.5 py-2 rounded-md border text-sm font-bold transition-all duration-150"
-                                            style={selSize === s
-                                                ? { background: "var(--spot)", color: "var(--spot-on)", borderColor: "var(--spot)" }
-                                                : { borderColor: "#2B303A", color: "#A3AAB6" }}>
+                                            className={`px-3.5 py-2 rounded-md border text-sm font-bold spot-chip ${selSize === s ? "spot-chip-selected" : ""}`}>
                                             {s}
                                         </button>
                                     ))}
@@ -410,10 +407,15 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
         <div className="press-canvas min-h-screen flex flex-col relative font-press" style={spotVars(spot)}>
             <PressFrame />
 
-            {/* ── HEADER ── */}
-            <div className="relative z-10">
-                <PublicHeader backHref="/shops" backLabel="All shops" />
+            {/* PublicHeader is a direct child of this min-h-screen root — not
+                nested inside the (short) hero block below — so its sticky
+                positioning stays anchored for the full scroll length of the
+                page instead of releasing once the hero's own container
+                scrolls out of view. See DESIGN.md. */}
+            <PublicHeader backHref="/shops" backLabel="All shops" />
 
+            {/* ── HERO ── */}
+            <div className="relative z-10">
                 <div className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 py-10 sm:py-14">
                     <motion.div initial={{ opacity:0, y:-8 }} animate={{ opacity:1, y:0 }} transition={{ duration:0.4, ease:EASE }}>
                         <h1 className="font-display uppercase text-3xl sm:text-4xl lg:text-5xl text-plate-50 leading-tight mb-3 tracking-tight flex items-center gap-3">
@@ -438,8 +440,9 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
                 </div>
             </div>
 
-            {/* ── STICKY NAV BAR ── */}
-            <div className="sticky top-0 z-20 bg-plate-950/90 backdrop-blur-md border-b border-plate-800">
+            {/* ── STICKY CART-STATUS BAR — stacks directly below the persistent
+                PublicHeader (top-16 = its 64px height), never overlapping it ── */}
+            <div className="sticky top-16 z-20 bg-plate-950/90 backdrop-blur-md border-b border-plate-800">
                 <div className="max-w-5xl mx-auto px-4 sm:px-6 h-13 py-2.5 flex items-center justify-between gap-3">
                     <p className="text-sm font-bold text-plate-50">
                         {itemCount === 0 ? "Select your items below" : `${itemCount} item${itemCount !== 1 ? "s" : ""} in your cart${otherShopsCount > 0 ? ` (${otherShopsCount} from other shops)` : ""}`}
@@ -557,10 +560,7 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
                                                                     {sizes.map(s => (
                                                                         <button key={s} type="button"
                                                                             onClick={() => setSelection(active.id,"size", sel.size===s ? "" : s)}
-                                                                            className="text-xs px-2.5 py-1 rounded-md border font-bold transition-all duration-150"
-                                                                            style={sel.size === s
-                                                                                ? { background: "var(--spot)", color: "var(--spot-on)", borderColor: "var(--spot)" }
-                                                                                : { borderColor: "#2B303A", color: "#A3AAB6" }}>
+                                                                            className={`text-xs px-2.5 py-1 rounded-md border font-bold spot-chip ${sel.size === s ? "spot-chip-selected" : ""}`}>
                                                                             {s}
                                                                         </button>
                                                                     ))}
@@ -579,8 +579,8 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
                                                                         return (
                                                                             <button key={c} type="button" title={c}
                                                                                 onClick={() => setSelection(active.id,"color", sel.color===c ? "" : c)}
-                                                                                className="w-6 h-6 rounded-full border-2 transition-all"
-                                                                                style={{ backgroundColor: css, borderColor: isSelected ? "var(--spot)" : "#2B303A", transform: isSelected ? "scale(1.1)" : undefined, boxShadow: isSelected ? "0 0 0 2px var(--spot-dim)" : undefined }}>
+                                                                                className={`w-6 h-6 rounded-full border-2 spot-swatch ${isSelected ? "spot-swatch-selected" : ""}`}
+                                                                                style={{ backgroundColor: css, borderColor: isSelected ? "var(--spot)" : "#2B303A" }}>
                                                                             </button>
                                                                         );
                                                                     })}
