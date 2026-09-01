@@ -21,9 +21,9 @@ const BAR_COLORS = ["#487b74", "#4c6383", "#c65f24", "#eeeade"];
 // center≈420) from about y=405 down to the hem at y=750, well clear of
 // the sleeves both above and beside it. The print sits centered on that
 // column, starting just below the collar/shoulder transition.
-const LOGO_X = 320;
-const LOGO_Y = 180;
-const LOGO_SIZE = 200;
+const LOGO_X = 270;
+const LOGO_Y = 200;
+const LOGO_SIZE = 300;
 
 const sweep = { duration: 1.05, ease: [0.45, 0.05, 0.55, 0.95] as [number, number, number, number] };
 
@@ -176,10 +176,13 @@ export function SeparationHero() {
                 <RegistrationMark className="absolute bottom-3 left-3 w-4 h-4 text-plate-600" strokeWidth={1.25} />
                 <RegistrationMark className="absolute bottom-3 right-3 w-4 h-4 text-plate-600" strokeWidth={1.25} />
 
-                {/* Color bar — the press sheet's own calibration strip */}
+                {/* Color bar — the press sheet's own calibration strip. A thin
+                    border keeps every swatch legible against the card's own
+                    off-white ground — without it, the palest swatch (#eeeade)
+                    all but disappears into the background. */}
                 <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1">
                     {BAR_COLORS.map(c => (
-                        <span key={c} className="w-3 h-3 rounded-[1px]" style={{ background: c }} />
+                        <span key={c} className="w-3 h-3 rounded-[1px] border border-black/15" style={{ background: c }} />
                     ))}
                 </div>
             </div>
