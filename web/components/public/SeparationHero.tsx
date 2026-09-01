@@ -29,7 +29,6 @@ const sweep = { duration: 1.05, ease: [0.45, 0.05, 0.55, 0.95] as [number, numbe
 
 export function SeparationHero() {
     const [printing, setPrinting] = useState(false);
-    const [flash, setFlash] = useState(false);
     const clipRectRef = useRef<SVGRectElement>(null);
 
     useEffect(() => {
@@ -50,8 +49,7 @@ export function SeparationHero() {
                 onUpdate: (v) => clipRectRef.current?.setAttribute("width", String(v)),
             });
         }, 500);
-        const t2 = setTimeout(() => setFlash(true), 500 + 1100);
-        return () => { clearTimeout(t1); clearTimeout(t2); };
+        return () => { clearTimeout(t1); };
     }, []);
 
     return (
@@ -127,15 +125,8 @@ export function SeparationHero() {
                     </g>
 
                     {/* The printed logo group — the true full-color logo underneath
-                        plus the black "unprinted screen" layer clipped away on top —
-                        settles with a small "stamped down" bounce once the pass
-                        completes. */}
-                    <motion.g
-                        initial={{ scale: 1 }}
-                        animate={printing ? { scale: [1, 1, 1.04, 1] } : {}}
-                        transition={{ duration: 0.4, delay: sweep.duration, ease: [0.16, 1, 0.3, 1], times: [0, 0.85, 0.93, 1] }}
-                        style={{ transformOrigin: `${LOGO_X + LOGO_SIZE / 2}px ${LOGO_Y + LOGO_SIZE / 2}px` }}
-                    >
+                        plus the black "unprinted screen" layer clipped away on top. */}
+                    <g>
                         {/* The true full-color logo sits underneath the whole time —
                             the blade doesn't paint it in, it just uncovers what's
                             already there. */}
@@ -146,7 +137,7 @@ export function SeparationHero() {
                         <g clipPath="url(#squeegeeClip)">
                             <image href="/logo.png" x={LOGO_X} y={LOGO_Y} width={LOGO_SIZE} height={LOGO_SIZE} filter="url(#toBlack)" />
                         </g>
-                    </motion.g>
+                    </g>
 
                     {/* The squeegee itself — a slight rubber-blade gradient with a
                         bright leading edge, dragging top to bottom in exact sync with
@@ -167,8 +158,6 @@ export function SeparationHero() {
                         />
                     </motion.g>
                 </svg>
-
-                {flash && <motion.div className="exposure-flash-overlay" initial={{ opacity: 0 }} animate={{ opacity: [0, 0.55, 0] }} transition={{ duration: 0.4 }} />}
 
                 {/* Corner registration marks — the light table's own crop marks */}
                 <RegistrationMark className="absolute top-3 left-3 w-4 h-4 text-plate-600" strokeWidth={1.25} />

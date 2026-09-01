@@ -252,7 +252,21 @@ clipPath rotation trick from Rev. 6.1, the ref+setAttribute animation)
 carried over unchanged — only the LOGO_X/Y/SIZE constants and the
 viewBox needed new numbers for the new asset's scale. The squeegee blade
 was also flattened to perfectly horizontal by explicit request, dropping
-the `skewY(-8)` lean the original printer's-drag-angle version used. -->
+the `skewY(-8)` lean the original printer's-drag-angle version used.
+
+Rev. 6.4 (2026-09-01, same day): three more small hero adjustments, all
+by explicit request. The print size grew from 200 to 300 (still centered
+on the same torso column). The color-bar swatches gained a thin
+`border-black/15` — the palest one (`#eeeade`) was blending into the
+card's own off-white background without it. And the two flourishes the
+original squeegee-hero concept shipped with are gone entirely: the "UV
+flash bed" white overlay that fired after the sweep, and the "stamped
+down" bounce (`scale: [1,1,1.04,1]`) on the logo group once the pass
+completed. Both are removed outright, not just disabled — the `flash`
+state, its timer, its JSX, and the now-orphaned `.exposure-flash-overlay`
+CSS class are gone from `SeparationHero.tsx`/`globals.css`, and the logo
+group is a plain (non-motion) `<g>` again. The hero's motion now ends the
+moment the squeegee finishes its pass and fades out — no epilogue beat. -->
 
 
 
