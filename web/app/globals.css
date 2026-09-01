@@ -585,17 +585,6 @@
   background-size: 10px 10px;
 }
 
-/* A brief exposure-unit flash — the signature hero moment's finishing
-   beat, a UV flash bed reserved for the one moment that earns it, never a
-   generic click feedback. */
-.exposure-flash-overlay {
-  position: absolute;
-  inset: 0;
-  background: #F7F8FA;
-  pointer-events: none;
-  mix-blend-mode: screen;
-}
-
 /* Spot chip — a size selector, styled like a die-cut swatch on the light
    table rather than a generic pill: it picks up the shop's own spot ink
    on hover/selection (var(--spot*), set by lib/spot.ts), the same register
