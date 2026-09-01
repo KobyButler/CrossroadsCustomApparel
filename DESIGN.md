@@ -235,7 +235,25 @@ headings — white glow behind white text reads as far subtler than the
 same value on colored text, so a second explicit rule, `h1,h2,h3,h4,h5 {
 text-shadow: 0 0 100px; }` (no color given, so it resolves to that
 heading's own currentColor at full strength), now overrides the inherited
-`--text-glow` for headings specifically, both registers. -->
+`--text-glow` for headings specifically, both registers.
+
+Rev. 6.3 (2026-09-01, same day): the landing hero's garment is now a real
+product photo (`public/TSHIRT.webp`, a flat-lay blank tee with genuine
+alpha transparency, supplied by the user) in place of the hand-drawn
+vector silhouette every earlier revision of this hero used — by explicit
+request. `SeparationHero`'s coordinate system (the logo placement, the
+viewBox, the shadow filter's offsets) was rebuilt entirely against the
+photo's own 832×832 pixel space rather than eyeballed: its alpha channel
+was scanned row-by-row to find the collar/sleeve/torso geometry, landing
+the print on the torso's own stable, sleeve-clear column (center ≈420,
+starting just below the collar) rather than guessing a position that
+might sit on a sleeve or a fold. The squeegee-pull mechanism itself (the
+clipPath rotation trick from Rev. 6.1, the ref+setAttribute animation)
+carried over unchanged — only the LOGO_X/Y/SIZE constants and the
+viewBox needed new numbers for the new asset's scale. The squeegee blade
+was also flattened to perfectly horizontal by explicit request, dropping
+the `skewY(-8)` lean the original printer's-drag-angle version used. -->
+
 
 
 ## Overview
