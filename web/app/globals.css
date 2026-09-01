@@ -185,7 +185,12 @@
 .console-panel {
   background: linear-gradient(180deg, #171B21 0%, #121620 100%);
   border: 1px solid rgba(255,255,255,0.08);
-  box-shadow: 0 1px 2px rgba(0,0,0,0.5), 0 10px 24px -8px rgba(0,0,0,0.6);
+  /* The third term is a wide, soft, low-opacity white glow — not really a
+     shadow at all, it's there to brighten the canvas's dot texture in a
+     halo just outside the panel's own edge, so the panel reads as if it's
+     casting a little light onto the light table behind it. See the
+     matching term on .separation-card/.spec-panel and DESIGN.md. */
+  box-shadow: 0 1px 2px rgba(0,0,0,0.5), 0 10px 24px -8px rgba(0,0,0,0.6), 0 0 46px 6px rgba(247,248,250,0.05);
   transition: box-shadow 0.25s ease, border-color 0.25s ease, transform 0.25s cubic-bezier(0.16,1,0.3,1);
 }
 
@@ -193,7 +198,7 @@
    not static layout chrome like the sidebar). */
 .console-panel-interactive:hover {
   border-color: rgba(255,255,255,0.14);
-  box-shadow: 0 2px 6px rgba(0,0,0,0.55), 0 20px 44px -10px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.06);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.55), 0 20px 44px -10px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.06), 0 0 56px 8px rgba(247,248,250,0.08);
   transform: translateY(-2px);
 }
 
@@ -345,13 +350,18 @@
   background: linear-gradient(180deg, #171B21 0%, #0F1319 100%);
   border: 1px solid #2B303A;
   border-radius: 0.625rem;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.5), 0 10px 24px -8px rgba(0,0,0,0.65);
+  /* The last term is a wide, soft, low-opacity white glow, not a real
+     shadow — it brightens the canvas's dot texture in a halo just outside
+     the card's edge, so the card reads as if it's casting a little light
+     onto the light table behind it. See the matching term on .console-
+     panel/.spec-panel and DESIGN.md. */
+  box-shadow: 0 1px 2px rgba(0,0,0,0.5), 0 10px 24px -8px rgba(0,0,0,0.65), 0 0 46px 6px rgba(247,248,250,0.05);
   transition: transform 0.3s cubic-bezier(0.16,1,0.3,1), box-shadow 0.3s ease, border-color 0.3s ease;
 }
 .separation-card-interactive:hover {
   transform: translateY(-4px);
   border-color: var(--spot, #C93420);
-  box-shadow: 0 2px 4px rgba(0,0,0,0.55), 0 22px 42px -10px rgba(0,0,0,0.7), 0 0 26px -6px var(--spot-dim, rgba(201,52,32,0.35));
+  box-shadow: 0 2px 4px rgba(0,0,0,0.55), 0 22px 42px -10px rgba(0,0,0,0.7), 0 0 26px -6px var(--spot-dim, rgba(201,52,32,0.35)), 0 0 56px 8px rgba(247,248,250,0.07);
 }
 /* The registration crosshair — a real pre-press alignment mark, not a
    decorative corner flourish. Two strokes (::before + ::after) offset by a
@@ -393,11 +403,14 @@
   background: linear-gradient(180deg, #171B21 0%, #121620 100%);
   border: 1px solid #2B303A;
   border-radius: 0.75rem;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.45), 0 8px 20px -8px rgba(0,0,0,0.55);
+  /* Same wide, soft, low-opacity white glow as .separation-card/.console-
+     panel — brightens the dot texture in a halo around the panel rather
+     than reading as a real drop shadow. See DESIGN.md. */
+  box-shadow: 0 1px 2px rgba(0,0,0,0.45), 0 8px 20px -8px rgba(0,0,0,0.55), 0 0 46px 6px rgba(247,248,250,0.05);
 }
 .spec-panel-interactive:hover {
   border-color: #414855;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.5), 0 16px 32px -8px rgba(0,0,0,0.6);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.5), 0 16px 32px -8px rgba(0,0,0,0.6), 0 0 56px 8px rgba(247,248,250,0.08);
 }
 
 /* Press button — the primary interactive object. Color comes from

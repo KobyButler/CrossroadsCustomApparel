@@ -450,11 +450,11 @@ function YouthLinkPanel({ products, editProductId, adultColors, adultPriceDollar
                             value={priceDollars}
                             onChange={e => onPriceChange(e.target.value)}
                             placeholder={`${adultPriceDollars || "0.00"} (same as Adult)`}
-                            className="w-full pl-6 pr-3 py-2 text-sm border border-white/10 rounded-md outline-none focus:border-signal-cyan/60 focus:ring-2 focus:ring-signal-cyan/30 bg-white/[0.03] text-white placeholder:text-graphite-500 transition-all"
+                            className={`w-full pl-6 py-2 text-sm border border-white/10 rounded-md outline-none focus:border-signal-cyan/60 focus:ring-2 focus:ring-signal-cyan/30 bg-white/[0.03] text-white placeholder:text-graphite-500 transition-all ${priceDollars ? "pr-16" : "pr-3"}`}
                         />
                         {priceDollars && (
                             <button type="button" onClick={() => onPriceChange("")}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-graphite-300 hover:text-white">
+                                className="absolute right-7 top-1/2 -translate-y-1/2 text-xs font-semibold text-graphite-300 hover:text-white">
                                 Reset
                             </button>
                         )}
