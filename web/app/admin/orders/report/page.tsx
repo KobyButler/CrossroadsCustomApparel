@@ -298,7 +298,6 @@ export default function OrderReportPage() {
                     {vendors.map((vendor, vIdx) => {
                         const lines = report.byVendor[vendor];
                         const totalQty = lines.reduce((a, l) => a + l.quantity, 0);
-                        const alreadyOrderedCount = report.alreadyOrdered[vendor]?.length ?? 0;
                         const isRealVendor = vendor === "SANMAR" || vendor === "SSACTIVEWEAR";
                         // Placing a new vendor PO only makes sense against pending (Unfulfilled)
                         // orders — never against orders already shipped or cancelled.
@@ -317,9 +316,6 @@ export default function OrderReportPage() {
                                     </div>
                                     {canPlaceOrders ? (
                                         <div className="flex items-center gap-2 no-print">
-                                            {alreadyOrderedCount > 0 && (
-                                                <Badge variant="warning" size="sm">{alreadyOrderedCount} order{alreadyOrderedCount !== 1 ? "s" : ""} already ordered</Badge>
-                                            )}
                                             <Button size="sm" disabled={shipTo ? !shipTo.configured : false} onClick={() => setConfirmVendor(vendor)}>
                                                 {vendorSelectedCount > 0
                                                     ? `Place Order — ${vendorSelectedCount} Selected`
