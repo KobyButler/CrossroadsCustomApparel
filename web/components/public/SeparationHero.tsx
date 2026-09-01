@@ -11,13 +11,13 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { RegistrationMark } from "./RegistrationMark";
 
-const BAR_COLORS = ["#00AEEF", "#EC008C", "#FFE800", "#0A0D14"];
+const BAR_COLORS = ["#487b74", "#4c6383", "#c65f24", "#eeeade"];
 
 // Logo bounding box inside the 320x340 shirt viewBox — square, centered
 // roughly where the old emblem sat (cx 160, cy 195).
-const LOGO_X = 108;
-const LOGO_Y = 143;
-const LOGO_SIZE = 104;
+const LOGO_X = 100;
+const LOGO_Y = 105;
+const LOGO_SIZE = 115;
 
 export function SeparationHero() {
     const [printing, setPrinting] = useState(false);
