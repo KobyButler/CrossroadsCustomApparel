@@ -10,6 +10,7 @@ import { useToast } from "@/components/ui/toast";
 import { ZoomableImage, ImageLightbox } from "@/components/ui/zoomable-image";
 import { IconButton, IconButtonRow } from "@/components/ui/icon-button";
 import { EditIcon, DuplicateIcon, TrashIcon } from "@/components/ui/icons";
+import { useSortable, SortableTh } from "@/components/ui/sortable-th";
 import { motion, Reorder } from "framer-motion";
 import { getColorCss } from "@/lib/colors";
 
@@ -1010,6 +1011,13 @@ export default function ProductsPage() {
             && (!filterShop || (p.shops ?? []).some(s => s.id === filterShop))
             && (!filterVendor || p.vendor === filterVendor);
     });
+    const { sorted: sortedProducts, sortKey: productSortKey, sortDir: productSortDir, requestSort: requestProductSort } = useSortable(filtered, (p, key) => {
+        if (key === "name") return p.name;
+        if (key === "sku") return p.sku;
+        if (key === "vendor") return VENDOR_LABELS[p.vendor] ?? p.vendor;
+        if (key === "price") return p.priceCents;
+        return null;
+    });
 
     function openEdit(p: Product) {
         setEditProduct(p);
@@ -1227,9 +1235,18 @@ export default function ProductsPage() {
                 ) : (
                     <div className="overflow-x-auto">
                         <div className="table-wrap"><table className="data-table">
-                            <thead><tr><th>Thumbnail</th><th>Product</th><th className="w-24">Crossroads SKU</th><th className="text-center">Shops</th><th className="text-center">Vendor</th><th>Variants</th><th>Price</th><th className="text-right pr-5">Actions</th></tr></thead>
+                            <thead><tr>
+                                <th>Thumbnail</th>
+                                <SortableTh sortKey="name" currentKey={productSortKey} dir={productSortDir} onSort={requestProductSort}>Product</SortableTh>
+                                <SortableTh sortKey="sku" currentKey={productSortKey} dir={productSortDir} onSort={requestProductSort} className="w-24">Crossroads SKU</SortableTh>
+                                <th className="text-center">Shops</th>
+                                <SortableTh sortKey="vendor" currentKey={productSortKey} dir={productSortDir} onSort={requestProductSort} className="text-center" align="center">Vendor</SortableTh>
+                                <th>Variants</th>
+                                <SortableTh sortKey="price" currentKey={productSortKey} dir={productSortDir} onSort={requestProductSort}>Price</SortableTh>
+                                <th className="text-right pr-5">Actions</th>
+                            </tr></thead>
                             <tbody>
-                                {filtered.map((p, idx) => {
+                                {sortedProducts.map((p, idx) => {
                                     const productImages: string[] = p.imagesJson ? JSON.parse(p.imagesJson) : [];
                                     return (
                                     <motion.tr key={p.id} initial={{ opacity:0, y:4 }} animate={{ opacity:1, y:0 }} transition={{ delay:idx*0.02, duration:0.2 }}>

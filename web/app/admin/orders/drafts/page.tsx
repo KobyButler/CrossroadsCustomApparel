@@ -7,6 +7,7 @@ import { Select } from "@/components/ui/select";
 import { Modal, ModalFooter } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
 import { motion } from "framer-motion";
+import { useSortable, SortableTh } from "@/components/ui/sortable-th";
 
 const EASE = [0.16, 1, 0.3, 1] as [number, number, number, number];
 
@@ -61,6 +62,15 @@ export default function DraftsPage() {
 
     const filteredProducts = products.filter(p => !filterShop || (p.shops ?? []).some((s: any) => s.id === filterShop));
 
+    const { sorted: sortedDrafts, sortKey: draftSortKey, sortDir: draftSortDir, requestSort: requestDraftSort } = useSortable(drafts, (o, key) => {
+        if (key === "id") return o.id;
+        if (key === "customer") return o.customerName;
+        if (key === "items") return o.items?.length ?? 0;
+        if (key === "total") return o.totalCents;
+        if (key === "created") return new Date(o.createdAt);
+        return null;
+    });
+
     return (
         <div className="space-y-6">
             <motion.div
@@ -91,9 +101,15 @@ export default function DraftsPage() {
                     </div>
                 ) : (
                     <div className="table-wrap"><table className="data-table">
-                        <thead><tr><th>Order ID</th><th>Customer</th><th>Items</th><th>Total</th><th>Created</th></tr></thead>
+                        <thead><tr>
+                            <SortableTh sortKey="id" currentKey={draftSortKey} dir={draftSortDir} onSort={requestDraftSort}>Order ID</SortableTh>
+                            <SortableTh sortKey="customer" currentKey={draftSortKey} dir={draftSortDir} onSort={requestDraftSort}>Customer</SortableTh>
+                            <SortableTh sortKey="items" currentKey={draftSortKey} dir={draftSortDir} onSort={requestDraftSort}>Items</SortableTh>
+                            <SortableTh sortKey="total" currentKey={draftSortKey} dir={draftSortDir} onSort={requestDraftSort}>Total</SortableTh>
+                            <SortableTh sortKey="created" currentKey={draftSortKey} dir={draftSortDir} onSort={requestDraftSort}>Created</SortableTh>
+                        </tr></thead>
                         <tbody>
-                            {drafts.map((o, idx) => (
+                            {sortedDrafts.map((o, idx) => (
                                 <motion.tr key={o.id} initial={{ opacity:0, y:4 }} animate={{ opacity:1, y:0 }} transition={{ delay:idx*0.03, duration:0.2 }}>
                                     <td><code className="text-xs font-mono font-medium text-signal-cyan">#{o.id.slice(-8).toUpperCase()}</code></td>
                                     <td><p className="text-sm font-semibold text-white">{o.customerName}</p><p className="text-xs text-graphite-300">{o.customerEmail}</p></td>

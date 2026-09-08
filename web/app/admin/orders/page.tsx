@@ -10,6 +10,7 @@ import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import { IconButton, IconButtonRow } from "@/components/ui/icon-button";
 import { EyeIcon, EditIcon, CheckIcon, XCircleIcon } from "@/components/ui/icons";
+import { useSortable, SortableTh } from "@/components/ui/sortable-th";
 import { motion, AnimatePresence } from "framer-motion";
 
 type VendorOrder = {
@@ -179,6 +180,17 @@ export default function OrdersPage() {
         const q = search.toLowerCase();
         return !q || o.customerName.toLowerCase().includes(q) ||
             o.customerEmail.toLowerCase().includes(q) || o.id.toLowerCase().includes(q);
+    });
+    const { sorted: sortedOrders, sortKey: orderSortKey, sortDir: orderSortDir, requestSort: requestOrderSort } = useSortable(filtered, (o, key) => {
+        if (key === "id") return o.id;
+        if (key === "customer") return o.customerName;
+        if (key === "shop") return o.shop?.name ?? "";
+        if (key === "items") return o.items.reduce((a, i) => a + i.quantity, 0);
+        if (key === "total") return o.totalCents;
+        if (key === "status") return o.status;
+        if (key === "payment") return o.paymentStatus ?? "";
+        if (key === "date") return new Date(o.createdAt);
+        return null;
     });
 
     function toggleSelect(id: string) {
@@ -435,13 +447,19 @@ export default function OrdersPage() {
                                             checked={selectedIds.size === filtered.length && filtered.length > 0}
                                             onChange={toggleAll} className="rounded border-white/20 bg-white/[0.03] accent-signal-cyan" />
                                     </th>
-                                    <th>Order</th><th>Customer</th><th>Shop</th>
-                                    <th>Items</th><th>Total</th><th>Status</th><th>Payment</th>
-                                    <th>Date</th><th className="text-right pr-5">Actions</th>
+                                    <SortableTh sortKey="id" currentKey={orderSortKey} dir={orderSortDir} onSort={requestOrderSort}>Order</SortableTh>
+                                    <SortableTh sortKey="customer" currentKey={orderSortKey} dir={orderSortDir} onSort={requestOrderSort}>Customer</SortableTh>
+                                    <SortableTh sortKey="shop" currentKey={orderSortKey} dir={orderSortDir} onSort={requestOrderSort}>Shop</SortableTh>
+                                    <SortableTh sortKey="items" currentKey={orderSortKey} dir={orderSortDir} onSort={requestOrderSort}>Items</SortableTh>
+                                    <SortableTh sortKey="total" currentKey={orderSortKey} dir={orderSortDir} onSort={requestOrderSort}>Total</SortableTh>
+                                    <SortableTh sortKey="status" currentKey={orderSortKey} dir={orderSortDir} onSort={requestOrderSort}>Status</SortableTh>
+                                    <SortableTh sortKey="payment" currentKey={orderSortKey} dir={orderSortDir} onSort={requestOrderSort}>Payment</SortableTh>
+                                    <SortableTh sortKey="date" currentKey={orderSortKey} dir={orderSortDir} onSort={requestOrderSort}>Date</SortableTh>
+                                    <th className="text-right pr-5">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {filtered.map((order, idx) => (
+                                {sortedOrders.map((order, idx) => (
                                     <motion.tr key={order.id}
                                         initial={{ opacity:0, y:4 }}
                                         animate={{ opacity:1, y:0 }}

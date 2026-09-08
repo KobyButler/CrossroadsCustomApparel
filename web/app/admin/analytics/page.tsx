@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { api } from "@/app/lib/api";
 import { motion } from "framer-motion";
+import { useSortable, SortableTh } from "@/components/ui/sortable-th";
 
 const EASE = [0.16, 1, 0.3, 1] as [number, number, number, number];
 
@@ -41,6 +42,17 @@ export default function AnalyticsPage() {
     useEffect(() => {
         api("/analytics/overview").then(setData).catch(console.error).finally(() => setLoading(false));
     }, []);
+
+    // Called unconditionally (before the loading/no-data early returns below)
+    // per the Rules of Hooks — data?.top ?? [] keeps it safe either way.
+    const { sorted: sortedTop, sortKey: topSortKey, sortDir: topSortDir, requestSort: requestTopSort } = useSortable(data?.top ?? [], (p, key) => {
+        if (key === "name") return p.name;
+        if (key === "sku") return p.sku;
+        if (key === "qty") return p.qty;
+        if (key === "sales") return p.salesCents;
+        return null;
+    });
+    const salesRank = new Map((data?.top ?? []).map((p, i) => [p.sku, i + 1]));
 
     if (loading) {
         return (
@@ -137,13 +149,23 @@ export default function AnalyticsPage() {
                     <div className="py-12 text-center text-sm text-graphite-300">No product sales yet</div>
                 ) : (
                     <div className="table-wrap"><table className="data-table">
-                        <thead><tr><th>#</th><th>Product</th><th>SKU</th><th>Units Sold</th><th>Sales</th></tr></thead>
+                        <thead><tr>
+                            <th>#</th>
+                            <SortableTh sortKey="name" currentKey={topSortKey} dir={topSortDir} onSort={requestTopSort}>Product</SortableTh>
+                            <SortableTh sortKey="sku" currentKey={topSortKey} dir={topSortDir} onSort={requestTopSort}>SKU</SortableTh>
+                            <SortableTh sortKey="qty" currentKey={topSortKey} dir={topSortDir} onSort={requestTopSort}>Units Sold</SortableTh>
+                            <SortableTh sortKey="sales" currentKey={topSortKey} dir={topSortDir} onSort={requestTopSort}>Sales</SortableTh>
+                        </tr></thead>
                         <tbody>
-                            {data.top.map((p, i) => (
+                            {sortedTop.map((p) => (
                                 <tr key={p.sku}>
                                     <td>
+                                        {/* The original sales rank, independent of whatever
+                                            column the table is currently sorted by — "#3"
+                                            should always mean "3rd best seller," not "3rd row
+                                            in the current sort order." */}
                                         <span className="inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold font-mono bg-white/[0.06] text-graphite-300">
-                                            {i+1}
+                                            {salesRank.get(p.sku)}
                                         </span>
                                     </td>
                                     <td className="font-semibold text-graphite-100">{p.name}</td>

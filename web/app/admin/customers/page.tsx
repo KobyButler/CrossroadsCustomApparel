@@ -4,6 +4,7 @@ import { api } from "@/app/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { motion } from "framer-motion";
+import { useSortable, SortableTh } from "@/components/ui/sortable-th";
 
 const EASE = [0.16, 1, 0.3, 1] as [number, number, number, number];
 
@@ -24,6 +25,20 @@ export default function CustomersPage() {
     const filtered = customers.filter(c =>
         !search || c.name.toLowerCase().includes(search.toLowerCase()) || c.email.toLowerCase().includes(search.toLowerCase())
     );
+    // Computed against the full customer list, independent of whatever
+    // column the table is currently sorted by — this used to be "row 0
+    // after a hardcoded revenue sort," which broke the instant a column
+    // header made a different sort order possible.
+    const topSpenderId = customers.length > 1
+        ? customers.reduce((max, c) => (c.totalCents > max.totalCents ? c : max), customers[0]).id
+        : null;
+    const { sorted: sortedCustomers, sortKey: customerSortKey, sortDir: customerSortDir, requestSort: requestCustomerSort } = useSortable(filtered, (c, key) => {
+        if (key === "name") return c.name;
+        if (key === "orders") return c.orders;
+        if (key === "total") return c.totalCents;
+        if (key === "since") return new Date(c.createdAt);
+        return null;
+    }, "total", "desc");
 
     const totalRevenue = customers.reduce((a, c) => a + c.totalCents, 0);
     const totalOrderCount = customers.reduce((a, c) => a + c.orders, 0);
@@ -94,9 +109,15 @@ export default function CustomersPage() {
                 ) : (
                     <div className="overflow-x-auto">
                         <div className="table-wrap"><table className="data-table">
-                            <thead><tr><th>Customer</th><th>Orders</th><th>Total Spent</th><th>Top Customer?</th><th>Since</th></tr></thead>
+                            <thead><tr>
+                                <SortableTh sortKey="name" currentKey={customerSortKey} dir={customerSortDir} onSort={requestCustomerSort}>Customer</SortableTh>
+                                <SortableTh sortKey="orders" currentKey={customerSortKey} dir={customerSortDir} onSort={requestCustomerSort}>Orders</SortableTh>
+                                <SortableTh sortKey="total" currentKey={customerSortKey} dir={customerSortDir} onSort={requestCustomerSort}>Total Spent</SortableTh>
+                                <th>Top Customer?</th>
+                                <SortableTh sortKey="since" currentKey={customerSortKey} dir={customerSortDir} onSort={requestCustomerSort}>Since</SortableTh>
+                            </tr></thead>
                             <tbody>
-                                {filtered.sort((a,b) => b.totalCents - a.totalCents).map((c, idx) => (
+                                {sortedCustomers.map((c, idx) => (
                                     <motion.tr key={c.id} initial={{ opacity:0, y:4 }} animate={{ opacity:1, y:0 }} transition={{ delay:idx*0.025, duration:0.2 }}>
                                         <td>
                                             <div className="flex items-center gap-3">
@@ -116,7 +137,7 @@ export default function CustomersPage() {
                                             <span className="text-sm font-bold font-mono text-white tabular-nums">{fmt(c.totalCents)}</span>
                                         </td>
                                         <td>
-                                            {idx === 0 && customers.length > 1 ? (
+                                            {c.id === topSpenderId ? (
                                                 <Badge variant="warning" size="sm">
                                                     <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.286 3.958a1 1 0 00.95.69h4.162c.969 0 1.371 1.24.588 1.81l-3.368 2.447a1 1 0 00-.364 1.118l1.287 3.957c.3.922-.755 1.688-1.54 1.118l-3.367-2.447a1 1 0 00-1.175 0l-3.367 2.447c-.784.57-1.838-.196-1.539-1.118l1.286-3.957a1 1 0 00-.363-1.118L2.98 9.385c-.784-.57-.38-1.81.588-1.81h4.163a1 1 0 00.95-.69l1.287-3.958z"/></svg>
                                                     Top spender

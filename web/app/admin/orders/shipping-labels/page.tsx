@@ -9,6 +9,7 @@ import { useToast } from "@/components/ui/toast";
 import { IconButton, IconButtonRow } from "@/components/ui/icon-button";
 import { CreditCardIcon, PrinterIcon, RefreshIcon, TruckIcon } from "@/components/ui/icons";
 import { motion, AnimatePresence } from "framer-motion";
+import { useSortable, SortableTh } from "@/components/ui/sortable-th";
 
 const EASE = [0.16, 1, 0.3, 1] as [number, number, number, number];
 
@@ -63,6 +64,15 @@ export default function ShippingLabelsPage() {
         const q = search.toLowerCase();
         return (!q || r.customerName.toLowerCase().includes(q) || r.customerEmail.toLowerCase().includes(q))
             && (!statusFilter || statusOf(r) === statusFilter);
+    });
+
+    const { sorted: sortedRows, sortKey: labelSortKey, sortDir: labelSortDir, requestSort: requestLabelSort } = useSortable(filtered, (r, key) => {
+        if (key === "order") return r.orderId;
+        if (key === "customer") return r.customerName;
+        if (key === "shipTo") return `${r.shipCity ?? ""} ${r.shipState ?? ""}`.trim() || r.shipAddress1;
+        if (key === "status") return statusOf(r);
+        if (key === "tracking") return r.shippingTrackingNumber ?? "";
+        return null;
     });
 
     function toggleSelect(id: string) { setSelectedIds(p => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; }); }
@@ -198,11 +208,16 @@ export default function ShippingLabelsPage() {
                                             checked={selectedIds.size === filtered.length && filtered.length > 0} onChange={selectAll}
                                             className="rounded border-white/20 accent-signal-cyan" />
                                     </th>
-                                    <th>Order</th><th>Customer</th><th>Ship To</th><th>Status</th><th>Tracking</th><th className="text-right pr-5">Actions</th>
+                                    <SortableTh sortKey="order" currentKey={labelSortKey} dir={labelSortDir} onSort={requestLabelSort}>Order</SortableTh>
+                                    <SortableTh sortKey="customer" currentKey={labelSortKey} dir={labelSortDir} onSort={requestLabelSort}>Customer</SortableTh>
+                                    <SortableTh sortKey="shipTo" currentKey={labelSortKey} dir={labelSortDir} onSort={requestLabelSort}>Ship To</SortableTh>
+                                    <SortableTh sortKey="status" currentKey={labelSortKey} dir={labelSortDir} onSort={requestLabelSort}>Status</SortableTh>
+                                    <SortableTh sortKey="tracking" currentKey={labelSortKey} dir={labelSortDir} onSort={requestLabelSort}>Tracking</SortableTh>
+                                    <th className="text-right pr-5">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {filtered.map((r, idx) => {
+                                {sortedRows.map((r, idx) => {
                                     const status = statusOf(r);
                                     const isBuying = buyingIds.has(r.id);
                                     return (

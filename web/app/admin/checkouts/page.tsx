@@ -3,6 +3,11 @@ import { useEffect, useState } from "react";
 import { api } from "@/app/lib/api";
 import { Badge, statusVariant } from "@/components/ui/badge";
 import { motion } from "framer-motion";
+import { useSortable, SortableTh } from "@/components/ui/sortable-th";
+
+function parseCartItems(cartJson: string | undefined): any[] {
+    try { return JSON.parse(cartJson || "[]"); } catch { return []; }
+}
 
 const EASE = [0.16, 1, 0.3, 1] as [number, number, number, number];
 
@@ -13,6 +18,15 @@ export default function AbandonedCheckoutsPage() {
     useEffect(() => {
         api("/checkouts").then(d => setRows(Array.isArray(d) ? d : [])).catch(console.error).finally(() => setLoading(false));
     }, []);
+
+    const { sorted: sortedRows, sortKey: checkoutSortKey, sortDir: checkoutSortDir, requestSort: requestCheckoutSort } = useSortable(rows, (r, key) => {
+        if (key === "date") return new Date(r.updatedAt ?? r.createdAt);
+        if (key === "email") return r.email ?? "";
+        if (key === "shop") return r.shop?.name ?? "";
+        if (key === "items") return parseCartItems(r.cartJson).length;
+        if (key === "status") return r.status;
+        return null;
+    });
 
     return (
         <div className="space-y-6">
@@ -42,10 +56,16 @@ export default function AbandonedCheckoutsPage() {
                 ) : (
                     <div className="overflow-x-auto">
                         <div className="table-wrap"><table className="data-table">
-                            <thead><tr><th>Date</th><th>Email</th><th>Shop</th><th>Items</th><th>Status</th></tr></thead>
+                            <thead><tr>
+                                <SortableTh sortKey="date" currentKey={checkoutSortKey} dir={checkoutSortDir} onSort={requestCheckoutSort}>Date</SortableTh>
+                                <SortableTh sortKey="email" currentKey={checkoutSortKey} dir={checkoutSortDir} onSort={requestCheckoutSort}>Email</SortableTh>
+                                <SortableTh sortKey="shop" currentKey={checkoutSortKey} dir={checkoutSortDir} onSort={requestCheckoutSort}>Shop</SortableTh>
+                                <SortableTh sortKey="items" currentKey={checkoutSortKey} dir={checkoutSortDir} onSort={requestCheckoutSort}>Items</SortableTh>
+                                <SortableTh sortKey="status" currentKey={checkoutSortKey} dir={checkoutSortDir} onSort={requestCheckoutSort}>Status</SortableTh>
+                            </tr></thead>
                             <tbody>
-                                {rows.map((r, idx) => {
-                                    const items = (() => { try { return JSON.parse(r.cartJson || "[]"); } catch { return []; } })();
+                                {sortedRows.map((r, idx) => {
+                                    const items = parseCartItems(r.cartJson);
                                     return (
                                         <motion.tr key={r.id} initial={{ opacity:0, y:4 }} animate={{ opacity:1, y:0 }} transition={{ delay:idx*0.03, duration:0.2 }}>
                                             <td><span className="text-xs text-graphite-300 font-mono">{new Date(r.updatedAt ?? r.createdAt).toLocaleString()}</span></td>
