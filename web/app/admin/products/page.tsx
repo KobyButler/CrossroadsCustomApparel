@@ -32,6 +32,14 @@ type Product = {
     youthPriceCents?: number | null;
 };
 
+// From GET /products/vendor-drift — a product whose configured color/size no
+// longer matches SanMar's own cataloged options for its style.
+type VendorDriftEntry = {
+    productId: string; productName: string; sku: string; style: string;
+    invalidColors: { value: string; suggestion: string | null }[];
+    invalidSizes: { value: string; suggestion: string | null }[];
+};
+
 const VENDOR_LABELS: Record<string, string> = { SANMAR:"SanMar", SSACTIVEWEAR:"S&S Activewear", OTHER:"Other" };
 const VENDOR_COLORS: Record<string, string> = { SANMAR:"info", SSACTIVEWEAR:"success", OTHER:"default" };
 const EMPTY = {
@@ -125,6 +133,122 @@ function ColorTagInput({ label, tags, onChange, placeholder, required }: { label
                     Add
                 </button>
             </div>
+        </div>
+    );
+}
+
+// ── SanMarResyncPanel ──────────────────────────────────────────────────────────
+// Lets an admin re-pick a SanMar-linked product's colors/sizes from SanMar's
+// own live catalog at any time — not just once at import. Built directly in
+// response to a real incident: SanMar renamed a color out from under an
+// existing product ("Athletic Grey" → "Athletic Heather" on PC78) with no
+// notice, and the only way to fix it before this existed was to manually
+// retype the color and hope it matched. Flags whichever of the product's
+// CURRENT colors/sizes no longer appear in that live list, so the mismatch
+// is obvious rather than something you have to notice yourself.
+function normalizeLocal(s: string): string { return s.trim().toLowerCase(); }
+
+function SanMarResyncPanel({ style, colors, sizes, onApply }: {
+    style: string; colors: string[]; sizes: string[];
+    onApply: (colors: string[], sizes: string[]) => void;
+}) {
+    const { toast } = useToast();
+    const [open, setOpen] = useState(false);
+    const [loading, setLoading] = useState(false);
+    const [live, setLive] = useState<{ colors: string[]; sizes: string[] } | null>(null);
+    const [checkedColors, setCheckedColors] = useState<Set<string>>(new Set());
+    const [checkedSizes, setCheckedSizes] = useState<Set<string>>(new Set());
+
+    async function fetchLive() {
+        if (!style.trim()) { toast("Set a Vendor SKU first", "error"); return; }
+        setLoading(true);
+        try {
+            const d = await api(`/sanmar/catalog/${encodeURIComponent(style.trim())}`);
+            const liveColors: string[] = d.colors ?? [];
+            const liveSizes: string[] = d.sizes ?? [];
+            setLive({ colors: liveColors, sizes: liveSizes });
+            // Pre-check whatever's currently selected and still valid, so
+            // clicking Apply without touching anything is a no-op rather than
+            // a silent wipe of everything that happened to still be correct.
+            setCheckedColors(new Set(liveColors.filter(c => colors.some(x => normalizeLocal(x) === normalizeLocal(c)))));
+            setCheckedSizes(new Set(liveSizes.filter(s => sizes.some(x => normalizeLocal(x) === normalizeLocal(s)))));
+            setOpen(true);
+        } catch (err: any) { toast(err.message || "Couldn't reach SanMar", "error"); }
+        finally { setLoading(false); }
+    }
+
+    function toggle(set: Set<string>, setter: (s: Set<string>) => void, value: string) {
+        const next = new Set(set);
+        next.has(value) ? next.delete(value) : next.add(value);
+        setter(next);
+    }
+
+    const staleColors = live ? colors.filter(c => !live.colors.some(x => normalizeLocal(x) === normalizeLocal(c))) : [];
+    const staleSizes = live ? sizes.filter(s => !live.sizes.some(x => normalizeLocal(x) === normalizeLocal(s))) : [];
+
+    return (
+        <div className="mt-2">
+            <button type="button" onClick={fetchLive} disabled={loading}
+                className="text-xs font-semibold text-signal-cyan hover:text-signal-cyan-bright transition-colors inline-flex items-center gap-1.5 disabled:opacity-50">
+                <svg className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                {loading ? "Checking SanMar…" : "Pick from SanMar"}
+            </button>
+
+            {open && live && (
+                <div className="mt-3 bg-white/[0.04] border border-white/10 rounded-lg p-4 space-y-4">
+                    {staleColors.length > 0 || staleSizes.length > 0 ? (
+                        <div className="flex items-start gap-2 bg-signal-amber/10 border border-signal-amber/25 rounded-md px-3 py-2">
+                            <svg className="w-4 h-4 text-signal-amber shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                            <p className="text-xs text-graphite-100">
+                                {staleColors.length > 0 && <>Currently set color{staleColors.length !== 1 ? "s" : ""} no longer on SanMar: <strong>{staleColors.join(", ")}</strong>. </>}
+                                {staleSizes.length > 0 && <>Currently set size{staleSizes.length !== 1 ? "s" : ""} no longer on SanMar: <strong>{staleSizes.join(", ")}</strong>. </>}
+                                Check the correct ones below, then Apply.
+                            </p>
+                        </div>
+                    ) : (
+                        <p className="text-xs text-graphite-300">Everything currently set matches SanMar&apos;s live catalog for {style}. Check/uncheck below to change your selection.</p>
+                    )}
+
+                    <div>
+                        <p className="field-label mb-1.5">Live Colors</p>
+                        <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto press-scroll">
+                            {live.colors.map(c => {
+                                const checked = checkedColors.has(c);
+                                return (
+                                    <button key={c} type="button" onClick={() => toggle(checkedColors, setCheckedColors, c)}
+                                        className={`inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-full border transition-all ${checked ? "bg-signal-cyan/15 text-signal-cyan border-signal-cyan/40" : "border-white/10 text-graphite-300 hover:border-white/25"}`}>
+                                        <span className="w-3 h-3 rounded-full border border-white/20 shrink-0" style={{ backgroundColor: getColorCss(c) }} />
+                                        {c}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    <div>
+                        <p className="field-label mb-1.5">Live Sizes</p>
+                        <div className="flex flex-wrap gap-1.5">
+                            {live.sizes.map(s => {
+                                const checked = checkedSizes.has(s);
+                                return (
+                                    <button key={s} type="button" onClick={() => toggle(checkedSizes, setCheckedSizes, s)}
+                                        className={`text-xs px-2.5 py-1 rounded-full border transition-all ${checked ? "bg-signal-cyan/15 text-signal-cyan border-signal-cyan/40" : "border-white/10 text-graphite-300 hover:border-white/25"}`}>
+                                        {s}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    <div className="flex justify-end gap-2 pt-1">
+                        <button type="button" onClick={() => setOpen(false)} className="text-xs text-graphite-300 hover:text-white px-3 py-1.5">Cancel</button>
+                        <button type="button" onClick={() => { onApply([...checkedColors], [...checkedSizes]); setOpen(false); }}
+                            className="text-xs font-semibold bg-signal-cyan text-graphite-950 px-3 py-1.5 rounded-md hover:bg-signal-cyan-bright transition-colors">
+                            Apply {checkedColors.size} color{checkedColors.size !== 1 ? "s" : ""}, {checkedSizes.size} size{checkedSizes.size !== 1 ? "s" : ""}
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
@@ -838,6 +962,14 @@ export default function ProductsPage() {
     const [importSource, setImportSource] = useState<"MANUAL"|"SANMAR"|"SS">("MANUAL");
     const [importedFrom, setImportedFrom] = useState<string>("");
 
+    // Products whose configured color/size no longer matches what SanMar
+    // itself calls it (SanMar renaming a color out from under an existing
+    // product is what this catches) — keyed by product id for O(1) lookup
+    // per row. Fetched once alongside the product list; a failure here is
+    // silent (an empty map just means no warnings show, not a page error) —
+    // this is an advisory layer on top of a page that works fine without it.
+    const [vendorDrift, setVendorDrift] = useState<Record<string, VendorDriftEntry>>({});
+
     useEffect(() => {
         Promise.all([api("/products"), api("/shops")])
             .then(([p, s]) => {
@@ -846,6 +978,9 @@ export default function ProductsPage() {
             })
             .catch(console.error)
             .finally(() => setLoading(false));
+        api("/products/vendor-drift")
+            .then(r => setVendorDrift(Object.fromEntries((r.data ?? []).map((d: VendorDriftEntry) => [d.productId, d]))))
+            .catch(() => {});
     }, []);
 
     const filtered = products.filter(p => {
@@ -1052,7 +1187,18 @@ export default function ProductsPage() {
                                             )}
                                         </td>
                                         <td>
-                                            <p className="font-semibold text-white text-sm">{p.name}</p>
+                                            <div className="flex items-center gap-1.5">
+                                                <p className="font-semibold text-white text-sm">{p.name}</p>
+                                                {vendorDrift[p.id] && (
+                                                    <span title={[
+                                                        ...vendorDrift[p.id].invalidColors.map(c => `Color "${c.value}" no longer matches SanMar${c.suggestion ? ` (try "${c.suggestion}")` : ""}`),
+                                                        ...vendorDrift[p.id].invalidSizes.map(s => `Size "${s.value}" no longer matches SanMar${s.suggestion ? ` (try "${s.suggestion}")` : ""}`),
+                                                    ].join("\n")}
+                                                        className="shrink-0 w-4 h-4 rounded-full bg-signal-amber/15 text-signal-amber flex items-center justify-center cursor-help">
+                                                        <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd"/></svg>
+                                                    </span>
+                                                )}
+                                            </div>
                                             {p.brand && <p className="text-xs text-graphite-300">{p.brand}</p>}
                                         </td>
                                         <td><code className="text-xs font-mono bg-white/[0.06] px-1.5 py-0.5 rounded-md text-graphite-200">{p.sku}</code></td>
@@ -1202,6 +1348,11 @@ export default function ProductsPage() {
                         <TagInput label="Available Sizes" tags={form.sizes} onChange={sizes => setForm(p => ({ ...p, sizes }))} placeholder="S, M, L, XL…" />
                         <ColorTagInput label="Available Colors" required tags={form.colors} onChange={colors => setForm(p => ({ ...p, colors }))} />
                     </div>
+
+                    {form.vendor === "SANMAR" && (form.vendorIdentifier || form.sku) && (
+                        <SanMarResyncPanel style={form.vendorIdentifier || form.sku} colors={form.colors} sizes={form.sizes}
+                            onApply={(colors, sizes) => setForm(p => ({ ...p, colors, sizes }))} />
+                    )}
 
                     <ShopMultiSelect shops={shops} selected={form.shopIds} onChange={shopIds => setForm(p => ({ ...p, shopIds }))} />
 
