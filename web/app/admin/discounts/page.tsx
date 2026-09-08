@@ -10,6 +10,13 @@ import { useToast } from "@/components/ui/toast";
 import { IconButton, IconButtonRow } from "@/components/ui/icon-button";
 import { PowerIcon, CheckIcon } from "@/components/ui/icons";
 import { motion } from "framer-motion";
+import { useSortable, SortableTh } from "@/components/ui/sortable-th";
+
+function discountStatusLabel(c: DiscountCode): string {
+    const expired = c.expiresAt && new Date(c.expiresAt) < new Date();
+    const exhausted = c.maxUses && c.usedCount >= c.maxUses;
+    return expired ? "Expired" : exhausted ? "Exhausted" : c.active ? "Active" : "Inactive";
+}
 
 const EASE = [0.16, 1, 0.3, 1] as [number, number, number, number];
 
@@ -60,6 +67,15 @@ export default function DiscountsPage() {
         return c.type==="PERCENT" ? `${c.value}% off` : `$${(c.value/100).toFixed(2)} off`;
     }
 
+    const { sorted: sortedCodes, sortKey: discountSortKey, sortDir: discountSortDir, requestSort: requestDiscountSort } = useSortable(codes, (c, key) => {
+        if (key === "code") return c.code;
+        if (key === "value") return c.value;
+        if (key === "used") return c.usedCount;
+        if (key === "status") return discountStatusLabel(c);
+        if (key === "expires") return c.expiresAt ? new Date(c.expiresAt) : null;
+        return null;
+    });
+
     return (
         <div className="space-y-6">
             <motion.div initial={{ opacity:0, y:-8 }} animate={{ opacity:1, y:0 }} transition={{ duration:0.4, ease:EASE }}
@@ -95,9 +111,16 @@ export default function DiscountsPage() {
                 ) : (
                     <div className="overflow-x-auto">
                         <div className="table-wrap"><table className="data-table">
-                            <thead><tr><th>Code</th><th>Discount</th><th>Used</th><th>Status</th><th>Expires</th><th className="text-right pr-5">Actions</th></tr></thead>
+                            <thead><tr>
+                                <SortableTh sortKey="code" currentKey={discountSortKey} dir={discountSortDir} onSort={requestDiscountSort}>Code</SortableTh>
+                                <SortableTh sortKey="value" currentKey={discountSortKey} dir={discountSortDir} onSort={requestDiscountSort}>Discount</SortableTh>
+                                <SortableTh sortKey="used" currentKey={discountSortKey} dir={discountSortDir} onSort={requestDiscountSort}>Used</SortableTh>
+                                <SortableTh sortKey="status" currentKey={discountSortKey} dir={discountSortDir} onSort={requestDiscountSort}>Status</SortableTh>
+                                <SortableTh sortKey="expires" currentKey={discountSortKey} dir={discountSortDir} onSort={requestDiscountSort}>Expires</SortableTh>
+                                <th className="text-right pr-5">Actions</th>
+                            </tr></thead>
                             <tbody>
-                                {codes.map((c, idx) => {
+                                {sortedCodes.map((c, idx) => {
                                     const expired   = c.expiresAt && new Date(c.expiresAt) < new Date();
                                     const exhausted = c.maxUses && c.usedCount >= c.maxUses;
                                     const isActive  = c.active && !expired && !exhausted;

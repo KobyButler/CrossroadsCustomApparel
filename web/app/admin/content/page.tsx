@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import { motion } from "framer-motion";
+import { useSortable, SortableTh } from "@/components/ui/sortable-th";
 
 const EASE = [0.16, 1, 0.3, 1] as [number, number, number, number];
 
@@ -21,6 +22,12 @@ export default function ContentPage() {
             .catch(console.error)
             .finally(() => setLoading(false));
     }, []);
+
+    const { sorted: sortedPages, sortKey: pageSortKey, sortDir: pageSortDir, requestSort: requestPageSort } = useSortable(pages, (p, key) => {
+        if (key === "slug") return p.slug;
+        if (key === "title") return p.title;
+        return null;
+    });
 
     async function handleSave(e: React.FormEvent) {
         e.preventDefault();
@@ -109,13 +116,13 @@ export default function ContentPage() {
                         <div className="table-wrap"><table className="data-table">
                             <thead>
                                 <tr>
-                                    <th>Slug</th>
-                                    <th>Title</th>
+                                    <SortableTh sortKey="slug" currentKey={pageSortKey} dir={pageSortDir} onSort={requestPageSort}>Slug</SortableTh>
+                                    <SortableTh sortKey="title" currentKey={pageSortKey} dir={pageSortDir} onSort={requestPageSort}>Title</SortableTh>
                                     <th>Preview URL</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {pages.map((p, idx) => (
+                                {sortedPages.map((p, idx) => (
                                     <motion.tr key={p.id} initial={{ opacity:0, y:4 }} animate={{ opacity:1, y:0 }} transition={{ delay:idx*0.03, duration:0.2 }}>
                                         <td>
                                             <code className="text-xs font-mono bg-white/[0.06] text-graphite-200 px-1.5 py-0.5 rounded">

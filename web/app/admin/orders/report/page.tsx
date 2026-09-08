@@ -8,6 +8,7 @@ import { Modal, ModalFooter } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
 import { ZoomableImage } from "@/components/ui/zoomable-image";
 import { motion } from "framer-motion";
+import { SortableTh, SortState, sortRows, toggleSortState } from "@/components/ui/sortable-th";
 import { getColorCss } from "@/lib/colors";
 
 const EASE = [0.16, 1, 0.3, 1] as [number, number, number, number];
@@ -89,6 +90,11 @@ export default function OrderReportPage() {
     const [expandedHistory, setExpandedHistory] = useState<string | null>(null);
     const [shopReport, setShopReport] = useState<ShopReport | null>(null);
     const [loadingShopReport, setLoadingShopReport] = useState(false);
+    // Each vendor/shop renders its own independent table in a loop — one
+    // useSortable() per iteration would violate the Rules of Hooks, so sort
+    // state lives here as one map (keyed by vendor name / shop id) instead.
+    const [vendorSort, setVendorSort] = useState<Record<string, SortState>>({});
+    const [shopLineSort, setShopLineSort] = useState<Record<string, SortState>>({});
 
     useEffect(() => {
         api("/shops").then(d => setShops(Array.isArray(d) ? d : d?.data ?? [])).catch(() => {});
@@ -296,7 +302,16 @@ export default function OrderReportPage() {
                     </p>
 
                     {vendors.map((vendor, vIdx) => {
-                        const lines = report.byVendor[vendor];
+                        const rawLines = report.byVendor[vendor];
+                        const vSort = vendorSort[vendor] ?? { key: null, dir: "asc" as const };
+                        const lines = sortRows(rawLines, (l, key) => {
+                            if (key === "vendorStyle") return l.vendorStyle;
+                            if (key === "product") return l.productNames[0] ?? "";
+                            if (key === "color") return l.color ?? "";
+                            if (key === "size") return l.size ?? "";
+                            if (key === "qty") return l.quantity;
+                            return null;
+                        }, vSort);
                         const totalQty = lines.reduce((a, l) => a + l.quantity, 0);
                         const isRealVendor = vendor === "SANMAR" || vendor === "SSACTIVEWEAR";
                         // Placing a new vendor PO only makes sense against pending (Unfulfilled)
@@ -336,7 +351,11 @@ export default function OrderReportPage() {
                                                         className="rounded border-white/20 accent-signal-cyan" />
                                                 </th>
                                             )}
-                                            <th>Vendor Style</th><th>Your Product(s)</th><th>Color</th><th>Size</th><th className="text-right pr-5">Qty Needed</th>
+                                            <SortableTh sortKey="vendorStyle" currentKey={vSort.key} dir={vSort.dir} onSort={k => setVendorSort(p => ({ ...p, [vendor]: toggleSortState(p[vendor], k) }))}>Vendor Style</SortableTh>
+                                            <SortableTh sortKey="product" currentKey={vSort.key} dir={vSort.dir} onSort={k => setVendorSort(p => ({ ...p, [vendor]: toggleSortState(p[vendor], k) }))}>Your Product(s)</SortableTh>
+                                            <SortableTh sortKey="color" currentKey={vSort.key} dir={vSort.dir} onSort={k => setVendorSort(p => ({ ...p, [vendor]: toggleSortState(p[vendor], k) }))}>Color</SortableTh>
+                                            <SortableTh sortKey="size" currentKey={vSort.key} dir={vSort.dir} onSort={k => setVendorSort(p => ({ ...p, [vendor]: toggleSortState(p[vendor], k) }))}>Size</SortableTh>
+                                            <SortableTh sortKey="qty" currentKey={vSort.key} dir={vSort.dir} onSort={k => setVendorSort(p => ({ ...p, [vendor]: toggleSortState(p[vendor], k) }))} className="text-right pr-5" align="right">Qty Needed</SortableTh>
                                         </tr></thead>
                                         <tbody>
                                             {lines.map((l) => {
@@ -431,6 +450,16 @@ export default function OrderReportPage() {
                     </p>
 
                     {shopReport.shops.map((g, gIdx) => {
+                        const groupKey = g.shop?.id ?? "__none__";
+                        const gSort = shopLineSort[groupKey] ?? { key: null, dir: "asc" as const };
+                        const lines = sortRows(g.lines, (l, key) => {
+                            if (key === "product") return l.productName;
+                            if (key === "sku") return l.sku;
+                            if (key === "color") return l.color ?? "";
+                            if (key === "size") return l.size ?? "";
+                            if (key === "qty") return l.quantity;
+                            return null;
+                        }, gSort);
                         const totalQty = g.lines.reduce((a, l) => a + l.quantity, 0);
                         return (
                             <motion.div key={g.shop?.id ?? "__none__"} initial={{ opacity:0, y:8 }} animate={{ opacity:1, y:0 }}
@@ -445,10 +474,14 @@ export default function OrderReportPage() {
                                 <div className="overflow-x-auto">
                                     <div className="table-wrap"><table className="data-table">
                                         <thead><tr>
-                                            <th>Product</th><th>SKU</th><th>Color</th><th>Size</th><th className="text-right pr-5">Qty Ordered</th>
+                                            <SortableTh sortKey="product" currentKey={gSort.key} dir={gSort.dir} onSort={k => setShopLineSort(p => ({ ...p, [groupKey]: toggleSortState(p[groupKey], k) }))}>Product</SortableTh>
+                                            <SortableTh sortKey="sku" currentKey={gSort.key} dir={gSort.dir} onSort={k => setShopLineSort(p => ({ ...p, [groupKey]: toggleSortState(p[groupKey], k) }))}>SKU</SortableTh>
+                                            <SortableTh sortKey="color" currentKey={gSort.key} dir={gSort.dir} onSort={k => setShopLineSort(p => ({ ...p, [groupKey]: toggleSortState(p[groupKey], k) }))}>Color</SortableTh>
+                                            <SortableTh sortKey="size" currentKey={gSort.key} dir={gSort.dir} onSort={k => setShopLineSort(p => ({ ...p, [groupKey]: toggleSortState(p[groupKey], k) }))}>Size</SortableTh>
+                                            <SortableTh sortKey="qty" currentKey={gSort.key} dir={gSort.dir} onSort={k => setShopLineSort(p => ({ ...p, [groupKey]: toggleSortState(p[groupKey], k) }))} className="text-right pr-5" align="right">Qty Ordered</SortableTh>
                                         </tr></thead>
                                         <tbody>
-                                            {g.lines.map(l => (
+                                            {lines.map(l => (
                                                 <tr key={`${l.productId}|${l.color ?? ""}|${l.size ?? ""}`}>
                                                     <td>
                                                         <div className="flex items-center gap-3">

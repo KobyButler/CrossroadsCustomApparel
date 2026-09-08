@@ -9,6 +9,7 @@ import { useToast } from "@/components/ui/toast";
 import { IconButton, IconButtonRow } from "@/components/ui/icon-button";
 import { EditIcon, PowerIcon, CheckIcon, ArchiveIcon, RestoreIcon } from "@/components/ui/icons";
 import { motion } from "framer-motion";
+import { useSortable, SortableTh } from "@/components/ui/sortable-th";
 
 const EASE = [0.16, 1, 0.3, 1] as [number, number, number, number];
 
@@ -53,6 +54,21 @@ export default function ShopsPage() {
     const tabShops = tab === "active" ? liveShops : archivedShops;
     const filtered = tabShops.filter(s => !search || s.name.toLowerCase().includes(search.toLowerCase()));
     const activeCount = liveShops.filter(s => s.active).length;
+
+    function shopStatusLabel(s: Shop): string {
+        const expired = s.expiresAt && new Date(s.expiresAt) < new Date();
+        return s.archived ? "Archived" : expired ? "Expired" : s.active ? "Active" : "Inactive";
+    }
+
+    const { sorted: sortedShops, sortKey: shopSortKey, sortDir: shopSortDir, requestSort: requestShopSort } = useSortable(filtered, (s, key) => {
+        if (key === "name") return s.name;
+        if (key === "products") return s._count?.products ?? 0;
+        if (key === "link") return s.slug;
+        if (key === "status") return shopStatusLabel(s);
+        if (key === "shipping") return s.shippingEnabled ? 1 : 0;
+        if (key === "expires") return s.expiresAt ? new Date(s.expiresAt) : null;
+        return null;
+    });
 
     async function createShop(e: React.FormEvent) {
         e.preventDefault(); setSaving(true);
@@ -217,9 +233,17 @@ export default function ShopsPage() {
                 ) : (
                     <div className="overflow-x-auto">
                         <div className="table-wrap"><table className="data-table">
-                            <thead><tr><th>Shop Name</th><th>Products</th><th>Link</th><th>Status</th><th>Shipping</th><th>Expires</th><th className="text-right pr-5">Actions</th></tr></thead>
+                            <thead><tr>
+                                <SortableTh sortKey="name" currentKey={shopSortKey} dir={shopSortDir} onSort={requestShopSort}>Shop Name</SortableTh>
+                                <SortableTh sortKey="products" currentKey={shopSortKey} dir={shopSortDir} onSort={requestShopSort}>Products</SortableTh>
+                                <SortableTh sortKey="link" currentKey={shopSortKey} dir={shopSortDir} onSort={requestShopSort}>Link</SortableTh>
+                                <SortableTh sortKey="status" currentKey={shopSortKey} dir={shopSortDir} onSort={requestShopSort}>Status</SortableTh>
+                                <SortableTh sortKey="shipping" currentKey={shopSortKey} dir={shopSortDir} onSort={requestShopSort}>Shipping</SortableTh>
+                                <SortableTh sortKey="expires" currentKey={shopSortKey} dir={shopSortDir} onSort={requestShopSort}>Expires</SortableTh>
+                                <th className="text-right pr-5">Actions</th>
+                            </tr></thead>
                             <tbody>
-                                {filtered.map((shop, idx) => {
+                                {sortedShops.map((shop, idx) => {
                                     const expired = shop.expiresAt && new Date(shop.expiresAt) < new Date();
                                     return (
                                         <motion.tr key={shop.id} initial={{ opacity:0, y:4 }} animate={{ opacity:1, y:0 }} transition={{ delay:idx*0.03, duration:0.2 }}>

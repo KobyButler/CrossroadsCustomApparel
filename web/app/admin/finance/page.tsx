@@ -8,6 +8,7 @@ import { Select } from "@/components/ui/select";
 import { Modal, ModalFooter } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
 import { motion } from "framer-motion";
+import { useSortable, SortableTh } from "@/components/ui/sortable-th";
 
 const EASE = [0.16, 1, 0.3, 1] as [number, number, number, number];
 
@@ -158,6 +159,31 @@ export default function FinancePage() {
         const q = search.toLowerCase();
         return (!q || (t.note ?? "").toLowerCase().includes(q) || t.id.toLowerCase().includes(q)) && (!typeFilter || t.type === typeFilter);
     });
+    const { sorted: sortedTx, sortKey: txSortKey, sortDir: txSortDir, requestSort: requestTxSort } = useSortable(filtered, (t, key) => {
+        if (key === "type") return t.type;
+        if (key === "amount") return t.amountCents;
+        if (key === "note") return t.note ?? "";
+        if (key === "order") return t.order?.customerName ?? "";
+        if (key === "date") return new Date(t.createdAt);
+        return null;
+    });
+    const { sorted: sortedStripeTx, sortKey: stripeTxSortKey, sortDir: stripeTxSortDir, requestSort: requestStripeTxSort } = useSortable(stripeTx, (t, key) => {
+        if (key === "type") return t.type;
+        if (key === "gross") return t.grossCents;
+        if (key === "fee") return t.feeCents;
+        if (key === "net") return t.netCents;
+        if (key === "order") return t.orderCustomerName ?? t.description ?? "";
+        if (key === "date") return new Date(t.createdAt);
+        return null;
+    });
+    const { sorted: sortedPayouts, sortKey: payoutSortKey, sortDir: payoutSortDir, requestSort: requestPayoutSort } = useSortable(stripePayouts, (p, key) => {
+        if (key === "status") return p.status;
+        if (key === "amount") return p.amountCents;
+        if (key === "method") return p.method;
+        if (key === "arrival") return new Date(p.arrivalDate);
+        if (key === "description") return p.description ?? "";
+        return null;
+    });
 
     async function addTransaction(e: React.FormEvent) {
         e.preventDefault(); setSaving(true);
@@ -260,9 +286,15 @@ export default function FinancePage() {
                 ) : (
                     <div className="overflow-x-auto">
                         <div className="table-wrap"><table className="data-table">
-                            <thead><tr><th>Type</th><th>Amount</th><th>Note</th><th>Order</th><th>Date</th></tr></thead>
+                            <thead><tr>
+                                <SortableTh sortKey="type" currentKey={txSortKey} dir={txSortDir} onSort={requestTxSort}>Type</SortableTh>
+                                <SortableTh sortKey="amount" currentKey={txSortKey} dir={txSortDir} onSort={requestTxSort}>Amount</SortableTh>
+                                <SortableTh sortKey="note" currentKey={txSortKey} dir={txSortDir} onSort={requestTxSort}>Note</SortableTh>
+                                <SortableTh sortKey="order" currentKey={txSortKey} dir={txSortDir} onSort={requestTxSort}>Order</SortableTh>
+                                <SortableTh sortKey="date" currentKey={txSortKey} dir={txSortDir} onSort={requestTxSort}>Date</SortableTh>
+                            </tr></thead>
                             <tbody>
-                                {filtered.map((tx, idx) => (
+                                {sortedTx.map((tx, idx) => (
                                     <motion.tr key={tx.id} initial={{ opacity:0, y:4 }} animate={{ opacity:1, y:0 }} transition={{ delay:idx*0.02, duration:0.2 }}>
                                         <td><Badge variant={TYPE_VARIANT[tx.type] as any} size="sm">{tx.type.charAt(0)+tx.type.slice(1).toLowerCase()}</Badge></td>
                                         <td>
@@ -349,9 +381,16 @@ export default function FinancePage() {
                         ) : (
                             <div className="overflow-x-auto">
                                 <div className="table-wrap"><table className="data-table">
-                                    <thead><tr><th>Type</th><th>Gross</th><th>Fee</th><th>Net</th><th>Order</th><th>Date</th></tr></thead>
+                                    <thead><tr>
+                                        <SortableTh sortKey="type" currentKey={stripeTxSortKey} dir={stripeTxSortDir} onSort={requestStripeTxSort}>Type</SortableTh>
+                                        <SortableTh sortKey="gross" currentKey={stripeTxSortKey} dir={stripeTxSortDir} onSort={requestStripeTxSort}>Gross</SortableTh>
+                                        <SortableTh sortKey="fee" currentKey={stripeTxSortKey} dir={stripeTxSortDir} onSort={requestStripeTxSort}>Fee</SortableTh>
+                                        <SortableTh sortKey="net" currentKey={stripeTxSortKey} dir={stripeTxSortDir} onSort={requestStripeTxSort}>Net</SortableTh>
+                                        <SortableTh sortKey="order" currentKey={stripeTxSortKey} dir={stripeTxSortDir} onSort={requestStripeTxSort}>Order</SortableTh>
+                                        <SortableTh sortKey="date" currentKey={stripeTxSortKey} dir={stripeTxSortDir} onSort={requestStripeTxSort}>Date</SortableTh>
+                                    </tr></thead>
                                     <tbody>
-                                        {stripeTx.map((tx, idx) => (
+                                        {sortedStripeTx.map((tx, idx) => (
                                             <motion.tr key={tx.id} initial={{ opacity:0, y:4 }} animate={{ opacity:1, y:0 }} transition={{ delay:Math.min(idx*0.02, 0.3), duration:0.2 }}>
                                                 <td>
                                                     <Badge variant={(STRIPE_TYPE_VARIANT[tx.type] ?? "default") as any} size="sm">
@@ -410,9 +449,15 @@ export default function FinancePage() {
                         ) : (
                             <div className="overflow-x-auto">
                                 <div className="table-wrap"><table className="data-table">
-                                    <thead><tr><th>Status</th><th>Amount</th><th>Method</th><th>Arrival</th><th>Description</th></tr></thead>
+                                    <thead><tr>
+                                        <SortableTh sortKey="status" currentKey={payoutSortKey} dir={payoutSortDir} onSort={requestPayoutSort}>Status</SortableTh>
+                                        <SortableTh sortKey="amount" currentKey={payoutSortKey} dir={payoutSortDir} onSort={requestPayoutSort}>Amount</SortableTh>
+                                        <SortableTh sortKey="method" currentKey={payoutSortKey} dir={payoutSortDir} onSort={requestPayoutSort}>Method</SortableTh>
+                                        <SortableTh sortKey="arrival" currentKey={payoutSortKey} dir={payoutSortDir} onSort={requestPayoutSort}>Arrival</SortableTh>
+                                        <SortableTh sortKey="description" currentKey={payoutSortKey} dir={payoutSortDir} onSort={requestPayoutSort}>Description</SortableTh>
+                                    </tr></thead>
                                     <tbody>
-                                        {stripePayouts.map(p => (
+                                        {sortedPayouts.map(p => (
                                             <tr key={p.id}>
                                                 <td><Badge variant={(PAYOUT_STATUS_VARIANT[p.status] ?? "default") as any} size="sm">{p.status.charAt(0).toUpperCase() + p.status.slice(1).replace(/_/g, " ")}</Badge></td>
                                                 <td><span className="text-sm font-bold font-mono tabular-nums text-white">{fmt(p.amountCents)}</span></td>
