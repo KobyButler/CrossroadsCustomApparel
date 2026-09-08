@@ -40,6 +40,16 @@ type VendorDriftEntry = {
     invalidSizes: { value: string; suggestion: string | null }[];
 };
 
+// From PUT /products/:id's orderImpact — an unfulfilled order's line item
+// carrying a color/size this save just removed from the product.
+type OrderImpactRow = {
+    orderId: string; orderItemId: string; field: "color" | "size";
+    oldValue: string; otherFieldLabel: string | null;
+    suggestedValue: string | null; validOptions: string[];
+    customerName: string; quantity: number; orderCreatedAt: string;
+};
+type OrderImpact = { productName: string; affected: OrderImpactRow[] };
+
 const VENDOR_LABELS: Record<string, string> = { SANMAR:"SanMar", SSACTIVEWEAR:"S&S Activewear", OTHER:"Other" };
 const VENDOR_COLORS: Record<string, string> = { SANMAR:"info", SSACTIVEWEAR:"success", OTHER:"default" };
 const EMPTY = {
@@ -970,6 +980,17 @@ export default function ProductsPage() {
     // this is an advisory layer on top of a page that works fine without it.
     const [vendorDrift, setVendorDrift] = useState<Record<string, VendorDriftEntry>>({});
 
+    // The post-save "these orders still reference a value you just removed"
+    // review — a real diff/change-management screen, not an auto-applied
+    // fix: every row starts pre-checked with a suggested replacement where
+    // one exists, but nothing touches an order until "Apply Selected" is
+    // clicked. Keyed by `${orderItemId}:${field}` since one item can appear
+    // twice (a stale color AND a stale size).
+    const [orderImpact, setOrderImpact] = useState<OrderImpact | null>(null);
+    const [reconcileProductId, setReconcileProductId] = useState<string | null>(null);
+    const [reconcileSelections, setReconcileSelections] = useState<Record<string, { checked: boolean; newValue: string }>>({});
+    const [reconciling, setReconciling] = useState(false);
+
     useEffect(() => {
         Promise.all([api("/products"), api("/shops")])
             .then(([p, s]) => {
@@ -1066,6 +1087,16 @@ export default function ProductsPage() {
                 const u = await api(`/products/${editProduct.id}`, { method:"PUT", body:JSON.stringify(payload) });
                 setProducts(p => p.map(x => x.id===editProduct.id ? u : x));
                 toast("Product updated"); setEditProduct(null);
+
+                if (u.orderImpact?.affected?.length) {
+                    const impact = u.orderImpact as OrderImpact;
+                    setOrderImpact(impact);
+                    setReconcileProductId(editProduct.id);
+                    setReconcileSelections(Object.fromEntries(impact.affected.map(row => [
+                        `${row.orderItemId}:${row.field}`,
+                        { checked: row.suggestedValue != null, newValue: row.suggestedValue ?? row.validOptions[0] ?? "" }
+                    ])));
+                }
             } else {
                 const c = await api("/products", { method:"POST", body:JSON.stringify(payload) });
                 setProducts(p => [c,...p]); toast("Product created"); setShowAdd(false);
@@ -1073,6 +1104,32 @@ export default function ProductsPage() {
             setForm({ ...EMPTY });
         } catch (err: any) { toast(err.message || "Failed to save product", "error"); }
         finally { setSaving(false); }
+    }
+
+    async function applyReconciliation() {
+        if (!orderImpact) return;
+        const changes = orderImpact.affected
+            .map(row => ({ row, sel: reconcileSelections[`${row.orderItemId}:${row.field}`] }))
+            .filter(({ sel }) => sel?.checked && sel.newValue)
+            .map(({ row, sel }) => ({ orderItemId: row.orderItemId, field: row.field, newValue: sel.newValue }));
+
+        if (changes.length === 0 || !reconcileProductId) { setOrderImpact(null); return; }
+
+        setReconciling(true);
+        try {
+            const res = await api(`/products/${reconcileProductId}/reconcile-orders`, { method: "POST", body: JSON.stringify({ changes }) });
+            toast(`Updated ${res.applied} item${res.applied !== 1 ? "s" : ""} across ${res.ordersUpdated} order${res.ordersUpdated !== 1 ? "s" : ""}`);
+            setOrderImpact(null);
+        } catch (err: any) { toast(err.message || "Failed to update orders", "error"); }
+        finally { setReconciling(false); }
+    }
+
+    function toggleAllReconcile(checked: boolean) {
+        if (!orderImpact) return;
+        setReconcileSelections(prev => Object.fromEntries(orderImpact.affected.map(row => {
+            const key = `${row.orderItemId}:${row.field}`;
+            return [key, { ...prev[key], checked }];
+        })));
     }
 
     async function deleteProduct() {
@@ -1413,6 +1470,85 @@ export default function ProductsPage() {
                     <Button type="button" variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
                     <Button type="button" variant="danger" loading={deleting} onClick={deleteProduct}>Delete</Button>
                 </ModalFooter>
+            </Modal>
+
+            {/* Order reconciliation — a real change-management/diff screen, not
+                an auto-applied fix. Every row starts pre-checked only where a
+                confident suggestion exists (see vendorOptionMatch.ts); nothing
+                touches an order until "Apply Selected" is clicked. */}
+            <Modal open={!!orderImpact} onClose={() => setOrderImpact(null)} title="Unfulfilled orders reference a value you just removed" size="lg">
+                {orderImpact && (() => {
+                    const rows = orderImpact.affected;
+                    const selectedCount = rows.filter(r => reconcileSelections[`${r.orderItemId}:${r.field}`]?.checked).length;
+                    const allChecked = rows.length > 0 && selectedCount === rows.length;
+                    return (
+                        <div className="space-y-4">
+                            <p className="text-sm text-graphite-300">
+                                {rows.length} unfulfilled order item{rows.length !== 1 ? "s" : ""} for <span className="font-semibold text-white">{orderImpact.productName}</span> still {rows.length !== 1 ? "have" : "has"} a color or size that no longer exists on this product. Fulfilled and cancelled orders are never touched. Review each change below, then apply the ones you want — nothing here happens automatically.
+                            </p>
+
+                            <div className="border border-white/10 rounded-lg overflow-hidden max-h-[420px] overflow-y-auto press-scroll">
+                                <table className="w-full text-sm">
+                                    <thead className="bg-white/[0.04] sticky top-0"><tr>
+                                        <th className="w-10 pl-3 py-2">
+                                            <input type="checkbox" title="Select all" aria-label="Select all"
+                                                checked={allChecked} onChange={() => toggleAllReconcile(!allChecked)}
+                                                className="rounded border-white/20 accent-signal-cyan" />
+                                        </th>
+                                        <th className="text-left px-3 py-2 font-semibold text-graphite-300 text-xs">Order</th>
+                                        <th className="text-left px-3 py-2 font-semibold text-graphite-300 text-xs">Field</th>
+                                        <th className="text-left px-3 py-2 font-semibold text-graphite-300 text-xs">Change</th>
+                                        <th className="text-right px-3 py-2 font-semibold text-graphite-300 text-xs">Qty</th>
+                                    </tr></thead>
+                                    <tbody className="divide-y divide-white/[0.05]">
+                                        {rows.map(row => {
+                                            const key = `${row.orderItemId}:${row.field}`;
+                                            const sel = reconcileSelections[key] ?? { checked: false, newValue: row.validOptions[0] ?? "" };
+                                            return (
+                                                <tr key={key} className={sel.checked ? "bg-signal-cyan/[0.04]" : undefined}>
+                                                    <td className="pl-3 py-2">
+                                                        <input type="checkbox" checked={sel.checked}
+                                                            onChange={() => setReconcileSelections(prev => ({ ...prev, [key]: { ...sel, checked: !sel.checked } }))}
+                                                            className="rounded border-white/20 accent-signal-cyan" />
+                                                    </td>
+                                                    <td className="px-3 py-2">
+                                                        <p className="text-graphite-100">{row.customerName}</p>
+                                                        <p className="text-xs font-mono text-graphite-400">#{row.orderId.slice(-8).toUpperCase()}{row.otherFieldLabel ? ` · ${row.otherFieldLabel}` : ""}</p>
+                                                    </td>
+                                                    <td className="px-3 py-2 text-graphite-300 capitalize">{row.field}</td>
+                                                    <td className="px-3 py-2">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="font-mono text-xs text-signal-red bg-signal-red/10 px-1.5 py-0.5 rounded line-through">{row.oldValue}</span>
+                                                            <svg className="w-3.5 h-3.5 text-graphite-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
+                                                            <select value={sel.newValue}
+                                                                onChange={e => setReconcileSelections(prev => ({ ...prev, [key]: { ...sel, newValue: e.target.value } }))}
+                                                                className="text-xs font-mono bg-signal-green/10 text-signal-green border border-signal-green/25 rounded px-1.5 py-0.5 outline-none focus:ring-2 focus:ring-signal-cyan/30">
+                                                                {row.validOptions.map(o => <option key={o} value={o}>{o}</option>)}
+                                                            </select>
+                                                            {!row.suggestedValue && (
+                                                                <span title="No confident match was found — pick the right one" className="text-signal-amber">
+                                                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-3 py-2 text-right font-mono text-graphite-300">{row.quantity}</td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <ModalFooter>
+                                <Button type="button" variant="outline" onClick={() => setOrderImpact(null)}>Skip — leave orders as-is</Button>
+                                <Button type="button" loading={reconciling} disabled={selectedCount === 0} onClick={applyReconciliation}>
+                                    Apply Selected ({selectedCount})
+                                </Button>
+                            </ModalFooter>
+                        </div>
+                    );
+                })()}
             </Modal>
         </div>
     );
