@@ -192,6 +192,56 @@ export async function sendOfflinePaymentNotification(data: OfflinePaymentData): 
     });
 }
 
+type VendorOrderFailureData = {
+    vendor: string; poNumber: string; error: string;
+    shopName?: string | null; totalUnits: number; orderCount: number;
+};
+
+// Fires whenever a vendor PO submission fails (Order Report → Place Order),
+// so a rejection surfaces immediately instead of silently sitting in the
+// admin panel until someone happens to check. Nothing was placed with the
+// vendor when this fires — the failure already stopped it — so there's no
+// urgency framing beyond "come look," but it's still worth knowing about
+// right away rather than discovering it next time someone tries to reorder.
+export async function sendVendorOrderFailureNotification(data: VendorOrderFailureData): Promise<void> {
+    const transport = createTransport();
+    console.log(`[vendor-order] ${data.vendor} PO ${data.poNumber} failed: ${data.error}`);
+
+    if (!transport || !config.smtp.adminEmail) {
+        console.log(`[email] SMTP disabled or no ADMIN_NOTIFY_EMAIL set — would send vendor order failure alert for ${data.poNumber}`);
+        return;
+    }
+
+    const escapedError = data.error
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+    await transport.sendMail({
+        from: `"Crossroads Custom Apparel" <${config.smtp.from}>`,
+        to: config.smtp.adminEmail,
+        subject: `⚠️ ${data.vendor} order failed — ${data.poNumber}`,
+        html: `<!DOCTYPE html><html><head><meta charset="utf-8"></head>
+<body style="font-family:Inter,system-ui,sans-serif;background:#f8fafc;padding:24px;margin:0;">
+  <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:12px;border:1px solid #e2e8f0;overflow:hidden;">
+    <div style="background:#dc2626;padding:24px;">
+      <h1 style="color:#fff;margin:0;font-size:18px;">⚠️ Vendor order failed</h1>
+      ${data.shopName ? `<p style="color:#fecaca;margin:4px 0 0;font-size:13px;">${data.shopName}</p>` : ''}
+    </div>
+    <div style="padding:24px;">
+      <p style="margin:0 0 8px;color:#334155;font-size:15px;">A ${data.vendor} purchase order was <strong>not placed</strong> — nothing was sent or charged.</p>
+      <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:12px 16px;margin-bottom:16px;">
+        <p style="margin:0;font-size:13px;color:#991b1b;font-family:monospace;white-space:pre-wrap;">${escapedError}</p>
+      </div>
+      <div style="background:#f8fafc;border-radius:8px;padding:12px 16px;font-size:13px;color:#475569;">
+        PO reference: <strong>${data.poNumber}</strong><br/>
+        ${data.totalUnits} unit${data.totalUnits !== 1 ? 's' : ''} across ${data.orderCount} customer order${data.orderCount !== 1 ? 's' : ''}
+      </div>
+      <p style="margin-top:16px;color:#64748b;font-size:13px;">Check Order Report in the admin panel for full details, then try again once fixed.</p>
+    </div>
+  </div>
+</body></html>`
+    });
+}
+
 export async function sendOrderConfirmation(data: OrderEmailData): Promise<void> {
     const transport = createTransport();
     if (!transport) {

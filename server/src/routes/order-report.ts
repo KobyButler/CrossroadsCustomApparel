@@ -4,6 +4,7 @@ import { config } from '../config.js';
 import { submitOrderToSanMar } from '../vendors/sanmar.js';
 import { submitOrderToSS } from '../vendors/ssactivewear.js';
 import { vendorGroupKey, vendorStyleCode } from '../utils/vendorGrouping.js';
+import { sendVendorOrderFailureNotification } from '../utils/email.js';
 
 export const router = Router();
 
@@ -429,6 +430,7 @@ router.post('/place-order', async (req, res) => {
             result
         });
     } catch (err: any) {
+        const errorMessage = err?.response?.data?.message ?? err.message ?? 'Vendor order submission failed';
         const rawResponse = String(err?.response?.data ? JSON.stringify(err.response.data) : err?.message ?? err).slice(0, 65000);
         await Promise.all([...contributingOrderIds].map(orderId => prisma.vendorOrder.create({
             data: {
@@ -438,6 +440,12 @@ router.post('/place-order', async (req, res) => {
                 externalOrderNumber: poNumber, shopId: shop?.id ?? null, linesJson, totalUnits
             }
         })));
-        res.status(502).json({ error: err?.response?.data?.message ?? err.message ?? 'Vendor order submission failed' });
+        // Best-effort — a notification failing (SMTP down, misconfigured) must
+        // never mask the real failure the admin needs to see in the response.
+        sendVendorOrderFailureNotification({
+            vendor, poNumber, error: errorMessage,
+            shopName: shop?.name ?? null, totalUnits, orderCount: contributingOrderIds.size
+        }).catch(e => console.error('[vendor-order] failure notification failed to send (non-fatal):', e));
+        res.status(502).json({ error: errorMessage });
     }
 });

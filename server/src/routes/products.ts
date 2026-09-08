@@ -2,6 +2,8 @@ import { Router } from 'express';
 import multer from 'multer';
 import path from 'path';
 import { prisma } from '../prisma.js';
+import { vendorStyleCode } from '../utils/vendorGrouping.js';
+import { optionMatches, suggestClosestOption } from '../utils/vendorOptionMatch.js';
 
 const uploadsDir = process.env.UPLOADS_DIR ?? path.join(__dirname, '../../../public/uploads');
 const uploadImages = multer({
@@ -97,6 +99,63 @@ router.get('/', async (req, res) => {
         prisma.product.count()
     ]);
     res.json({ data, total, page, limit, pages: Math.ceil(total / limit) });
+});
+
+// GET /products/vendor-drift — flags SanMar-linked products whose configured
+// color/size no longer matches SanMar's own cataloged options for that style
+// (SanMar renaming/re-coding a color on their end is what triggered this
+// feature — see the order-placement error in sanmar.ts for the same
+// underlying check, applied there per-line at order time instead of
+// proactively across the whole catalog). Compares against the cached
+// SanmarCatalogProduct table (kept fresh by the weekly sync + self-healing
+// live lookups — see server/src/vendors/sanmar.ts) rather than calling
+// SanMar live for every product, so this stays cheap enough to run on every
+// Products page load. A style with zero cataloged rows (never synced, or a
+// manually-entered product) is skipped entirely rather than flagged — no
+// catalog to compare against means no evidence of drift, not evidence of a
+// problem. Placed before the /:id route below so Express doesn't swallow
+// this path as if "vendor-drift" were an id.
+router.get('/vendor-drift', async (_req, res) => {
+    const products = await prisma.product.findMany({
+        where: { vendor: 'SANMAR', OR: [{ colorsJson: { not: null } }, { sizesJson: { not: null } }] },
+        select: { id: true, name: true, sku: true, vendorIdentifier: true, colorsJson: true, sizesJson: true }
+    });
+    if (products.length === 0) return res.json({ data: [] });
+
+    const withStyle = products.map(p => ({ ...p, style: vendorStyleCode(p) }));
+    const styles = [...new Set(withStyle.map(p => p.style))];
+
+    const catalogRows = await prisma.sanmarCatalogProduct.findMany({
+        where: { style: { in: styles } },
+        select: { style: true, colorName: true, sizeName: true }
+    });
+    const colorsByStyle = new Map<string, Set<string>>();
+    const sizesByStyle = new Map<string, Set<string>>();
+    for (const r of catalogRows) {
+        if (r.colorName) (colorsByStyle.get(r.style) ?? colorsByStyle.set(r.style, new Set()).get(r.style)!).add(r.colorName);
+        if (r.sizeName) (sizesByStyle.get(r.style) ?? sizesByStyle.set(r.style, new Set()).get(r.style)!).add(r.sizeName);
+    }
+
+    const flagged = withStyle.map(p => {
+        const validColors = [...(colorsByStyle.get(p.style) ?? [])];
+        const validSizes = [...(sizesByStyle.get(p.style) ?? [])];
+        // Nothing cataloged for this style at all — no basis for comparison.
+        if (validColors.length === 0 && validSizes.length === 0) return null;
+
+        const colors: string[] = p.colorsJson ? JSON.parse(p.colorsJson) : [];
+        const sizes: string[] = p.sizesJson ? JSON.parse(p.sizesJson) : [];
+        const invalidColors = validColors.length
+            ? colors.filter(c => !optionMatches(c, validColors)).map(value => ({ value, suggestion: suggestClosestOption(value, validColors) }))
+            : [];
+        const invalidSizes = validSizes.length
+            ? sizes.filter(s => !optionMatches(s, validSizes)).map(value => ({ value, suggestion: suggestClosestOption(value, validSizes) }))
+            : [];
+        if (invalidColors.length === 0 && invalidSizes.length === 0) return null;
+
+        return { productId: p.id, productName: p.name, sku: p.sku, style: p.style, invalidColors, invalidSizes };
+    }).filter((x): x is NonNullable<typeof x> => x !== null);
+
+    res.json({ data: flagged });
 });
 
 // Upload one or more product images before a product exists (e.g. while filling

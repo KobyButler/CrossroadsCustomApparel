@@ -2,6 +2,7 @@ import { config } from '../config.js';
 import * as soap from 'soap';
 import { prisma } from '../prisma.js';
 import { vendorStyleCode } from '../utils/vendorGrouping.js';
+import { suggestClosestOption } from '../utils/vendorOptionMatch.js';
 
 /* ─── Helpers ─────────────────────────────────────────────────────────────── */
 
@@ -178,7 +179,29 @@ async function buildPOEnvelope(order: any, lines: LineGroup) {
             const basic = match?.productBasicInfo;
 
             if (!basic?.catalogColor) {
-                throw new Error(`SanMar has no record of ${style} in color "${item.color}" size "${item.size}" — double-check the color and size are correct.`);
+                // The requested color/size combo has no exact match — before giving
+                // up, tell the caller WHY as precisely as possible: SanMar renaming a
+                // color out from under an existing product (their own catalog change,
+                // not a code bug) is common enough to be worth a specific, actionable
+                // message rather than a flat rejection. See vendorOptionMatch.ts.
+                const validColors = [...new Set(rows.map((r: any) => r?.productBasicInfo?.color).filter(Boolean))] as string[];
+                const validSizesForColor = [...new Set(
+                    rows.filter((r: any) => normalize(r?.productBasicInfo?.color) === normalize(item.color))
+                        .map((r: any) => r?.productBasicInfo?.size).filter(Boolean)
+                )] as string[];
+
+                let detail: string;
+                if (validSizesForColor.length > 0) {
+                    // The color itself is real — this specific size just isn't
+                    // offered in it. A genuine availability gap, not a naming bug.
+                    detail = `"${item.color}" is a real color for ${style}, but "${item.size}" isn't offered in it (available sizes: ${validSizesForColor.join(', ')}).`;
+                } else {
+                    const suggestion = suggestClosestOption(String(item.color ?? ''), validColors);
+                    detail = suggestion
+                        ? `SanMar no longer calls this color "${item.color}" — the closest real match on ${style} is "${suggestion}". Open this product in Admin → Products and use "Pick from SanMar" to re-sync its colors.`
+                        : `"${item.color}" isn't a color SanMar has for ${style} (current colors: ${validColors.slice(0, 8).join(', ')}${validColors.length > 8 ? ', …' : ''}). Open this product in Admin → Products and use "Pick from SanMar" to re-sync its colors.`;
+                }
+                throw new Error(`SanMar has no record of ${style} in color "${item.color}" size "${item.size}" — ${detail}`);
             }
 
             mainframeColor = basic.catalogColor;
