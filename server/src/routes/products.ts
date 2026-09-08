@@ -4,6 +4,8 @@ import path from 'path';
 import { prisma } from '../prisma.js';
 import { vendorStyleCode } from '../utils/vendorGrouping.js';
 import { optionMatches, suggestClosestOption } from '../utils/vendorOptionMatch.js';
+import { recordOrderHistory, FieldChange } from '../utils/orderHistory.js';
+import { AuthUser } from '../middleware/auth.js';
 
 const uploadsDir = process.env.UPLOADS_DIR ?? path.join(__dirname, '../../../public/uploads');
 const uploadImages = multer({
@@ -241,6 +243,73 @@ router.get('/:id', async (req, res) => {
     res.json(p);
 });
 
+// One row of order-impact from a color/size an edit just removed — one
+// per affected OrderItem-field, so an item that's stale on BOTH its color
+// and size (rare, but possible) surfaces as two independently
+// accept/reject-able rows rather than one row that conflates them.
+type OrderImpactRow = {
+    orderId: string; orderItemId: string; field: 'color' | 'size';
+    oldValue: string; otherFieldLabel: string | null;
+    suggestedValue: string | null; validOptions: string[];
+    customerName: string; quantity: number; orderCreatedAt: string;
+};
+
+// Compares a product's old vs. new color/size lists, and — only for the
+// values this edit actually removed — finds every UNFULFILLED order still
+// carrying one of them, so the admin can reconcile those orders right in
+// the same save flow rather than discovering the mismatch later (whether
+// that's a customer complaint or a failed vendor PO like the one that
+// prompted this feature). Fulfilled/cancelled orders are left alone
+// entirely — they're historical record of what was actually sent, not
+// something a later product edit should retroactively rewrite.
+async function computeOrderImpact(
+    productId: string, productName: string,
+    oldColors: string[], oldSizes: string[], newColors: string[], newSizes: string[]
+): Promise<{ productName: string; affected: OrderImpactRow[] } | null> {
+    const removedColors = oldColors.filter(c => !optionMatches(c, newColors));
+    const removedSizes = oldSizes.filter(s => !optionMatches(s, newSizes));
+    if (removedColors.length === 0 && removedSizes.length === 0) return null;
+
+    const orders = await prisma.order.findMany({
+        where: {
+            status: 'UNFULFILLED',
+            items: {
+                some: {
+                    productId,
+                    OR: [
+                        ...(removedColors.length ? [{ color: { in: removedColors } }] : []),
+                        ...(removedSizes.length ? [{ size: { in: removedSizes } }] : []),
+                    ]
+                }
+            }
+        },
+        include: { items: { where: { productId } } }
+    });
+
+    const affected: OrderImpactRow[] = [];
+    for (const o of orders) {
+        for (const item of o.items) {
+            if (item.color && removedColors.includes(item.color)) {
+                affected.push({
+                    orderId: o.id, orderItemId: item.id, field: 'color',
+                    oldValue: item.color, otherFieldLabel: item.size ? `Size ${item.size}` : null,
+                    suggestedValue: suggestClosestOption(item.color, newColors), validOptions: newColors,
+                    customerName: o.customerName, quantity: item.quantity, orderCreatedAt: o.createdAt.toISOString()
+                });
+            }
+            if (item.size && removedSizes.includes(item.size)) {
+                affected.push({
+                    orderId: o.id, orderItemId: item.id, field: 'size',
+                    oldValue: item.size, otherFieldLabel: item.color ? `Color ${item.color}` : null,
+                    suggestedValue: suggestClosestOption(item.size, newSizes), validOptions: newSizes,
+                    customerName: o.customerName, quantity: item.quantity, orderCreatedAt: o.createdAt.toISOString()
+                });
+            }
+        }
+    }
+    return affected.length > 0 ? { productName, affected } : null;
+}
+
 router.put('/:id', async (req, res) => {
     const {
         name, sku, vendor, vendorIdentifier, brand, description, priceCents, images, sizes, colors,
@@ -295,9 +364,21 @@ router.put('/:id', async (req, res) => {
         }
 
         await syncYouthSizeChart(p.youthProductId, youthSizeChartUrl);
-        res.json(youthSizeChartUrl !== undefined && p.youthProductId
+        const responseProduct = youthSizeChartUrl !== undefined && p.youthProductId
             ? await prisma.product.findUnique({ where: { id: p.id }, include: { shops: shopSelect, youthProduct: youthSelect } })
-            : p);
+            : p;
+
+        // A color/size this edit just removed might still be sitting on
+        // unfulfilled customer orders (this is exactly how "SanMar renamed
+        // Athletic Grey to Athletic Heather" turned into a failed PO days
+        // later) — surface those right in the save response so the admin
+        // can fix them immediately instead of discovering it at order time.
+        const orderImpact = await computeOrderImpact(p.id, p.name,
+            existing.colorsJson ? JSON.parse(existing.colorsJson) : [],
+            existing.sizesJson ? JSON.parse(existing.sizesJson) : [],
+            Array.isArray(colors) ? colors : [], Array.isArray(sizes) ? sizes : []);
+
+        res.json({ ...responseProduct, orderImpact });
     } catch (err: any) {
         if (err?.code === 'P2002' && err?.meta?.target?.includes?.('youthProductId')) {
             return res.status(409).json({ error: 'That product is already linked as another product\'s youth version.' });
@@ -307,6 +388,60 @@ router.put('/:id', async (req, res) => {
         }
         res.status(404).json({ error: 'not found' });
     }
+});
+
+// POST /products/:id/reconcile-orders — applies admin-approved color/size
+// corrections to specific order items, from the review screen a product
+// save's orderImpact triggers. Never runs automatically: every change here
+// was an explicit accept/edit + "Apply" click, never a value this endpoint
+// picked on its own — see vendorOptionMatch.ts's suggestion-not-decision
+// philosophy. Only touches the OrderItem rows named in `changes`; the
+// product itself was already saved by the PUT above.
+router.post('/:id/reconcile-orders', async (req, res) => {
+    const { changes } = req.body as { changes?: { orderItemId: string; field: 'color' | 'size'; newValue: string }[] };
+    if (!Array.isArray(changes) || changes.length === 0) {
+        return res.status(400).json({ error: 'changes must be a non-empty array' });
+    }
+
+    const user = (req as any).user as AuthUser | undefined;
+    const itemIds = [...new Set(changes.map(c => c.orderItemId))];
+    const items = await prisma.orderItem.findMany({
+        where: { id: { in: itemIds }, productId: req.params.id },
+        include: { order: { select: { id: true, status: true } } }
+    });
+    const itemById = new Map(items.map(i => [i.id, i]));
+
+    // Group by order so one order touched on two lines gets one history
+    // entry describing both, not two separate entries a moment apart.
+    const changesByOrder = new Map<string, FieldChange[]>();
+    let applied = 0;
+
+    for (const c of changes) {
+        const item = itemById.get(c.orderItemId);
+        if (!item) continue; // stale id (already reconciled, or belongs to a different product) — skip, don't error the whole batch
+        // Never touch a fulfilled/cancelled order's record of what was
+        // actually sent, even if the review screen was left open long
+        // enough for its status to change underneath it.
+        if (item.order.status !== 'UNFULFILLED') continue;
+        if (c.field !== 'color' && c.field !== 'size') continue;
+
+        const oldValue = c.field === 'color' ? item.color : item.size;
+        if (oldValue === c.newValue) continue;
+
+        await prisma.orderItem.update({ where: { id: item.id }, data: { [c.field]: c.newValue } });
+        applied++;
+
+        const label = c.field === 'color' ? 'Color corrected' : 'Size corrected';
+        const list = changesByOrder.get(item.orderId) ?? [];
+        list.push({ field: `item-${c.field}`, label: `${label} (product update)`, oldValue: oldValue ?? null, newValue: c.newValue });
+        changesByOrder.set(item.orderId, list);
+    }
+
+    await Promise.all([...changesByOrder.entries()].map(([orderId, fieldChanges]) =>
+        recordOrderHistory(orderId, user?.email, fieldChanges)
+    ));
+
+    res.json({ applied, ordersUpdated: changesByOrder.size });
 });
 
 router.delete('/:id', async (req, res) => {
