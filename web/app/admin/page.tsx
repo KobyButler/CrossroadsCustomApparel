@@ -22,16 +22,15 @@ function fmt(cents: number) {
 /* ─── Status → signal lamp ────────────────────────────────────────────────
    Reserved strictly for real order state, never decoration — see DESIGN.md's
    "locked palette" rule. Order.status is one of UNFULFILLED | FULFILLED |
-   CANCELLED | DRAFT (server/prisma/schema.prisma). */
+   CANCELLED (server/prisma/schema.prisma). */
 const STATUS_LAMP: Record<string, { label: string; dot: string; text: string }> = {
     UNFULFILLED: { label: "Unfulfilled", dot: "bg-signal-amber", text: "text-signal-amber" },
     FULFILLED:   { label: "Fulfilled",   dot: "bg-signal-green", text: "text-signal-green" },
     CANCELLED:   { label: "Cancelled",   dot: "bg-signal-red",   text: "text-signal-red"   },
-    DRAFT:       { label: "Draft",       dot: "bg-graphite-500", text: "text-graphite-300" },
 };
 
 function SignalLamp({ status }: { status: string }) {
-    const meta = STATUS_LAMP[status?.toUpperCase()] ?? STATUS_LAMP.DRAFT;
+    const meta = STATUS_LAMP[status?.toUpperCase()] ?? STATUS_LAMP.UNFULFILLED;
     return (
         <span className={cnBase("inline-flex items-center gap-1.5 text-xs font-medium", meta.text)}>
             <span className={cnBase("w-1.5 h-1.5 rounded-full shrink-0", meta.dot)} />

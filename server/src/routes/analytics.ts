@@ -1,11 +1,12 @@
 import { Router } from 'express';
 import { prisma } from '../prisma.js';
+import { EXCLUDE_INCOMPLETE_CHECKOUTS } from '../utils/orderFilters.js';
 
 export const router = Router();
 
 router.get('/overview', async (_req, res) => {
     const since = new Date(Date.now() - 30 * 24 * 3600 * 1000);
-    const orders = await prisma.order.findMany({ where: { createdAt: { gte: since } } });
+    const orders = await prisma.order.findMany({ where: { createdAt: { gte: since }, ...EXCLUDE_INCOMPLETE_CHECKOUTS } });
     const byDay = new Map<string, { count: number; cents: number }>();
     for (const o of orders) {
         const d = o.createdAt.toISOString().slice(0, 10);
@@ -18,7 +19,7 @@ router.get('/overview', async (_req, res) => {
         .map(([date, v]) => ({ date, orders: v.count, grossCents: v.cents }));
 
     // top products
-    const items = await prisma.orderItem.findMany({ include: { product: true } });
+    const items = await prisma.orderItem.findMany({ where: { order: EXCLUDE_INCOMPLETE_CHECKOUTS }, include: { product: true } });
     const bySku = new Map<string, { name: string; qty: number; cents: number }>();
     for (const it of items) {
         const k = it.product.sku;

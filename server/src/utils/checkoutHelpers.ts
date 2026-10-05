@@ -14,6 +14,7 @@ export type ShopGroup = {
     shopId: string | null;
     shopName: string | null;
     shopShippingEnabled: boolean;
+    shopOfflinePaymentEnabled: boolean;
     // Whether this group's shop is still purchasable right now — false if the
     // shop was found but has expired, gone inactive, or been archived since
     // the item was added to the cart. null when the item has no shop context
@@ -63,6 +64,7 @@ export async function buildShopGroups(
             groups.set(slug, {
                 slug, shopId: shop?.id ?? null, shopName: shop?.name ?? null,
                 shopShippingEnabled: shop?.shippingEnabled ?? true,
+                shopOfflinePaymentEnabled: shop?.offlinePaymentEnabled ?? true,
                 shopAvailable: shop ? (shop.active && !shop.archived && !shopExpired) : (slug ? false : null),
                 shopExpired,
                 items: [], subtotal: 0, shippingCents: 0
@@ -158,6 +160,21 @@ export function assertShippingAllowed(groups: ShopGroup[]): void {
             blocked.shopName
                 ? `"${blocked.shopName}" does not offer shipping — please choose pickup instead.`
                 : 'One of the shops in your cart does not offer shipping — please choose pickup instead.'
+        );
+    }
+}
+
+// Throws if the customer chose an offline payment method (pay at pickup, cash,
+// or check) but any shop represented in the cart has that option disabled —
+// re-checked server-side since the UI restriction alone could be bypassed by a
+// direct API call to POST /orders/checkout.
+export function assertOfflinePaymentAllowed(groups: ShopGroup[]): void {
+    const blocked = groups.find(g => !g.shopOfflinePaymentEnabled);
+    if (blocked) {
+        throw new Error(
+            blocked.shopName
+                ? `"${blocked.shopName}" does not offer pay-at-pickup — please pay by card instead.`
+                : 'One of the shops in your cart does not offer pay-at-pickup — please pay by card instead.'
         );
     }
 }

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../prisma.js';
 import { getStripeOrNull } from '../utils/stripeClient.js';
+import { EXCLUDE_INCOMPLETE_CHECKOUTS } from '../utils/orderFilters.js';
 
 export const router = Router();
 
@@ -11,7 +12,7 @@ const STRIPE_NOT_CONFIGURED = 'Stripe is not configured (STRIPE_SECRET_KEY not s
 // the state and owed back to them, not income to the business.
 router.get('/summary', async (_req, res) => {
     const [orders, txs] = await Promise.all([
-        prisma.order.findMany({ where: { status: { in: ['UNFULFILLED', 'FULFILLED'] } } }),
+        prisma.order.findMany({ where: { status: { in: ['UNFULFILLED', 'FULFILLED'] }, ...EXCLUDE_INCOMPLETE_CHECKOUTS } }),
         prisma.financeTransaction.findMany()
     ]);
     const gross = orders.reduce((a, b) => a + (b.totalCents - b.taxCents), 0);

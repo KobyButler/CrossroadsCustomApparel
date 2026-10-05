@@ -6,6 +6,7 @@ import { vendorStyleCode } from '../utils/vendorGrouping.js';
 import { optionMatches, suggestClosestOption } from '../utils/vendorOptionMatch.js';
 import { recordOrderHistory, FieldChange } from '../utils/orderHistory.js';
 import { AuthUser } from '../middleware/auth.js';
+import { EXCLUDE_INCOMPLETE_CHECKOUTS } from '../utils/orderFilters.js';
 
 const uploadsDir = process.env.UPLOADS_DIR ?? path.join(__dirname, '../../../public/uploads');
 const uploadImages = multer({
@@ -273,6 +274,7 @@ async function computeOrderImpact(
     const orders = await prisma.order.findMany({
         where: {
             status: 'UNFULFILLED',
+            ...EXCLUDE_INCOMPLETE_CHECKOUTS,
             items: {
                 some: {
                     productId,

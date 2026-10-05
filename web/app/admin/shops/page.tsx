@@ -24,11 +24,11 @@ const item = {
 
 type Shop = {
     id: string; name: string; slug: string;
-    active: boolean; archived: boolean; shippingEnabled: boolean; expiresAt?: string; notes?: string; createdAt: string;
+    active: boolean; archived: boolean; shippingEnabled: boolean; offlinePaymentEnabled: boolean; expiresAt?: string; notes?: string; createdAt: string;
     _count?: { products: number };
 };
 
-const EMPTY = { name:"", expiresAt:"", notes:"", shippingEnabled:true };
+const EMPTY = { name:"", expiresAt:"", notes:"", shippingEnabled:true, offlinePaymentEnabled:true };
 
 export default function ShopsPage() {
     const { toast } = useToast();
@@ -66,6 +66,7 @@ export default function ShopsPage() {
         if (key === "link") return s.slug;
         if (key === "status") return shopStatusLabel(s);
         if (key === "shipping") return s.shippingEnabled ? 1 : 0;
+        if (key === "payment") return s.offlinePaymentEnabled ? 1 : 0;
         if (key === "expires") return s.expiresAt ? new Date(s.expiresAt) : null;
         return null;
     });
@@ -77,7 +78,8 @@ export default function ShopsPage() {
                 name:form.name,
                 expiresAt:form.expiresAt ? new Date(form.expiresAt).toISOString() : undefined,
                 notes:form.notes || undefined,
-                shippingEnabled:form.shippingEnabled
+                shippingEnabled:form.shippingEnabled,
+                offlinePaymentEnabled:form.offlinePaymentEnabled
             })});
             setShops(p => [shop, ...p]);
             setShowCreate(false); setForm({ ...EMPTY }); toast("Shop created! Link is ready to share.");
@@ -91,7 +93,8 @@ export default function ShopsPage() {
             const u = await api(`/shops/${editShop.id}`, { method:"PATCH", body:JSON.stringify({
                 name:form.name,
                 expiresAt:form.expiresAt ? new Date(form.expiresAt).toISOString() : null, notes:form.notes||null,
-                shippingEnabled:form.shippingEnabled
+                shippingEnabled:form.shippingEnabled,
+                offlinePaymentEnabled:form.offlinePaymentEnabled
             })});
             setShops(p => p.map(s => s.id===editShop.id ? { ...s, ...u } : s));
             setEditShop(null); toast("Shop updated");
@@ -112,6 +115,14 @@ export default function ShopsPage() {
             const u = await api(`/shops/${shop.id}`, { method:"PATCH", body:JSON.stringify({ shippingEnabled:!shop.shippingEnabled }) });
             setShops(p => p.map(s => s.id===shop.id ? { ...s, shippingEnabled:u.shippingEnabled } : s));
             toast(`Shipping ${u.shippingEnabled ? "enabled" : "disabled"} for ${shop.name}`);
+        } catch (err: any) { toast(err.message || "Failed", "error"); }
+    }
+
+    async function toggleOfflinePayment(shop: Shop) {
+        try {
+            const u = await api(`/shops/${shop.id}`, { method:"PATCH", body:JSON.stringify({ offlinePaymentEnabled:!shop.offlinePaymentEnabled }) });
+            setShops(p => p.map(s => s.id===shop.id ? { ...s, offlinePaymentEnabled:u.offlinePaymentEnabled } : s));
+            toast(`Pay at pickup ${u.offlinePaymentEnabled ? "enabled" : "disabled"} for ${shop.name}`);
         } catch (err: any) { toast(err.message || "Failed", "error"); }
     }
 
@@ -140,7 +151,7 @@ export default function ShopsPage() {
         setEditShop(shop);
         setForm({ name:shop.name,
             expiresAt:shop.expiresAt ? new Date(shop.expiresAt).toISOString().split("T")[0] : "",
-            notes:shop.notes ?? "", shippingEnabled: shop.shippingEnabled });
+            notes:shop.notes ?? "", shippingEnabled: shop.shippingEnabled, offlinePaymentEnabled: shop.offlinePaymentEnabled });
     }
 
     return (
@@ -239,6 +250,7 @@ export default function ShopsPage() {
                                 <SortableTh sortKey="link" currentKey={shopSortKey} dir={shopSortDir} onSort={requestShopSort}>Link</SortableTh>
                                 <SortableTh sortKey="status" currentKey={shopSortKey} dir={shopSortDir} onSort={requestShopSort}>Status</SortableTh>
                                 <SortableTh sortKey="shipping" currentKey={shopSortKey} dir={shopSortDir} onSort={requestShopSort}>Shipping</SortableTh>
+                                <SortableTh sortKey="payment" currentKey={shopSortKey} dir={shopSortDir} onSort={requestShopSort}>Payment</SortableTh>
                                 <SortableTh sortKey="expires" currentKey={shopSortKey} dir={shopSortDir} onSort={requestShopSort}>Expires</SortableTh>
                                 <th className="text-right pr-5">Actions</th>
                             </tr></thead>
@@ -286,6 +298,18 @@ export default function ShopsPage() {
                                                         <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z"/></svg>
                                                     )}
                                                     {shop.shippingEnabled ? "Ship + Pickup" : "Pickup only"}
+                                                </button>
+                                            </td>
+                                            <td>
+                                                <button type="button" onClick={() => toggleOfflinePayment(shop)}
+                                                    title="Click to toggle"
+                                                    className={`inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full border transition-colors ${shop.offlinePaymentEnabled ? "bg-signal-green/10 text-signal-green border-signal-green/25 hover:bg-signal-green/20" : "bg-white/[0.04] text-graphite-300 border-white/10 hover:bg-white/[0.08]"}`}>
+                                                    {shop.offlinePaymentEnabled ? (
+                                                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3M3.75 4.5h16.5a1.5 1.5 0 011.5 1.5v12a1.5 1.5 0 01-1.5 1.5H3.75a1.5 1.5 0 01-1.5-1.5V6a1.5 1.5 0 011.5-1.5z"/></svg>
+                                                    ) : (
+                                                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 4.5h16.5a1.5 1.5 0 011.5 1.5v12a1.5 1.5 0 01-1.5 1.5H3.75a1.5 1.5 0 01-1.5-1.5V6a1.5 1.5 0 011.5-1.5zM2.25 8.25h19.5M6 15h3M2.25 2.25l19.5 19.5"/></svg>
+                                                    )}
+                                                    {shop.offlinePaymentEnabled ? "Card + Pickup" : "Card only"}
                                                 </button>
                                             </td>
                                             <td>
@@ -349,6 +373,17 @@ export default function ShopsPage() {
                             onClick={() => setForm(p => ({ ...p, shippingEnabled: !p.shippingEnabled }))}
                             className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${form.shippingEnabled ? "bg-signal-cyan" : "bg-graphite-600"}`}>
                             <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${form.shippingEnabled ? "translate-x-5" : ""}`} />
+                        </button>
+                    </div>
+                    <div className="bg-white/[0.04] border border-white/10 rounded-lg p-4 flex items-center justify-between">
+                        <div>
+                            <p className="text-sm font-semibold text-white">Allow pay at pickup</p>
+                            <p className="text-xs text-graphite-300 mt-0.5">When off, customers must pay by card — no cash/check option for this shop</p>
+                        </div>
+                        <button type="button" role="switch" aria-checked={form.offlinePaymentEnabled}
+                            onClick={() => setForm(p => ({ ...p, offlinePaymentEnabled: !p.offlinePaymentEnabled }))}
+                            className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${form.offlinePaymentEnabled ? "bg-signal-cyan" : "bg-graphite-600"}`}>
+                            <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${form.offlinePaymentEnabled ? "translate-x-5" : ""}`} />
                         </button>
                     </div>
                     <ModalFooter>
