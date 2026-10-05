@@ -5,6 +5,7 @@ import { submitOrderToSanMar } from '../vendors/sanmar.js';
 import { submitOrderToSS } from '../vendors/ssactivewear.js';
 import { vendorGroupKey, vendorStyleCode } from '../utils/vendorGrouping.js';
 import { sendVendorOrderFailureNotification } from '../utils/email.js';
+import { EXCLUDE_INCOMPLETE_CHECKOUTS } from '../utils/orderFilters.js';
 
 export const router = Router();
 
@@ -55,7 +56,7 @@ function buildPoNumber(shopName: string | null): string {
 }
 
 async function aggregate(shopId: string | undefined, status: string) {
-    const where: any = { status };
+    const where: any = { status, ...EXCLUDE_INCOMPLETE_CHECKOUTS };
     if (shopId) where.shopId = shopId;
 
     const orders = await prisma.order.findMany({
@@ -124,7 +125,7 @@ type ShopReportGroup = { shop: { id: string; name: string } | null; orderCount: 
 // lines here, one per Crossroads product, which is the whole point of
 // this view versus the vendor-facing report above.
 async function aggregateByProduct(shopId: string | undefined, status: string) {
-    const where: any = { status };
+    const where: any = { status, ...EXCLUDE_INCOMPLETE_CHECKOUTS };
     if (shopId) where.shopId = shopId;
 
     const orders = await prisma.order.findMany({

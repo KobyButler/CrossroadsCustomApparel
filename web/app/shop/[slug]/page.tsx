@@ -30,7 +30,7 @@ type Product = {
     youthVariant?: Product | null;
     adultVariant?: Product | null;
 };
-type Shop = { id:string; name:string; notes?:string; expiresAt?:string; shippingEnabled:boolean; products:Product[] };
+type Shop = { id:string; name:string; notes?:string; expiresAt?:string; shippingEnabled:boolean; offlinePaymentEnabled:boolean; products:Product[] };
 
 const stripHtml = (s?: string) => (s ?? "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
 
@@ -359,7 +359,7 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
     function addToCart(product: Product, size?: string, color?: string, qty = 1) {
         if (!shop) return;
         addItem({
-            productId: product.id, shopSlug: slug, shopName: shop.name, shopShippingEnabled: shop.shippingEnabled, name: product.name,
+            productId: product.id, shopSlug: slug, shopName: shop.name, shopShippingEnabled: shop.shippingEnabled, shopOfflinePaymentEnabled: shop.offlinePaymentEnabled, name: product.name,
             priceCents: product.priceCents, upchargeEnabled: product.upchargeEnabled, upchargeCents: product.upchargeCents,
             size, color,
         }, qty);

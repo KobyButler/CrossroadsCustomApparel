@@ -3,11 +3,12 @@ import { prisma } from '../prisma.js';
 import { requireAuth, AuthUser } from '../middleware/auth.js';
 import { sendOrderConfirmation, sendOfflinePaymentNotification } from '../utils/email.js';
 import { computeItemPriceCents, resolveProductPriceCents } from '../utils/pricing.js';
-import { buildShopGroups, applyDiscountAcrossGroups, allocateShippingAcrossGroups, newOrderGroupId, assertShippingAllowed, assertShopsAvailable } from '../utils/checkoutHelpers.js';
+import { buildShopGroups, applyDiscountAcrossGroups, allocateShippingAcrossGroups, newOrderGroupId, assertShippingAllowed, assertOfflinePaymentAllowed, assertShopsAvailable } from '../utils/checkoutHelpers.js';
 import { quoteShipping, buyLabelForOrder } from '../utils/shippingCalc.js';
 import { diffScalarFields, diffItems, recordOrderHistory } from '../utils/orderHistory.js';
 import { quoteOrderTax } from '../utils/tax.js';
 import { getStripeOrNull } from '../utils/stripeClient.js';
+import { EXCLUDE_INCOMPLETE_CHECKOUTS } from '../utils/orderFilters.js';
 
 export const router = Router();
 
@@ -22,7 +23,10 @@ router.get('/', requireAuth, async (req, res) => {
     const page = req.query.page ? Math.max(1, parseInt(req.query.page as string, 10)) : 1;
     const skip = (page - 1) * limit;
 
-    const where: any = {};
+    // Excluded from every default list view since an incomplete card checkout
+    // was never a real sale; an explicit ?ids= lookup (e.g. Print Orders) is
+    // exempted so that mode always returns exactly what was asked for.
+    const where: any = ids ? {} : { ...EXCLUDE_INCOMPLETE_CHECKOUTS };
     if (status) where.status = status;
     if (shopId) where.shopId = shopId;
     if (ids) where.id = { in: ids };
@@ -59,16 +63,26 @@ async function resolveDiscount(discountCode?: string) {
     return null;
 }
 
-// create order (single-shop / no-shop) — used by the admin "Create Order" and
-// "Draft Order" modals, and kept as a simple fallback for single-shop checkouts.
-// Public checkout with a cross-shop cart should use POST /checkout instead.
+// create order (single-shop / no-shop) — used by the admin "Create Order"
+// modal, and kept as a simple fallback for single-shop checkouts. Public
+// checkout with a cross-shop cart should use POST /checkout instead.
+//
+// paymentStatus is required and admin-chosen ('PAID' or 'OFFLINE_PENDING') —
+// there's no silent default here on purpose. This endpoint used to infer
+// UNPAID whenever paymentMethod wasn't one of pickup/cash/check, which is how
+// hundreds of manually-entered orders that were actually paid in person ended
+// up mislabeled "Unpaid" forever (nothing in the admin UI ever prompted a fix).
 router.post('/', async (req, res) => {
     const {
         shopSlug, customerName, customerEmail,
         shipAddress1, shipAddress2, shipCity, shipState, shipZip, residential = true,
         items, discountCode, specialInstructions,
-        paymentMethod   // 'pickup' | 'cash' | 'check'  (card goes through /payments/create-intent)
+        paymentStatus, paymentMethod   // paymentMethod is optional detail (e.g. 'cash' vs 'check'); card payments go through /payments/create-intent instead
     } = req.body;
+
+    if (paymentStatus !== 'PAID' && paymentStatus !== 'OFFLINE_PENDING') {
+        return res.status(400).json({ error: "paymentStatus is required and must be 'PAID' or 'OFFLINE_PENDING'" });
+    }
 
     const shop = shopSlug ? await prisma.shop.findFirst({ where: { slug: shopSlug } }) : null;
 
@@ -103,14 +117,11 @@ router.post('/', async (req, res) => {
         create: { email: customerEmail, name: customerName }
     }) : null;
 
-    const isOffline = paymentMethod === 'pickup' || paymentMethod === 'cash' || paymentMethod === 'check';
-    const payStatus = isOffline ? 'OFFLINE_PENDING' : 'UNPAID';
-
     const order = await prisma.order.create({
         data: {
             shopId: shop?.id, status: 'UNFULFILLED',
-            paymentStatus: payStatus,
-            paymentMethod: isOffline ? 'pickup' : null,
+            paymentStatus,
+            paymentMethod: paymentMethod || (paymentStatus === 'OFFLINE_PENDING' ? 'pickup' : null),
             customerId: customer?.id,
             customerName, customerEmail, shipAddress1, shipAddress2, shipCity, shipState, shipZip, residential,
             specialInstructions: specialInstructions || null,
@@ -137,7 +148,7 @@ router.post('/', async (req, res) => {
             size: i.size, color: i.color, priceCents: i.priceCents
         }));
 
-        if (isOffline) {
+        if (paymentStatus === 'OFFLINE_PENDING') {
             sendOfflinePaymentNotification({
                 orderId: order.id,
                 customerName: order.customerName,
@@ -191,6 +202,7 @@ router.post('/checkout', async (req, res) => {
         groups = await buildShopGroups(items);
         assertShopsAvailable(groups);
         if (isShipping) assertShippingAllowed(groups);
+        assertOfflinePaymentAllowed(groups);
     } catch (err: any) {
         return res.status(400).json({ error: err.message });
     }
@@ -559,7 +571,7 @@ router.post('/:id/shipping-label', requireAuth, async (req, res) => {
 // CSV of shipping addresses for label tools (admin only)
 router.get('/shipping/export', requireAuth, async (req, res) => {
     const status = (req.query.status as string) ?? 'UNFULFILLED';
-    const orders = await prisma.order.findMany({ where: { status } });
+    const orders = await prisma.order.findMany({ where: { status, ...EXCLUDE_INCOMPLETE_CHECKOUTS } });
     const rows = [
         ['OrderId', 'Name', 'Address1', 'Address2', 'City', 'State', 'Zip', 'Residential', 'Email'].join(','),
         ...orders.filter(o => o.shippingMethod === 'SHIP').map(o => [

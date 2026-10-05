@@ -38,7 +38,7 @@ type HistoryChange = { field: string; label: string; oldValue: string | null; ne
 type HistoryEntry = { id: string; userEmail: string | null; createdAt: string; changes: HistoryChange[] };
 type EditItem = { id?: string; productId: string; size: string; color: string; quantity: number; priceDollars: string };
 
-const STATUS_OPTIONS = ["UNFULFILLED", "FULFILLED", "CANCELLED", "DRAFT"];
+const STATUS_OPTIONS = ["UNFULFILLED", "FULFILLED", "CANCELLED"];
 const PAYMENT_STATUS_OPTIONS = ["UNPAID", "PAID", "OFFLINE_PENDING"];
 const PAYMENT_METHOD_OPTIONS = [
     { value: "", label: "— None —" },
@@ -70,16 +70,15 @@ const EASE = [0.16, 1, 0.3, 1] as [number, number, number, number];
 /* ─── Status → signal lamp ────────────────────────────────────────────────
    Reserved strictly for real order/payment state, never decoration — see
    DESIGN.md's "locked palette" rule. Order.status is one of UNFULFILLED |
-   FULFILLED | CANCELLED | DRAFT (server/prisma/schema.prisma). */
+   FULFILLED | CANCELLED (server/prisma/schema.prisma). */
 const STATUS_LAMP: Record<string, { label: string; dot: string; text: string }> = {
     UNFULFILLED: { label: "Unfulfilled", dot: "bg-signal-amber", text: "text-signal-amber" },
     FULFILLED:   { label: "Fulfilled",   dot: "bg-signal-green", text: "text-signal-green" },
     CANCELLED:   { label: "Cancelled",   dot: "bg-signal-red",   text: "text-signal-red"   },
-    DRAFT:       { label: "Draft",       dot: "bg-graphite-500", text: "text-graphite-300" },
 };
 
 function SignalLamp({ status }: { status: string }) {
-    const meta = STATUS_LAMP[status?.toUpperCase()] ?? STATUS_LAMP.DRAFT;
+    const meta = STATUS_LAMP[status?.toUpperCase()] ?? STATUS_LAMP.UNFULFILLED;
     return (
         <span className={cn("inline-flex items-center gap-1.5 text-xs font-medium", meta.text)}>
             <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", meta.dot)} />
@@ -133,7 +132,7 @@ export default function OrdersPage() {
         customerName: "", customerEmail: "",
         shipAddress1: "", shipAddress2: "",
         shipCity: "", shipState: "", shipZip: "",
-        specialInstructions: ""
+        specialInstructions: "", paymentStatus: ""
     });
     const [cartItems, setCartItems] = useState<{ productId: string; quantity: number }[]>([]);
 
@@ -243,12 +242,13 @@ export default function OrdersPage() {
     async function createOrder(e: React.FormEvent) {
         e.preventDefault();
         if (cartItems.length === 0) { toast("Add at least one item", "error"); return; }
+        if (!createForm.paymentStatus) { toast("Please select whether this order has been paid", "error"); return; }
         setCreating(true);
         try {
             await api("/orders", { method: "POST", body: JSON.stringify({ ...createForm, items: cartItems }) });
             toast("Order created successfully");
             setShowCreate(false);
-            setCreateForm({ customerName:"",customerEmail:"",shipAddress1:"",shipAddress2:"",shipCity:"",shipState:"",shipZip:"",specialInstructions:"" });
+            setCreateForm({ customerName:"",customerEmail:"",shipAddress1:"",shipAddress2:"",shipCity:"",shipState:"",shipZip:"",specialInstructions:"",paymentStatus:"" });
             setCartItems([]); fetchOrders();
         } catch (err: any) { toast(err.message || "Failed to create order", "error"); }
         finally { setCreating(false); }
@@ -908,6 +908,15 @@ export default function OrdersPage() {
                             onChange={e => setCreateForm(p => ({ ...p, shipState: e.target.value }))} />
                         <Input label="ZIP" required value={createForm.shipZip}
                             onChange={e => setCreateForm(p => ({ ...p, shipZip: e.target.value }))} />
+                    </div>
+                    <div>
+                        <label className="field-label">Payment</label>
+                        <Select required value={createForm.paymentStatus}
+                            onChange={e => setCreateForm(p => ({ ...p, paymentStatus: e.target.value }))}>
+                            <option value="">— Select —</option>
+                            <option value="PAID">Paid (already collected)</option>
+                            <option value="OFFLINE_PENDING">Due at pickup (cash/check, not yet collected)</option>
+                        </Select>
                     </div>
                     <div>
                         <label className="field-label">Special Instructions (optional)</label>

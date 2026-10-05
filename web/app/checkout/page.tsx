@@ -86,10 +86,19 @@ export default function CheckoutPage() {
         () => [...new Set(cart.filter(c => c.shopShippingEnabled === false).map(c => c.shopName))],
         [cart]
     );
+    const offlinePaymentAllowed = useMemo(() => cart.every(c => c.shopOfflinePaymentEnabled !== false), [cart]);
+    const shopsWithoutOfflinePayment = useMemo(
+        () => [...new Set(cart.filter(c => c.shopOfflinePaymentEnabled === false).map(c => c.shopName))],
+        [cart]
+    );
 
     useEffect(() => {
         if (shippingMethod === "SHIP" && paymentMethod === "pickup") setPaymentMethod("");
     }, [shippingMethod, paymentMethod]);
+
+    useEffect(() => {
+        if (!offlinePaymentAllowed && paymentMethod === "pickup") setPaymentMethod("");
+    }, [offlinePaymentAllowed, paymentMethod]);
 
     useEffect(() => {
         if (!shippingAllowed && shippingMethod === "SHIP") setShippingMethod("");
@@ -411,12 +420,14 @@ export default function CheckoutPage() {
                                             </div>
                                         </label>
                                         {shippingMethod === "PICKUP" && (
-                                            <label className={`flex items-center gap-3 p-3.5 rounded-md border-2 cursor-pointer transition-all duration-150 ${paymentMethod === "pickup" ? "border-[#167A4D] bg-[#167A4D]/10" : "border-plate-700 hover:border-plate-600"}`}>
-                                                <input type="radio" name="paymentMethod" value="pickup" className="accent-[#167A4D]"
+                                            <label className={`flex items-center gap-3 p-3.5 rounded-md border-2 transition-all duration-150 ${!offlinePaymentAllowed ? "opacity-50 cursor-not-allowed border-plate-700" : paymentMethod === "pickup" ? "border-[#167A4D] bg-[#167A4D]/10 cursor-pointer" : "border-plate-700 hover:border-plate-600 cursor-pointer"}`}>
+                                                <input type="radio" name="paymentMethod" value="pickup" className="accent-[#167A4D]" disabled={!offlinePaymentAllowed}
                                                     checked={paymentMethod === "pickup"} onChange={() => setPaymentMethod("pickup")} />
                                                 <div className="flex-1">
                                                     <p className="text-sm font-bold text-plate-50">Pay at pickup</p>
-                                                    <p className="text-xs text-plate-300 mt-0.5">Pay with cash or check when you collect your order</p>
+                                                    <p className="text-xs text-plate-300 mt-0.5">
+                                                        {offlinePaymentAllowed ? "Pay with cash or check when you collect your order" : `Not available — ${shopsWithoutOfflinePayment.join(", ")} ${shopsWithoutOfflinePayment.length === 1 ? "requires" : "require"} online payment`}
+                                                    </p>
                                                 </div>
                                                 <svg className="w-5 h-5 text-plate-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V6m0 10v2m9-6a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                                             </label>

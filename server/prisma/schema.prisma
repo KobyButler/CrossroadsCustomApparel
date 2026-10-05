@@ -67,6 +67,7 @@ model Shop {
   active           Boolean    @default(true)
   archived         Boolean    @default(false) // tucked out of the main Shops list into the Archived tab; distinct from active/inactive
   shippingEnabled  Boolean    @default(true) // whether customers may choose "Ship to you" for this shop
+  offlinePaymentEnabled Boolean @default(true) // whether customers may choose "Pay at pickup" (cash/check) for this shop
   expiresAt        DateTime?
   notes            String?
   createdAt        DateTime   @default(now())
@@ -91,7 +92,7 @@ model Order {
   orderGroupId          String?              // shared by orders split across shops from one multi-shop checkout
   customerId            String?
   customer              Customer?            @relation(fields: [customerId], references: [id])
-  status                String               @default("UNFULFILLED") // UNFULFILLED|FULFILLED|CANCELLED|DRAFT
+  status                String               @default("UNFULFILLED") // UNFULFILLED|FULFILLED|CANCELLED
   paymentStatus         String               @default("UNPAID")      // UNPAID|PAID|OFFLINE_PENDING
   paymentMethod         String?                                       // stripe|cash|check
   stripePaymentIntentId String?

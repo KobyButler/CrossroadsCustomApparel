@@ -7,6 +7,7 @@ export type CartItem = {
     shopSlug: string;
     shopName: string;
     shopShippingEnabled?: boolean; // whether the shop this item was added from offers shipping
+    shopOfflinePaymentEnabled?: boolean; // whether the shop this item was added from offers "pay at pickup"
     name: string;
     priceCents: number;      // base unit price (before any size upcharge)
     upchargeEnabled?: boolean;
