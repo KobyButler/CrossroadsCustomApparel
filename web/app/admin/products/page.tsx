@@ -476,6 +476,14 @@ function YouthLinkPanel({ products, editProductId, adultColors, adultPriceDollar
     const timerRef = useRef<ReturnType<typeof setTimeout>>();
     const liveTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
+    // "Other Product" covers a youth item that isn't in SanMar's catalog at
+    // all (e.g. a shirt from a different company) — the admin types its info
+    // in directly instead of searching, and colors/sizes aren't locked to
+    // Adult's since it's a genuinely separate product line.
+    const [youthSource, setYouthSource] = useState<"SANMAR" | "OTHER">("SANMAR");
+    const [otherForm, setOtherForm] = useState({ name: "", sku: "", priceDollars: "", brand: "", colors: [] as string[], sizes: [] as string[] });
+    const [creatingOther, setCreatingOther] = useState(false);
+
     // The same youth product can be the youth version of several adults at
     // once (see schema.prisma) — list every one so the admin doesn't see
     // stale "linked to X" info once more than one adult shares it.
@@ -567,6 +575,29 @@ function YouthLinkPanel({ products, editProductId, adultColors, adultPriceDollar
 
     function cancel() {
         setSearching(false); setQuery(""); setResults([]); setDetail(null);
+        setOtherForm({ name: "", sku: "", priceDollars: "", brand: "", colors: [], sizes: [] });
+    }
+
+    async function confirmOtherLink() {
+        if (!otherForm.name.trim() || !otherForm.sku.trim() || !otherForm.priceDollars.trim() || otherForm.colors.length === 0) {
+            toast("Name, SKU, price, and at least one color are required", "error");
+            return;
+        }
+        setCreatingOther(true);
+        try {
+            const p = await api("/products", { method: "POST", body: JSON.stringify({
+                name: otherForm.name.trim(), sku: otherForm.sku.trim(), vendor: "OTHER",
+                brand: otherForm.brand.trim() || undefined,
+                priceCents: Math.round(parseFloat(otherForm.priceDollars) * 100),
+                colors: otherForm.colors, sizes: otherForm.sizes, images: []
+            }) });
+            onChange({ id: p.id, name: p.name, vendorIdentifier: p.vendorIdentifier });
+            onSizeChartChange(p.sizeChartUrl ?? "");
+            setSearching(false);
+            setOtherForm({ name: "", sku: "", priceDollars: "", brand: "", colors: [], sizes: [] });
+            toast(`Linked "${p.name}" as the youth version`);
+        } catch (err: any) { toast(err.message || "Failed to create youth product", "error"); }
+        finally { setCreatingOther(false); }
     }
 
     if (value && !searching) {
@@ -676,36 +707,73 @@ function YouthLinkPanel({ products, editProductId, adultColors, adultPriceDollar
     return (
         <div>
             <label className="field-label">Youth version (optional)</label>
-            <div className="relative">
-                <input value={query} onChange={handleChange}
-                    placeholder="Search SanMar for the youth style (e.g. PC61Y)…"
-                    className="w-full pl-3 pr-8 py-2 text-sm border border-white/10 rounded-md outline-none focus:border-signal-cyan/60 focus:ring-2 focus:ring-signal-cyan/30 bg-white/[0.03] text-white placeholder:text-graphite-500 transition-all" />
-                {loading && (
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                        <div className="w-4 h-4 border-2 border-signal-cyan border-t-transparent rounded-full animate-spin" />
-                    </div>
-                )}
+            <div className="flex rounded-md border border-white/10 overflow-hidden mb-2">
+                {(["SANMAR", "OTHER"] as const).map(src => (
+                    <button key={src} type="button" onClick={() => setYouthSource(src)}
+                        className={`flex-1 py-1.5 text-xs font-semibold transition-all ${youthSource === src ? "bg-signal-cyan text-graphite-950" : "text-graphite-300 hover:bg-white/[0.05]"}`}>
+                        {src === "SANMAR" ? "SanMar" : "Other Product"}
+                    </button>
+                ))}
             </div>
-            {results.length > 0 && (
-                <div className="mt-1.5 border border-white/10 rounded-md overflow-hidden max-h-56 overflow-y-auto divide-y divide-white/[0.06] bg-graphite-900 shadow-console">
-                    {results.map((r, i) => (
-                        <button key={i} type="button" onClick={() => pickResult(r)}
-                            className="w-full text-left px-3.5 py-2 hover:bg-white/[0.05] transition-colors flex items-center gap-3">
-                            {r.productImage ? (
-                                <img src={r.productImage} alt="" className="w-7 h-7 rounded-md object-cover border border-white/10 shrink-0" />
-                            ) : null}
-                            <div className="min-w-0 flex-1">
-                                <p className="text-sm font-semibold text-white truncate">{r.title ?? r.style}</p>
-                                <p className="text-xs text-graphite-300 truncate">{r.brand ?? ""} {r.brand ? "·" : ""} Style {r.style}</p>
+
+            {youthSource === "SANMAR" ? (
+                <>
+                    <div className="relative">
+                        <input value={query} onChange={handleChange}
+                            placeholder="Search SanMar for the youth style (e.g. PC61Y)…"
+                            className="w-full pl-3 pr-8 py-2 text-sm border border-white/10 rounded-md outline-none focus:border-signal-cyan/60 focus:ring-2 focus:ring-signal-cyan/30 bg-white/[0.03] text-white placeholder:text-graphite-500 transition-all" />
+                        {loading && (
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                                <div className="w-4 h-4 border-2 border-signal-cyan border-t-transparent rounded-full animate-spin" />
                             </div>
-                        </button>
-                    ))}
+                        )}
+                    </div>
+                    {results.length > 0 && (
+                        <div className="mt-1.5 border border-white/10 rounded-md overflow-hidden max-h-56 overflow-y-auto divide-y divide-white/[0.06] bg-graphite-900 shadow-console">
+                            {results.map((r, i) => (
+                                <button key={i} type="button" onClick={() => pickResult(r)}
+                                    className="w-full text-left px-3.5 py-2 hover:bg-white/[0.05] transition-colors flex items-center gap-3">
+                                    {r.productImage ? (
+                                        <img src={r.productImage} alt="" className="w-7 h-7 rounded-md object-cover border border-white/10 shrink-0" />
+                                    ) : null}
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-sm font-semibold text-white truncate">{r.title ?? r.style}</p>
+                                        <p className="text-xs text-graphite-300 truncate">{r.brand ?? ""} {r.brand ? "·" : ""} Style {r.style}</p>
+                                    </div>
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                    <p className="text-xs text-graphite-300 mt-1.5">If this style also comes in youth sizes, search for it and pick it — it&apos;s imported automatically and linked here, offering the same colors as Adult. Shoppers get an Adult/Youth toggle on this product&apos;s page.</p>
+                </>
+            ) : (
+                <div className="bg-white/[0.04] border border-white/10 rounded-lg p-3.5 space-y-3">
+                    <p className="text-xs text-graphite-300">For a youth item that isn&apos;t in SanMar&apos;s catalog — e.g. from a different company. Fill in its own details below.</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <Input label="Youth Product Name" required value={otherForm.name}
+                            onChange={e => setOtherForm(p => ({ ...p, name: e.target.value }))} />
+                        <Input label="SKU" required value={otherForm.sku}
+                            onChange={e => setOtherForm(p => ({ ...p, sku: e.target.value }))} />
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <Input label="Brand" placeholder="Optional" value={otherForm.brand}
+                            onChange={e => setOtherForm(p => ({ ...p, brand: e.target.value }))} />
+                        <Input label="Price ($)" type="number" step="0.01" min="0" required value={otherForm.priceDollars}
+                            onChange={e => setOtherForm(p => ({ ...p, priceDollars: e.target.value }))} />
+                    </div>
+                    <TagInput label="Available Sizes" tags={otherForm.sizes} placeholder="S, M, L, XL…"
+                        onChange={sizes => setOtherForm(p => ({ ...p, sizes }))} />
+                    <ColorTagInput label="Available Colors" required tags={otherForm.colors} placeholder="Black, White, Navy…"
+                        onChange={colors => setOtherForm(p => ({ ...p, colors }))} />
+                    <button type="button" onClick={confirmOtherLink} disabled={creatingOther}
+                        className="console-sheen w-full py-2.5 text-sm font-bold rounded-md text-graphite-950 bg-signal-cyan-gradient shadow-glow-cyan-sm hover:shadow-glow-cyan disabled:opacity-40 disabled:cursor-not-allowed transition-shadow active:scale-95">
+                        {creatingOther ? "Linking…" : "Create & Link"}
+                    </button>
                 </div>
             )}
             {value && (
                 <button type="button" onClick={cancel} className="text-xs text-graphite-300 hover:text-graphite-200 mt-1.5">← Cancel</button>
             )}
-            <p className="text-xs text-graphite-300 mt-1.5">If this style also comes in youth sizes, search for it and pick it — it&apos;s imported automatically and linked here, offering the same colors as Adult. Shoppers get an Adult/Youth toggle on this product&apos;s page.</p>
         </div>
     );
 }
