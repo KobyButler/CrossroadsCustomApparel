@@ -83,7 +83,9 @@ router.get('/:slug', async (req, res) => {
                 // it isn't itself part of this shop's product list, so the
                 // storefront's Adult/Youth toggle works regardless of whether
                 // the admin also added the sibling product to this shop.
-                include: { youthProduct: true, adultProduct: true }
+                // adultProducts is a list since the same youth product can now
+                // be linked from several different adults (see schema.prisma).
+                include: { youthProduct: true, adultProducts: { select: { id: true, priceCents: true, youthPriceCents: true } } }
             }
         }
     });
@@ -91,19 +93,30 @@ router.get('/:slug', async (req, res) => {
 
     res.json({
         ...s,
-        products: s.products.map(({ youthProduct, adultProduct, ...p }) => ({
-            ...p,
-            // This product's own displayed price, resolved in case it's
-            // itself a linked youth variant (listed directly in the shop
-            // rather than only reached via its adult's toggle) — see
-            // resolveProductPriceCents.
-            priceCents: resolveProductPriceCents({ priceCents: p.priceCents, adultProduct }),
-            youthVariant: youthProduct
-                ? { ...youthProduct, priceCents: resolveProductPriceCents({ priceCents: youthProduct.priceCents, adultProduct: p }) }
-                : null,
-            // The adult side is never overridden — its own price is always authoritative.
-            adultVariant: adultProduct ?? null
-        }))
+        products: s.products.map(({ youthProduct, adultProducts, ...p }) => {
+            // Only unambiguous when there's exactly one possible parent adult —
+            // with zero or several, this product's own raw priceCents is shown
+            // instead of guessing whose override applies (see
+            // pickYouthPricingContext for the equivalent checkout-time logic).
+            const adultProduct = adultProducts.length === 1 ? adultProducts[0] : null;
+            return {
+                ...p,
+                // This product's own displayed price, resolved in case it's
+                // itself a linked youth variant (listed directly in the shop
+                // rather than only reached via its adult's toggle) — see
+                // resolveProductPriceCents.
+                priceCents: resolveProductPriceCents({ priceCents: p.priceCents, adultProduct }),
+                youthVariant: youthProduct
+                    ? { ...youthProduct, priceCents: resolveProductPriceCents({ priceCents: youthProduct.priceCents, adultProduct: p }) }
+                    : null,
+                // The adult side is never overridden — its own price is always
+                // authoritative. Picking the first linked adult here is just
+                // which product the storefront's toggle points to when this
+                // youth product is listed directly and shared by several
+                // adults — display/navigation only, not a pricing decision.
+                adultVariant: adultProducts[0] ?? null
+            };
+        })
     });
 });
 

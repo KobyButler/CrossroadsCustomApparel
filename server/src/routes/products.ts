@@ -48,15 +48,13 @@ async function syncYouthSizeChart(youthProductId: string | null | undefined, you
 // user-facing error string, or null if the link is fine. currentProductId is
 // null on create (nothing to compare against yet) and the product's own id on
 // update (so re-saving with the same link it already has isn't rejected).
+// The same youth product can be linked from any number of different adult
+// products (e.g. a generic youth tee shared across several adult designs) —
+// there's no uniqueness to enforce here beyond "it has to actually exist".
 async function validateYouthLink(youthProductId: string, currentProductId: string | null): Promise<string | null> {
     if (youthProductId === currentProductId) return "A product can't be linked to itself.";
-    const target = await prisma.product.findUnique({ where: { id: youthProductId }, select: { id: true, name: true } });
+    const target = await prisma.product.findUnique({ where: { id: youthProductId }, select: { id: true } });
     if (!target) return 'Selected youth product not found.';
-    const claimedBy = await prisma.product.findFirst({
-        where: { youthProductId, ...(currentProductId ? { id: { not: currentProductId } } : {}) },
-        select: { id: true, name: true }
-    });
-    if (claimedBy) return `"${target.name}" is already linked as the youth version of "${claimedBy.name}".`;
     return null;
 }
 
@@ -190,7 +188,7 @@ router.post('/', async (req, res) => {
     const {
         name, sku, vendor, vendorIdentifier, brand, description, priceCents, images, sizes, colors,
         shopIds, upchargeEnabled, upchargeCents, weightOz, sizeChartUrl, youthProductId, youthSizeChartUrl,
-        youthPriceCents
+        youthPriceCents, hoodNumberEnabled, hoodNumberPriceCents
     } = req.body;
     if (!Array.isArray(colors) || colors.length === 0) {
         return res.status(400).json({ error: 'At least one color is required.' });
@@ -211,6 +209,8 @@ router.post('/', async (req, res) => {
                 upchargeEnabled: Boolean(upchargeEnabled),
                 ...(upchargeCents !== undefined ? { upchargeCents } : {}),
                 ...(weightOz !== undefined ? { weightOz: weightOz === null ? null : Number(weightOz) } : {}),
+                hoodNumberEnabled: Boolean(hoodNumberEnabled),
+                ...(hoodNumberPriceCents !== undefined ? { hoodNumberPriceCents: Math.round(Number(hoodNumberPriceCents) || 0) } : {}),
                 youthProductId: youthProductId || null,
                 // null/omitted/blank = inherit this product's own priceCents for
                 // the linked youth variant (the default); only a real number
@@ -316,7 +316,7 @@ router.put('/:id', async (req, res) => {
     const {
         name, sku, vendor, vendorIdentifier, brand, description, priceCents, images, sizes, colors,
         shopIds, upchargeEnabled, upchargeCents, weightOz, sizeChartUrl, youthProductId, youthSizeChartUrl,
-        youthPriceCents
+        youthPriceCents, hoodNumberEnabled, hoodNumberPriceCents
     } = req.body;
     if (!Array.isArray(colors) || colors.length === 0) {
         return res.status(400).json({ error: 'At least one color is required.' });
@@ -345,6 +345,8 @@ router.put('/:id', async (req, res) => {
                 ...(upchargeEnabled !== undefined ? { upchargeEnabled: Boolean(upchargeEnabled) } : {}),
                 ...(upchargeCents !== undefined ? { upchargeCents } : {}),
                 ...(weightOz !== undefined ? { weightOz: weightOz === null ? null : Number(weightOz) } : {}),
+                ...(hoodNumberEnabled !== undefined ? { hoodNumberEnabled: Boolean(hoodNumberEnabled) } : {}),
+                ...(hoodNumberPriceCents !== undefined ? { hoodNumberPriceCents: Math.round(Number(hoodNumberPriceCents) || 0) } : {}),
                 ...(youthProductId !== undefined ? { youthProductId: youthProductId || null } : {}),
                 ...(youthPriceCents !== undefined
                     ? { youthPriceCents: youthPriceCents === null || youthPriceCents === '' ? null : Math.round(Number(youthPriceCents)) }
@@ -382,9 +384,6 @@ router.put('/:id', async (req, res) => {
 
         res.json({ ...responseProduct, orderImpact });
     } catch (err: any) {
-        if (err?.code === 'P2002' && err?.meta?.target?.includes?.('youthProductId')) {
-            return res.status(409).json({ error: 'That product is already linked as another product\'s youth version.' });
-        }
         if (err?.code === 'P2002') {
             return res.status(409).json({ error: `A product with that SKU already exists.` });
         }
@@ -487,6 +486,8 @@ router.post('/:id/duplicate', async (req, res) => {
             weightOz: source.weightOz,
             upchargeEnabled: source.upchargeEnabled,
             upchargeCents: source.upchargeCents,
+            hoodNumberEnabled: source.hoodNumberEnabled,
+            hoodNumberPriceCents: source.hoodNumberPriceCents,
             shops: source.shops.length ? { connect: source.shops.map(s => ({ id: s.id })) } : undefined
         },
         include: { shops: shopSelect }

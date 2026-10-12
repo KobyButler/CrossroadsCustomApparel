@@ -8,13 +8,17 @@ export function isUpchargeSize(size: string | null | undefined): boolean {
 }
 
 export function computeItemPriceCents(
-    product: { priceCents: number; upchargeEnabled?: boolean | null; upchargeCents?: number | null },
-    size?: string | null
+    product: { priceCents: number; upchargeEnabled?: boolean | null; upchargeCents?: number | null; hoodNumberEnabled?: boolean | null; hoodNumberPriceCents?: number | null },
+    size?: string | null,
+    hoodNumberRequested?: boolean | null
 ): number {
-    if (product.upchargeEnabled && isUpchargeSize(size)) {
-        return product.priceCents + (product.upchargeCents ?? 0);
-    }
-    return product.priceCents;
+    let cents = product.priceCents;
+    if (product.upchargeEnabled && isUpchargeSize(size)) cents += product.upchargeCents ?? 0;
+    // Only ever charged when the product currently offers the addon — a
+    // stale hoodNumberRequested on an old order item (from before the admin
+    // turned the addon off for this product) doesn't re-add the charge.
+    if (hoodNumberRequested && product.hoodNumberEnabled) cents += product.hoodNumberPriceCents ?? 0;
+    return cents;
 }
 
 // A linked youth product's own priceCents is never what a customer should be
@@ -37,4 +41,22 @@ export function resolveProductPriceCents(product: {
         return product.adultProduct.youthPriceCents ?? product.adultProduct.priceCents;
     }
     return product.priceCents;
+}
+
+// The same youth product can now be linked from several different adult
+// products (see Product.adultProducts in schema.prisma), each potentially
+// with its own youthPriceCents override. That's only unambiguous when the
+// caller actually knows which specific adult a shopper added the youth item
+// relative to (explicitAdult — see youthContextAdultId on cart items), which
+// is validated against the youth product's own id so a client can't claim an
+// unrelated adult's override. Without that context, an override is only
+// applied when there's exactly one possible parent adult; with zero or
+// several, falls back to the youth product's own raw priceCents rather than
+// guessing whose override should win.
+export function pickYouthPricingContext(
+    product: { id: string; adultProducts: { id: string; priceCents: number; youthPriceCents: number | null }[] },
+    explicitAdult?: { id: string; priceCents: number; youthPriceCents: number | null; youthProductId: string | null } | null
+): { priceCents: number; youthPriceCents?: number | null } | null {
+    if (explicitAdult && explicitAdult.youthProductId === product.id) return explicitAdult;
+    return product.adultProducts.length === 1 ? product.adultProducts[0] : null;
 }

@@ -15,6 +15,14 @@ export type CartItem = {
     quantity: number;
     size?: string;
     color?: string;
+    // Set only when this item is a youth variant added by toggling from a
+    // specific adult product's page — pins down which adult's price override
+    // applies when the youth product is shared by several adults.
+    youthContextAdultId?: string;
+    // Hoodie hood-number addon, as chosen at add-to-cart time.
+    hoodNumberRequested?: boolean;
+    hoodNumberText?: string;
+    hoodNumberPriceCents?: number;
 };
 
 type CartContextValue = {
@@ -34,8 +42,13 @@ const CartContext = createContext<CartContextValue | null>(null);
 
 function lineTotal(item: CartItem) {
     return computeItemPriceCents(
-        { priceCents: item.priceCents, upchargeEnabled: item.upchargeEnabled, upchargeCents: item.upchargeCents },
-        item.size
+        {
+            priceCents: item.priceCents, upchargeEnabled: item.upchargeEnabled, upchargeCents: item.upchargeCents,
+            // Already a settled choice by the time it's in the cart — true here
+            // just unlocks computeItemPriceCents's own hoodNumberRequested gate.
+            hoodNumberEnabled: true, hoodNumberPriceCents: item.hoodNumberPriceCents
+        },
+        item.size, item.hoodNumberRequested
     ) * item.quantity;
 }
 
@@ -59,9 +72,11 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     }, [cart, hydrated]);
 
     const addItem = useCallback((item: Omit<CartItem, "quantity">, qty = 1) => {
-        const key = `${item.shopSlug}|${item.productId}|${item.size ?? ""}|${item.color ?? ""}`;
+        const keyOf = (x: Omit<CartItem, "quantity">) =>
+            `${x.shopSlug}|${x.productId}|${x.size ?? ""}|${x.color ?? ""}|${x.youthContextAdultId ?? ""}|${x.hoodNumberRequested ? "1" : "0"}|${x.hoodNumberText ?? ""}`;
+        const key = keyOf(item);
         setCart(prev => {
-            const idx = prev.findIndex(x => `${x.shopSlug}|${x.productId}|${x.size ?? ""}|${x.color ?? ""}` === key);
+            const idx = prev.findIndex(x => keyOf(x) === key);
             if (idx >= 0) return prev.map((x, i) => i === idx ? { ...x, quantity: x.quantity + qty } : x);
             return [...prev, { ...item, quantity: qty }];
         });

@@ -24,6 +24,7 @@ type Product = {
     priceCents: number; shops?: Shop[];
     sizesJson?: string; colorsJson?: string; imagesJson?: string; sizeChartUrl?: string | null;
     upchargeEnabled?: boolean; upchargeCents?: number; weightOz?: number | null;
+    hoodNumberEnabled?: boolean; hoodNumberPriceCents?: number;
     youthProductId?: string | null;
     youthProduct?: YouthProductRef | null;
     // What the linked youth variant actually costs at checkout — null (the
@@ -57,7 +58,8 @@ const EMPTY = {
     name:"", sku:"", vendor:"OTHER", vendorIdentifier:"", brand:"", description:"", priceDollars:"",
     shopIds:[] as string[], sizes:[] as string[], colors:[] as string[], images:[] as string[],
     sizeChartUrl:"", youthLink: null as YouthProductRef | null, youthSizeChartUrl:"", youthPriceDollars:"",
-    upchargeEnabled:false, upchargeDollars:"3.00", weightOz:""
+    upchargeEnabled:false, upchargeDollars:"3.00", weightOz:"",
+    hoodNumberEnabled:false, hoodNumberDollars:"5.00"
 };
 
 // ── TagInput ──────────────────────────────────────────────────────────────────
@@ -474,13 +476,18 @@ function YouthLinkPanel({ products, editProductId, adultColors, adultPriceDollar
     const timerRef = useRef<ReturnType<typeof setTimeout>>();
     const liveTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
-    const linkedFromAdult = editProductId ? products.find(y => y.youthProductId === editProductId) : undefined;
+    // The same youth product can be the youth version of several adults at
+    // once (see schema.prisma) — list every one so the admin doesn't see
+    // stale "linked to X" info once more than one adult shares it.
+    const linkedFromAdults = editProductId ? products.filter(y => y.youthProductId === editProductId) : [];
 
-    if (linkedFromAdult) {
+    if (linkedFromAdults.length > 0) {
         return (
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
-                <p className="text-sm font-semibold text-slate-800">Linked as the youth version of &quot;{linkedFromAdult.name}&quot;</p>
-                <p className="text-xs text-slate-400 mt-0.5">Manage or remove this link from that product&apos;s edit form instead.</p>
+                <p className="text-sm font-semibold text-slate-800">
+                    Linked as the youth version of {linkedFromAdults.map(a => `"${a.name}"`).join(", ")}
+                </p>
+                <p className="text-xs text-slate-400 mt-0.5">Manage or remove each link from that product&apos;s own edit form instead.</p>
             </div>
         );
     }
@@ -1034,6 +1041,7 @@ export default function ProductsPage() {
             youthPriceDollars: p.youthPriceCents != null ? (p.youthPriceCents / 100).toFixed(2) : "",
             upchargeEnabled: Boolean(p.upchargeEnabled), upchargeDollars: ((p.upchargeCents ?? 300)/100).toFixed(2),
             weightOz: p.weightOz != null ? String(p.weightOz) : "",
+            hoodNumberEnabled: Boolean(p.hoodNumberEnabled), hoodNumberDollars: ((p.hoodNumberPriceCents ?? 500)/100).toFixed(2),
         });
     }
 
@@ -1090,6 +1098,8 @@ export default function ProductsPage() {
                 upchargeEnabled:form.upchargeEnabled,
                 upchargeCents:Math.round(parseFloat(form.upchargeDollars || "0")*100) || 300,
                 weightOz: form.weightOz.trim() ? Math.round(parseFloat(form.weightOz)) : null,
+                hoodNumberEnabled:form.hoodNumberEnabled,
+                hoodNumberPriceCents:Math.round(parseFloat(form.hoodNumberDollars || "0")*100) || 0,
             };
             if (editProduct) {
                 const u = await api(`/products/${editProduct.id}`, { method:"PUT", body:JSON.stringify(payload) });
@@ -1453,6 +1463,33 @@ export default function ProductsPage() {
                                         className="w-full pl-6 pr-2 py-1.5 text-sm bg-white/[0.03] border border-white/10 hover:border-white/20 rounded-md text-white outline-none focus:border-signal-cyan/60 focus:ring-2 focus:ring-signal-cyan/30" />
                                 </div>
                                 <span className="text-xs text-graphite-300">for 2XL and up</span>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Hood Number toggle (hoodies) */}
+                    <div className="bg-white/[0.04] border border-white/10 rounded-lg p-4">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm font-semibold text-white">Hood Number (hoodies)</p>
+                                <p className="text-xs text-graphite-300 mt-0.5">Lets the customer request a number/name printed on the hood for an extra charge</p>
+                            </div>
+                            <button type="button" role="switch" aria-checked={form.hoodNumberEnabled}
+                                onClick={() => setForm(p => ({ ...p, hoodNumberEnabled: !p.hoodNumberEnabled }))}
+                                className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${form.hoodNumberEnabled ? "bg-signal-cyan" : "bg-white/15"}`}>
+                                <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${form.hoodNumberEnabled ? "translate-x-5" : ""}`} />
+                            </button>
+                        </div>
+                        {form.hoodNumberEnabled && (
+                            <div className="mt-3 flex items-center gap-2">
+                                <span className="text-sm text-graphite-300">Extra charge:</span>
+                                <div className="relative w-28">
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-graphite-400 text-sm">$</span>
+                                    <input type="number" step="0.01" min="0" value={form.hoodNumberDollars}
+                                        onChange={e => setForm(p => ({ ...p, hoodNumberDollars:e.target.value }))}
+                                        className="w-full pl-6 pr-2 py-1.5 text-sm bg-white/[0.03] border border-white/10 hover:border-white/20 rounded-md text-white outline-none focus:border-signal-cyan/60 focus:ring-2 focus:ring-signal-cyan/30" />
+                                </div>
+                                <span className="text-xs text-graphite-300">per hoodie</span>
                             </div>
                         )}
                     </div>

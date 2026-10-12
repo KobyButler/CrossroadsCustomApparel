@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { prisma } from '../prisma.js';
 import { requireAuth, AuthUser } from '../middleware/auth.js';
 import { sendOrderConfirmation, sendOfflinePaymentNotification } from '../utils/email.js';
-import { computeItemPriceCents, resolveProductPriceCents } from '../utils/pricing.js';
+import { computeItemPriceCents, resolveProductPriceCents, pickYouthPricingContext } from '../utils/pricing.js';
 import { buildShopGroups, applyDiscountAcrossGroups, allocateShippingAcrossGroups, newOrderGroupId, assertShippingAllowed, assertOfflinePaymentAllowed, assertShopsAvailable } from '../utils/checkoutHelpers.js';
 import { quoteShipping, buyLabelForOrder } from '../utils/shippingCalc.js';
 import { diffScalarFields, diffItems, recordOrderHistory } from '../utils/orderHistory.js';
@@ -89,16 +89,21 @@ router.post('/', async (req, res) => {
     const uniqueProductIds = [...new Set<string>(items.map((i: any) => i.productId))];
     const products = await prisma.product.findMany({
         where: { id: { in: uniqueProductIds } },
-        include: { adultProduct: { select: { priceCents: true, youthPriceCents: true } } }
+        include: { adultProducts: { select: { id: true, priceCents: true, youthPriceCents: true } } }
     });
     if (products.length !== uniqueProductIds.length) return res.status(400).json({ error: 'invalid product(s)' });
 
     let subtotal = 0;
     const orderItems = items.map((i: any) => {
         const p = products.find(pp => pp.id === i.productId)!;
-        const price = computeItemPriceCents({ ...p, priceCents: resolveProductPriceCents(p) }, i.size);
+        const adultProduct = pickYouthPricingContext(p);
+        const hoodNumberRequested = Boolean(i.hoodNumberRequested) && p.hoodNumberEnabled;
+        const price = computeItemPriceCents({ ...p, priceCents: resolveProductPriceCents({ priceCents: p.priceCents, adultProduct }) }, i.size, hoodNumberRequested);
         subtotal += price * i.quantity;
-        return { productId: p.id, quantity: i.quantity, size: i.size ?? null, color: i.color ?? null, priceCents: price };
+        return {
+            productId: p.id, quantity: i.quantity, size: i.size ?? null, color: i.color ?? null, priceCents: price,
+            hoodNumberRequested, hoodNumberText: hoodNumberRequested ? (i.hoodNumberText?.trim() || null) : null
+        };
     });
 
     const discount = await resolveDiscount(discountCode);
@@ -145,7 +150,7 @@ router.post('/', async (req, res) => {
     if (customerEmail) {
         const emailItems = order.items.map(i => ({
             name: i.product.name, quantity: i.quantity,
-            size: i.size, color: i.color, priceCents: i.priceCents
+            size: i.size, color: i.color, priceCents: i.priceCents, hoodNumberText: i.hoodNumberText
         }));
 
         if (paymentStatus === 'OFFLINE_PENDING') {
@@ -277,7 +282,7 @@ router.post('/checkout', async (req, res) => {
             shopName: g.shopName ?? undefined,
             specialInstructions: order.specialInstructions,
             paymentMethod: 'cash',
-            items: order.items.map(i => ({ name: i.product.name, quantity: i.quantity, size: i.size, color: i.color, priceCents: i.priceCents }))
+            items: order.items.map(i => ({ name: i.product.name, quantity: i.quantity, size: i.size, color: i.color, priceCents: i.priceCents, hoodNumberText: i.hoodNumberText }))
         }).catch(err => console.error('offline payment email error', err));
     }
 
@@ -377,22 +382,34 @@ router.put('/:id', requireAuth, async (req, res) => {
     const uniqueProductIds = [...new Set<string>(items.map((i: any) => i.productId))];
     const products = await prisma.product.findMany({
         where: { id: { in: uniqueProductIds } },
-        include: { adultProduct: { select: { priceCents: true, youthPriceCents: true } } }
+        include: { adultProducts: { select: { id: true, priceCents: true, youthPriceCents: true } } }
     });
     if (products.length !== uniqueProductIds.length) return res.status(400).json({ error: 'invalid product(s)' });
     const productMap = new Map(products.map(p => [p.id, p]));
+    const existingItemById = new Map(existing.items.map(i => [i.id, i]));
 
     const newItemsData = items.map((i: any) => {
         const p = productMap.get(i.productId)!;
+        const existingItem = i.id ? existingItemById.get(String(i.id)) : undefined;
+        // The admin "Edit Order" item picker doesn't have hood-number controls
+        // yet — preserve whatever was already on an existing item unless the
+        // request explicitly touches it, so a routine edit (quantity, address,
+        // status) never silently wipes a customer's hood-number request.
+        const hoodNumberRequested = (i.hoodNumberRequested !== undefined ? Boolean(i.hoodNumberRequested) : (existingItem?.hoodNumberRequested ?? false))
+            && p.hoodNumberEnabled;
+        const hoodNumberText = hoodNumberRequested
+            ? ((i.hoodNumberText !== undefined ? i.hoodNumberText?.trim() : existingItem?.hoodNumberText) || null)
+            : null;
+        const adultProduct = pickYouthPricingContext(p);
         const priceCents = i.priceCents !== undefined && i.priceCents !== null && i.priceCents !== ''
             ? Math.round(Number(i.priceCents))
-            : computeItemPriceCents({ ...p, priceCents: resolveProductPriceCents(p) }, i.size);
+            : computeItemPriceCents({ ...p, priceCents: resolveProductPriceCents({ priceCents: p.priceCents, adultProduct }) }, i.size, hoodNumberRequested);
         return {
             id: i.id ? String(i.id) : undefined,
             productId: p.id, productName: p.name,
             size: i.size || null, color: i.color || null,
             quantity: Math.max(1, Math.round(Number(i.quantity) || 1)),
-            priceCents
+            priceCents, hoodNumberRequested, hoodNumberText
         };
     });
     const subtotal = newItemsData.reduce((a: number, i: { quantity: number; priceCents: number }) => a + i.quantity * i.priceCents, 0);
@@ -474,11 +491,17 @@ router.put('/:id', requireAuth, async (req, res) => {
             if (i.id) {
                 await tx.orderItem.update({
                     where: { id: i.id },
-                    data: { productId: i.productId, size: i.size, color: i.color, quantity: i.quantity, priceCents: i.priceCents }
+                    data: {
+                        productId: i.productId, size: i.size, color: i.color, quantity: i.quantity, priceCents: i.priceCents,
+                        hoodNumberRequested: i.hoodNumberRequested, hoodNumberText: i.hoodNumberText
+                    }
                 });
             } else {
                 await tx.orderItem.create({
-                    data: { orderId: id, productId: i.productId, size: i.size, color: i.color, quantity: i.quantity, priceCents: i.priceCents }
+                    data: {
+                        orderId: id, productId: i.productId, size: i.size, color: i.color, quantity: i.quantity, priceCents: i.priceCents,
+                        hoodNumberRequested: i.hoodNumberRequested, hoodNumberText: i.hoodNumberText
+                    }
                 });
             }
         }

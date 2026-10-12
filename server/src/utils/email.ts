@@ -18,7 +18,7 @@ type OrderEmailData = {
     totalCents: number;
     shippingCents?: number;
     taxCents?: number;
-    items: Array<{ name: string; quantity: number; size?: string | null; color?: string | null; priceCents: number }>;
+    items: Array<{ name: string; quantity: number; size?: string | null; color?: string | null; priceCents: number; hoodNumberText?: string | null }>;
     shopName?: string;
     specialInstructions?: string | null;
 };
@@ -62,8 +62,11 @@ function fmt(cents: number) {
 function buildOrderHtml(data: OrderEmailData): string {
     const itemRows = data.items.map(i => {
         const variant = [i.size, i.color].filter(Boolean).join(' / ');
+        const hoodNumber = i.hoodNumberText
+            ? `<br/><span style="color:#be123c;font-size:12px;font-weight:700;">Hood number: "${i.hoodNumberText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}"</span>`
+            : '';
         return `<tr>
-            <td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;">${i.name}${variant ? ` <span style="color:#94a3b8;font-size:12px;">(${variant})</span>` : ''}</td>
+            <td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;">${i.name}${variant ? ` <span style="color:#94a3b8;font-size:12px;">(${variant})</span>` : ''}${hoodNumber}</td>
             <td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;text-align:center;">${i.quantity}</td>
             <td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;text-align:right;">${fmt(i.priceCents * i.quantity)}</td>
         </tr>`;
@@ -121,8 +124,11 @@ export async function sendOfflinePaymentNotification(data: OfflinePaymentData): 
 
     const itemRows = data.items.map(i => {
         const variant = [i.size, i.color].filter(Boolean).join(' / ');
+        const hoodNumber = i.hoodNumberText
+            ? `<br/><span style="color:#be123c;font-weight:700;">Hood number: "${i.hoodNumberText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}"</span>`
+            : '';
         return `<tr>
-            <td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;">${i.name}${variant ? ` <span style="color:#94a3b8;">(${variant})</span>` : ''}</td>
+            <td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;">${i.name}${variant ? ` <span style="color:#94a3b8;">(${variant})</span>` : ''}${hoodNumber}</td>
             <td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;text-align:center;">${i.quantity}</td>
             <td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;text-align:right;">${fmt(i.priceCents * i.quantity)}</td>
         </tr>`;

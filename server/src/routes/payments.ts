@@ -269,7 +269,8 @@ export async function stripeWebhookHandler(req: Request, res: Response) {
                     quantity: i.quantity,
                     size: i.size,
                     color: i.color,
-                    priceCents: i.priceCents
+                    priceCents: i.priceCents,
+                    hoodNumberText: i.hoodNumberText
                 }))
             }).catch(err => console.error('[stripe-webhook] email error:', err));
         }

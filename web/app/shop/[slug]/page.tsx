@@ -27,9 +27,11 @@ type Product = {
     priceCents:number; description?:string; imagesJson?:string;
     sizesJson?:string; colorsJson?:string; sizeChartUrl?:string | null;
     upchargeEnabled?:boolean; upchargeCents?:number;
+    hoodNumberEnabled?:boolean; hoodNumberPriceCents?:number;
     youthVariant?: Product | null;
     adultVariant?: Product | null;
 };
+type AddToCartOpts = { youthContextAdultId?: string; hoodNumberRequested?: boolean; hoodNumberText?: string };
 type Shop = { id:string; name:string; notes?:string; expiresAt?:string; shippingEnabled:boolean; offlinePaymentEnabled:boolean; products:Product[] };
 
 const stripHtml = (s?: string) => (s ?? "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
@@ -84,12 +86,16 @@ function ProductDetailDrawer({
     product: Product;
     initialVariant?: "self" | "linked";
     onClose: () => void;
-    onAddToCart: (product: Product, size?: string, color?: string, qty?: number) => void;
+    onAddToCart: (product: Product, size?: string, color?: string, qty?: number, opts?: AddToCartOpts) => void;
     cartQuantityFor: (productId: string) => number;
 }) {
     const { linked, selfLabel, linkedLabel, adultSource } = getVariantInfo(product);
     const [variantChoice, setVariantChoice] = useState<"self" | "linked">(linked ? initialVariant : "self");
     const active = variantChoice === "linked" && linked ? linked : product;
+    // Only set when `active` is itself the youth side of an adult/youth pair —
+    // pins down which adult's price override applies at checkout if this
+    // youth product is shared by more than one adult. See getVariantInfo.
+    const youthContextAdultId = active.id !== adultSource.id ? adultSource.id : undefined;
 
     const imgs: string[] = adultSource.imagesJson ? JSON.parse(adultSource.imagesJson) : [];
     const sizes: string[] = active.sizesJson ? JSON.parse(active.sizesJson) : [];
@@ -100,19 +106,28 @@ function ProductDetailDrawer({
     const [selColor, setSelColor] = useState(colors.length === 1 ? colors[0] : "");
     const [qty, setQty] = useState(1);
     const [added, setAdded] = useState(false);
+    const [hoodNumberWanted, setHoodNumberWanted] = useState(false);
+    const [hoodNumberText, setHoodNumberText] = useState("");
 
-    const unitPrice = computeItemPriceCents(active, selSize || undefined);
+    const unitPrice = computeItemPriceCents(active, selSize || undefined, hoodNumberWanted);
 
     useEffect(() => {
         setSelSize(sizes.length === 1 ? sizes[0] : "");
         setSelColor(colors.length === 1 ? colors[0] : "");
+        setHoodNumberWanted(false);
+        setHoodNumberText("");
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [variantChoice]);
 
     function handleAdd() {
         if (sizes.length > 0 && !selSize) { alert("Please select a size."); return; }
         if (colors.length > 0 && !selColor) { alert("Please select a color."); return; }
-        onAddToCart(active, selSize || undefined, selColor || undefined, qty);
+        if (hoodNumberWanted && !hoodNumberText.trim()) { alert("Please type the number/name you'd like on the hood, or turn that option off."); return; }
+        onAddToCart(active, selSize || undefined, selColor || undefined, qty, {
+            youthContextAdultId,
+            hoodNumberRequested: hoodNumberWanted,
+            hoodNumberText: hoodNumberWanted ? hoodNumberText.trim() : undefined
+        });
         setAdded(true);
         setTimeout(() => setAdded(false), 1500);
     }
@@ -289,6 +304,26 @@ function ProductDetailDrawer({
                             </div>
                         )}
 
+                        {active.hoodNumberEnabled && (
+                            <div className="bg-plate-800/60 border border-plate-700 rounded-md p-4">
+                                <label className="flex items-start gap-3 cursor-pointer">
+                                    <input type="checkbox" checked={hoodNumberWanted}
+                                        onChange={e => setHoodNumberWanted(e.target.checked)}
+                                        className="mt-0.5 w-4 h-4 rounded border-plate-600 accent-[var(--spot)]" />
+                                    <span className="flex-1">
+                                        <span className="block text-sm font-bold text-plate-50">Add a hood number</span>
+                                        <span className="block text-xs text-plate-300 mt-0.5">+{fmt(active.hoodNumberPriceCents ?? 0)} — printed on the hood</span>
+                                    </span>
+                                </label>
+                                {hoodNumberWanted && (
+                                    <input type="text" value={hoodNumberText} onChange={e => setHoodNumberText(e.target.value)}
+                                        placeholder="Number or name to print on the hood"
+                                        maxLength={40}
+                                        className="w-full mt-3 rounded-md border border-plate-700 bg-plate-950 px-3 py-2.5 text-sm text-plate-50 placeholder:text-plate-500 outline-none hover:border-plate-600 focus:border-proc-cyan focus:ring-2 focus:ring-proc-cyan/25 transition-all font-press" />
+                                )}
+                            </div>
+                        )}
+
                         <div>
                             <h3 className="text-xs font-bold text-plate-300 uppercase tracking-wider mb-2">Quantity</h3>
                             <div className="flex items-center gap-3">
@@ -356,21 +391,29 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
     function setSelection(pid: string, key:"size"|"color", val:string) {
         setSelections(p => ({ ...p, [pid]:{ ...getSelection(pid), [key]:val } }));
     }
-    function addToCart(product: Product, size?: string, color?: string, qty = 1) {
+    function addToCart(product: Product, size?: string, color?: string, qty = 1, opts?: AddToCartOpts) {
         if (!shop) return;
         addItem({
             productId: product.id, shopSlug: slug, shopName: shop.name, shopShippingEnabled: shop.shippingEnabled, shopOfflinePaymentEnabled: shop.offlinePaymentEnabled, name: product.name,
             priceCents: product.priceCents, upchargeEnabled: product.upchargeEnabled, upchargeCents: product.upchargeCents,
             size, color,
+            youthContextAdultId: opts?.youthContextAdultId,
+            hoodNumberRequested: opts?.hoodNumberRequested,
+            hoodNumberText: opts?.hoodNumberText,
+            hoodNumberPriceCents: product.hoodNumberPriceCents,
         }, qty);
     }
-    function addToCartFromCard(product: Product) {
+    // adultSource lets a quick add from the card grid (no detail drawer, so no
+    // chance to opt into the hood-number addon) still pin down which adult's
+    // price override applies if `product` turns out to be a shared youth item.
+    function addToCartFromCard(product: Product, adultSource: Product) {
         const sizes: string[] = product.sizesJson ? JSON.parse(product.sizesJson) : [];
         const colors: string[] = product.colorsJson ? JSON.parse(product.colorsJson) : [];
         const sel = getSelection(product.id);
         if (sizes.length > 0 && !sel.size) { alert("Please select a size."); return; }
         if (colors.length > 0 && !sel.color) { alert("Please select a color."); return; }
-        addToCart(product, sel.size || undefined, sel.color || undefined, 1);
+        const youthContextAdultId = product.id !== adultSource.id ? adultSource.id : undefined;
+        addToCart(product, sel.size || undefined, sel.color || undefined, 1, { youthContextAdultId });
     }
     function cartQuantityFor(productId: string) {
         return cart.filter(c => c.shopSlug === slug && c.productId === productId).reduce((a, c) => a + c.quantity, 0);
@@ -591,7 +634,7 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
                                                 )}
 
                                                 <div className="flex gap-2">
-                                                    <motion.button type="button" whileTap={{ scale:0.96 }} whileHover={{ y:-1 }} onClick={() => addToCartFromCard(active)}
+                                                    <motion.button type="button" whileTap={{ scale:0.96 }} whileHover={{ y:-1 }} onClick={() => addToCartFromCard(active, adultSource)}
                                                         className="console-sheen flex-1 press-btn press-btn-primary text-sm py-2.5">
                                                         Add to cart
                                                     </motion.button>
@@ -666,8 +709,8 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
                         initialVariant={detailInitialVariant}
                         onClose={() => setDetailProduct(null)}
                         cartQuantityFor={cartQuantityFor}
-                        onAddToCart={(product, size, color, qty) => {
-                            addToCart(product, size, color, qty);
+                        onAddToCart={(product, size, color, qty, opts) => {
+                            addToCart(product, size, color, qty, opts);
                         }}
                     />
                 )}

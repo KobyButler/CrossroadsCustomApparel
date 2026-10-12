@@ -49,7 +49,7 @@ function groupByShop(cart: CartItem[]) {
         if (!groups.has(item.shopSlug)) groups.set(item.shopSlug, { shopSlug: item.shopSlug, shopName: item.shopName, items: [], subtotal: 0 });
         const g = groups.get(item.shopSlug)!;
         g.items.push(item);
-        g.subtotal += computeItemPriceCents(item, item.size) * item.quantity;
+        g.subtotal += computeItemPriceCents({ ...item, hoodNumberEnabled: true }, item.size, item.hoodNumberRequested) * item.quantity;
     }
     return [...groups.values()];
 }
@@ -141,7 +141,11 @@ export default function CheckoutPage() {
         if (!shippingMethod) { setError("Please choose how you'd like to receive your order."); return; }
         if (!paymentMethod) { setError("Please select a payment method."); return; }
         setError("");
-        const items = cart.map(c => ({ productId:c.productId, quantity:c.quantity, size:c.size, color:c.color, shopSlug:c.shopSlug }));
+        const items = cart.map(c => ({
+            productId:c.productId, quantity:c.quantity, size:c.size, color:c.color, shopSlug:c.shopSlug,
+            youthContextAdultId: c.youthContextAdultId,
+            hoodNumberRequested: c.hoodNumberRequested, hoodNumberText: c.hoodNumberText,
+        }));
         const addressFields = shippingMethod === "SHIP"
             ? { shipAddress1: form.shipAddress1, shipAddress2: form.shipAddress2, shipCity: form.shipCity, shipState: form.shipState, shipZip: form.shipZip }
             : {};
@@ -500,6 +504,9 @@ export default function CheckoutPage() {
                                                                 )}
                                                                 {[item.size, item.color].filter(Boolean).join(" · ")}
                                                             </p>
+                                                            {item.hoodNumberRequested && (
+                                                                <p className="text-xs text-proc-cyan mt-0.5">Hood number: &quot;{item.hoodNumberText}&quot;</p>
+                                                            )}
                                                         </div>
                                                         <div className="flex items-center gap-1.5 shrink-0">
                                                             <button type="button" onClick={() => updateQty(idx, item.quantity-1)}

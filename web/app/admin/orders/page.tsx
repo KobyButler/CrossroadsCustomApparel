@@ -606,7 +606,12 @@ export default function OrdersPage() {
                             <div className="rounded-lg overflow-hidden border border-white/10">
                                 {detailOrder.items?.map((item: any, i: number) => (
                                     <div key={i} className="flex justify-between items-center px-4 py-3 border-b border-white/[0.05] last:border-0 hover:bg-white/[0.03] transition-colors text-sm">
-                                        <span className="text-graphite-100 font-medium">{item.product?.name ?? "Item"} {item.size && <span className="text-graphite-300 font-normal">({item.size})</span>}</span>
+                                        <span className="text-graphite-100 font-medium">
+                                            {item.product?.name ?? "Item"} {item.size && <span className="text-graphite-300 font-normal">({item.size})</span>}
+                                            {item.hoodNumberRequested && (
+                                                <span className="block text-xs font-bold text-signal-amber mt-0.5">Hood number: &quot;{item.hoodNumberText}&quot;</span>
+                                            )}
+                                        </span>
                                         <span className="text-graphite-300 mx-4 font-mono">×{item.quantity}</span>
                                         <span className="font-semibold text-white tabular-nums font-mono">{fmt(item.priceCents * item.quantity)}</span>
                                     </div>

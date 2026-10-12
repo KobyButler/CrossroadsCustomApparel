@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 type OrderItemRow = {
     id: string; product?: { name: string; sku: string } | null;
     size?: string | null; color?: string | null; quantity: number; priceCents: number;
+    hoodNumberRequested?: boolean; hoodNumberText?: string | null;
 };
 type PrintOrder = {
     id: string; customerName: string; customerEmail: string;
@@ -94,7 +95,12 @@ function OrderPage({ order, isFirst }: { order: PrintOrder; isFirst: boolean }) 
                 <tbody>
                     {order.items.map((item, i) => (
                         <tr key={item.id ?? i} className="border-b border-slate-100">
-                            <td className="py-2 text-slate-800">{item.product?.name ?? "Item"}</td>
+                            <td className="py-2 text-slate-800">
+                                {item.product?.name ?? "Item"}
+                                {item.hoodNumberRequested && (
+                                    <div className="text-xs font-bold text-red-700">Hood number: &quot;{item.hoodNumberText}&quot;</div>
+                                )}
+                            </td>
                             <td className="py-2 text-slate-600">{item.color ?? "—"}</td>
                             <td className="py-2 text-slate-600">{item.size ?? "—"}</td>
                             <td className="py-2 text-right text-slate-800">{item.quantity}</td>

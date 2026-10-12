@@ -1,5 +1,5 @@
 import { prisma } from '../prisma.js';
-import { computeItemPriceCents, resolveProductPriceCents } from './pricing.js';
+import { computeItemPriceCents, resolveProductPriceCents, pickYouthPricingContext } from './pricing.js';
 
 export type CheckoutItemInput = {
     productId: string;
@@ -7,6 +7,13 @@ export type CheckoutItemInput = {
     size?: string | null;
     color?: string | null;
     shopSlug?: string | null;
+    // Set only when this item is a youth variant the shopper reached by
+    // toggling from a specific adult product's page — pins down which
+    // adult's youthPriceCents override applies when the youth product is
+    // shared by several adults. See pickYouthPricingContext.
+    youthContextAdultId?: string | null;
+    hoodNumberRequested?: boolean | null;
+    hoodNumberText?: string | null;
 };
 
 export type ShopGroup = {
@@ -22,7 +29,7 @@ export type ShopGroup = {
     // never treated as unavailable. See assertShopsAvailable.
     shopAvailable: boolean | null;
     shopExpired: boolean;
-    items: { productId: string; quantity: number; size: string | null; color: string | null; priceCents: number }[];
+    items: { productId: string; quantity: number; size: string | null; color: string | null; priceCents: number; hoodNumberRequested: boolean; hoodNumberText: string | null }[];
     subtotal: number;
     shippingCents: number;
 };
@@ -39,14 +46,24 @@ export async function buildShopGroups(
     }
 
     const uniqueProductIds = [...new Set(items.map(i => i.productId))];
-    const products = await prisma.product.findMany({
-        where: { id: { in: uniqueProductIds } },
-        include: { adultProduct: { select: { priceCents: true, youthPriceCents: true } } }
-    });
+    const uniqueAdultContextIds = [...new Set(items.map(i => i.youthContextAdultId).filter((id): id is string => !!id))];
+    const [products, adultContexts] = await Promise.all([
+        prisma.product.findMany({
+            where: { id: { in: uniqueProductIds } },
+            include: { adultProducts: { select: { id: true, priceCents: true, youthPriceCents: true } } }
+        }),
+        uniqueAdultContextIds.length
+            ? prisma.product.findMany({
+                where: { id: { in: uniqueAdultContextIds } },
+                select: { id: true, priceCents: true, youthPriceCents: true, youthProductId: true }
+            })
+            : Promise.resolve([])
+    ]);
     if (products.length !== uniqueProductIds.length) {
         throw new Error('One or more products were not found');
     }
     const productMap = new Map(products.map(p => [p.id, p]));
+    const adultContextMap = new Map(adultContexts.map(a => [a.id, a]));
 
     const slugs = [...new Set(items.map(i => i.shopSlug ?? topLevelShopSlug ?? null).filter((s): s is string => !!s))];
     const shops = slugs.length ? await prisma.shop.findMany({ where: { slug: { in: slugs } } }) : [];
@@ -57,7 +74,13 @@ export async function buildShopGroups(
     for (const i of items) {
         const slug = i.shopSlug ?? topLevelShopSlug ?? null;
         const product = productMap.get(i.productId)!;
-        const priceCents = computeItemPriceCents({ ...product, priceCents: resolveProductPriceCents(product) }, i.size);
+        const adultProduct = pickYouthPricingContext(product, i.youthContextAdultId ? adultContextMap.get(i.youthContextAdultId) : null);
+        const resolvedPriceCents = resolveProductPriceCents({ priceCents: product.priceCents, adultProduct });
+        // Only a real, currently-enabled addon on this exact product can add
+        // to the charge — never trust the client's own say-so for whether it
+        // applies or what it costs.
+        const hoodNumberRequested = Boolean(i.hoodNumberRequested) && product.hoodNumberEnabled;
+        const priceCents = computeItemPriceCents({ ...product, priceCents: resolvedPriceCents }, i.size, hoodNumberRequested);
         if (!groups.has(slug)) {
             const shop = slug ? shopBySlug.get(slug) : undefined;
             const shopExpired = !!shop?.expiresAt && shop.expiresAt <= now;
@@ -71,7 +94,10 @@ export async function buildShopGroups(
             });
         }
         const g = groups.get(slug)!;
-        g.items.push({ productId: product.id, quantity: i.quantity, size: i.size ?? null, color: i.color ?? null, priceCents });
+        g.items.push({
+            productId: product.id, quantity: i.quantity, size: i.size ?? null, color: i.color ?? null, priceCents,
+            hoodNumberRequested, hoodNumberText: hoodNumberRequested ? (i.hoodNumberText?.trim() || null) : null
+        });
         g.subtotal += priceCents * i.quantity;
     }
     return [...groups.values()];
