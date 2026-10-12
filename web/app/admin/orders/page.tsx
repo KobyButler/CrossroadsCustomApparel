@@ -9,7 +9,7 @@ import { Modal, ModalFooter } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import { IconButton, IconButtonRow } from "@/components/ui/icon-button";
-import { EyeIcon, EditIcon, CheckIcon, XCircleIcon } from "@/components/ui/icons";
+import { EyeIcon, EditIcon, CheckIcon, XCircleIcon, PrinterIcon } from "@/components/ui/icons";
 import { useSortable, SortableTh } from "@/components/ui/sortable-th";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -522,6 +522,9 @@ export default function OrdersPage() {
                                                 <IconButton title="Edit order" onClick={() => openEditOrder(order)}>
                                                     <EditIcon />
                                                 </IconButton>
+                                                <IconButton title="Print receipt" onClick={() => window.open(`/admin/orders/receipt?id=${order.id}`, "_blank")}>
+                                                    <PrinterIcon />
+                                                </IconButton>
                                                 {order.status === "UNFULFILLED" && (
                                                     <>
                                                         <IconButton title="Mark fulfilled" tone="emerald" onClick={() => markFulfilled(order.id)}>
@@ -735,6 +738,7 @@ export default function OrdersPage() {
                         </div>
                         <ModalFooter>
                             <Button variant="outline" onClick={() => setDetailOrder(null)}>Close</Button>
+                            <Button variant="outline" onClick={() => window.open(`/admin/orders/receipt?id=${detailOrder.id}`, "_blank")}>Print Receipt</Button>
                             <Button variant="outline" onClick={() => { const o = detailOrder; setDetailOrder(null); openEditOrder(o); }}>Edit Order</Button>
                             {detailOrder.status === "UNFULFILLED" && (
                                 <>

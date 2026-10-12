@@ -539,6 +539,39 @@ router.get('/:id/history', requireAuth, async (req, res) => {
     })));
 });
 
+// Everything a customer-facing receipt needs for one order, including the
+// card brand/last4 for a Stripe payment — fetched live from Stripe via the
+// stored PaymentIntent rather than kept in our own DB, so it works for any
+// past order with no backfill and is never stale. Best-effort: if Stripe
+// isn't configured or the lookup fails for any reason, the receipt still
+// renders, just without card details (admin only).
+router.get('/:id/receipt', requireAuth, async (req, res) => {
+    const order = await prisma.order.findUnique({
+        where: { id: String(req.params.id) },
+        include: { items: { include: { product: true } }, shop: true, discountCode: { select: { code: true } } }
+    });
+    if (!order) return res.status(404).json({ error: 'not found' });
+
+    let payment: { brand: string | null; last4: string | null } | null = null;
+    if (order.paymentMethod === 'stripe' && order.stripePaymentIntentId) {
+        try {
+            const stripe = getStripeOrNull();
+            if (stripe) {
+                const pi = await stripe.paymentIntents.retrieve(order.stripePaymentIntentId, {
+                    expand: ['latest_charge.payment_method_details']
+                });
+                const charge = pi.latest_charge as any;
+                const card = charge?.payment_method_details?.card;
+                if (card) payment = { brand: card.brand ?? null, last4: card.last4 ?? null };
+            }
+        } catch (err) {
+            console.error('[receipt] failed to fetch Stripe card details (continuing without them):', err);
+        }
+    }
+
+    res.json({ order, payment });
+});
+
 // Buy a real, print-ready shipping label via Shippo (admin only). Idempotent
 // by default — if this order already has a label, returns it as-is rather
 // than buying (and paying for) a second one; pass ?regenerate=true to force
