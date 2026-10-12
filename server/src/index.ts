@@ -15,6 +15,7 @@ import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 import morgan from 'morgan';
+import compression from 'compression';
 import path from 'path';
 
 console.log('Core modules loaded');
@@ -32,6 +33,7 @@ console.log('Routes loaded');
 const app = express();
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(cors({ origin: config.corsOrigins, credentials: true }));
+app.use(compression());
 
 // Stripe webhook MUST receive the raw body — register before express.json()
 app.post('/api/payments/webhook', express.raw({ type: 'application/json' }), stripeWebhookHandler);

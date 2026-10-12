@@ -18,8 +18,14 @@ router.get('/overview', async (_req, res) => {
     const series = Array.from(byDay.entries()).sort(([a], [b]) => a.localeCompare(b))
         .map(([date, v]) => ({ date, orders: v.count, grossCents: v.cents }));
 
-    // top products
-    const items = await prisma.orderItem.findMany({ where: { order: EXCLUDE_INCOMPLETE_CHECKOUTS }, include: { product: true } });
+    // top products — scoped to the same 30-day window as the series above
+    // (this used to scan every order item ever placed on every dashboard
+    // load, getting slower as order history grows for no real benefit: a
+    // "top products" list should reflect recent activity, not all-time).
+    const items = await prisma.orderItem.findMany({
+        where: { order: { createdAt: { gte: since }, ...EXCLUDE_INCOMPLETE_CHECKOUTS } },
+        include: { product: true }
+    });
     const bySku = new Map<string, { name: string; qty: number; cents: number }>();
     for (const it of items) {
         const k = it.product.sku;

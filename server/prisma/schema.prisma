@@ -41,10 +41,16 @@ model Product {
   // storefront offer an Adult/Youth toggle on one page instead of the
   // shopper having to find the other listing themselves). The FK lives on
   // the adult side; onDelete: SetNull so deleting the youth product just
-  // drops the link rather than blocking the delete.
-  youthProductId   String?     @unique
+  // drops the link rather than blocking the delete. Many-to-one: the same
+  // youth product (e.g. a generic youth tee) can be the youth counterpart
+  // of several different adult products, same as one adult product can be
+  // offered across many shops — so adultProducts is a list, not a single
+  // back-reference. See pickYouthPricingContext() in utils/pricing.ts for
+  // how youthPriceCents resolves when a youth product has more than one
+  // parent adult.
+  youthProductId   String?
   youthProduct     Product?    @relation("AdultYouthLink", fields: [youthProductId], references: [id], onDelete: SetNull)
-  adultProduct     Product?    @relation("AdultYouthLink")
+  adultProducts    Product[]   @relation("AdultYouthLink")
 
   // The price actually charged for the linked youth variant above, in cents.
   // null (the default, and what every existing link now resolves to) means
@@ -58,6 +64,16 @@ model Product {
   // resolveProductPriceCents() in utils/pricing.ts, the one place this gets
   // resolved into what a customer is actually shown and charged.
   youthPriceCents  Int?
+
+  // Hoodie-only addon: an extra charge for printing a number on the hood,
+  // with a free-text field for which number/note the customer wants. Not
+  // meaningful for non-hoodie products, but kept as plain fields rather than
+  // a separate table since it's a single optional addon, not a general
+  // product-options system.
+  hoodNumberEnabled   Boolean @default(false)
+  hoodNumberPriceCents Int    @default(0)
+
+  @@index([vendor])
 }
 
 model Shop {
@@ -132,6 +148,12 @@ model Order {
   discountCode          DiscountCode?        @relation(fields: [discountCodeId], references: [id])
   financeTransactions   FinanceTransaction[]
   history                OrderHistoryEntry[]
+
+  @@index([shopId])
+  @@index([status])
+  @@index([paymentStatus])
+  @@index([customerId])
+  @@index([createdAt])
 }
 
 // Audit trail for admin edits to an order (full-order edits, plus fulfill/cancel
@@ -157,7 +179,17 @@ model OrderItem {
   size       String?
   color      String?
   quantity   Int
-  priceCents Int
+  priceCents Int // unit price already includes the hood-number addon charge below, if requested
+
+  // Hoodie hood-number addon, as actually chosen for this line item (see
+  // Product.hoodNumberEnabled/hoodNumberPriceCents for the per-product
+  // on/off + price). hoodNumberText is the customer's free-text note (the
+  // number/name they want printed); only meaningful when requested is true.
+  hoodNumberRequested Boolean @default(false)
+  hoodNumberText      String?
+
+  @@index([orderId])
+  @@index([productId])
 }
 
 model DiscountCode {
@@ -206,6 +238,8 @@ model FinanceTransaction {
   amountCents Int
   note        String?
   createdAt   DateTime @default(now())
+
+  @@index([orderId])
 }
 
 model Checkout {
@@ -217,6 +251,8 @@ model Checkout {
   status    String   @default("ABANDONED") // ABANDONED|RECOVERED
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([shopId])
 }
 
 // SanMar catalog rows synced from SFTP CSV files
