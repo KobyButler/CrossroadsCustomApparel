@@ -3,7 +3,7 @@ import { prisma } from '../prisma.js';
 import { requireAuth, AuthUser } from '../middleware/auth.js';
 import { sendOrderConfirmation, sendOfflinePaymentNotification } from '../utils/email.js';
 import { computeItemPriceCents, resolveProductPriceCents, pickYouthPricingContext } from '../utils/pricing.js';
-import { buildShopGroups, applyDiscountAcrossGroups, allocateShippingAcrossGroups, newOrderGroupId, assertShippingAllowed, assertOfflinePaymentAllowed, assertShopsAvailable } from '../utils/checkoutHelpers.js';
+import { buildShopGroups, applyDiscountAcrossGroups, allocateShippingAcrossGroups, newOrderGroupId, assertShippingAllowed, assertOfflinePaymentAllowed, assertShopsAvailable, shopGroupItemsToCreateInput } from '../utils/checkoutHelpers.js';
 import { quoteShipping, buyLabelForOrder } from '../utils/shippingCalc.js';
 import { diffScalarFields, diffItems, recordOrderHistory } from '../utils/orderHistory.js';
 import { quoteOrderTax } from '../utils/tax.js';
@@ -34,7 +34,7 @@ router.get('/', requireAuth, async (req, res) => {
     const [orders, total] = await Promise.all([
         prisma.order.findMany({
             where,
-            include: { items: { include: { product: true } }, shop: true, vendorOrders: true },
+            include: { items: { include: { product: true, variations: true } }, shop: true, vendorOrders: true },
             orderBy: { createdAt: 'desc' },
             ...(ids ? {} : { take: limit, skip })
         }),
@@ -94,16 +94,14 @@ router.post('/', async (req, res) => {
     if (products.length !== uniqueProductIds.length) return res.status(400).json({ error: 'invalid product(s)' });
 
     let subtotal = 0;
+    // No variation picker in the admin "Create Order" form yet — a manually
+    // entered phone/in-person order just doesn't carry any addon selections.
     const orderItems = items.map((i: any) => {
         const p = products.find(pp => pp.id === i.productId)!;
         const adultProduct = pickYouthPricingContext(p);
-        const hoodNumberRequested = Boolean(i.hoodNumberRequested) && p.hoodNumberEnabled;
-        const price = computeItemPriceCents({ ...p, priceCents: resolveProductPriceCents({ priceCents: p.priceCents, adultProduct }) }, i.size, hoodNumberRequested);
+        const price = computeItemPriceCents({ ...p, priceCents: resolveProductPriceCents({ priceCents: p.priceCents, adultProduct }) }, i.size);
         subtotal += price * i.quantity;
-        return {
-            productId: p.id, quantity: i.quantity, size: i.size ?? null, color: i.color ?? null, priceCents: price,
-            hoodNumberRequested, hoodNumberText: hoodNumberRequested ? (i.hoodNumberText?.trim() || null) : null
-        };
+        return { productId: p.id, quantity: i.quantity, size: i.size ?? null, color: i.color ?? null, priceCents: price };
     });
 
     const discount = await resolveDiscount(discountCode);
@@ -150,7 +148,7 @@ router.post('/', async (req, res) => {
     if (customerEmail) {
         const emailItems = order.items.map(i => ({
             name: i.product.name, quantity: i.quantity,
-            size: i.size, color: i.color, priceCents: i.priceCents, hoodNumberText: i.hoodNumberText
+            size: i.size, color: i.color, priceCents: i.priceCents
         }));
 
         if (paymentStatus === 'OFFLINE_PENDING') {
@@ -259,9 +257,9 @@ router.post('/checkout', async (req, res) => {
                 specialInstructions: specialInstructions || null,
                 taxCents,
                 totalCents: orderTotal,
-                items: { createMany: { data: g.items } }
+                items: { create: shopGroupItemsToCreateInput(g.items) }
             },
-            include: { items: { include: { product: true } } }
+            include: { items: { include: { product: true, variations: true } } }
         });
         createdOrders.push(order);
 
@@ -282,7 +280,10 @@ router.post('/checkout', async (req, res) => {
             shopName: g.shopName ?? undefined,
             specialInstructions: order.specialInstructions,
             paymentMethod: 'cash',
-            items: order.items.map(i => ({ name: i.product.name, quantity: i.quantity, size: i.size, color: i.color, priceCents: i.priceCents, hoodNumberText: i.hoodNumberText }))
+            items: order.items.map(i => ({
+                name: i.product.name, quantity: i.quantity, size: i.size, color: i.color, priceCents: i.priceCents,
+                variations: i.variations.map(v => ({ name: v.name, textValue: v.textValue, choiceLabel: v.choiceLabel }))
+            }))
         }).catch(err => console.error('offline payment email error', err));
     }
 
@@ -386,30 +387,23 @@ router.put('/:id', requireAuth, async (req, res) => {
     });
     if (products.length !== uniqueProductIds.length) return res.status(400).json({ error: 'invalid product(s)' });
     const productMap = new Map(products.map(p => [p.id, p]));
-    const existingItemById = new Map(existing.items.map(i => [i.id, i]));
 
+    // Variation selections live in their own OrderItemVariation rows, not
+    // inline on OrderItem, so a routine edit here (quantity, address, status)
+    // leaves an existing item's variations alone automatically — there's
+    // nothing to explicitly preserve, unlike a field stored directly on the row.
     const newItemsData = items.map((i: any) => {
         const p = productMap.get(i.productId)!;
-        const existingItem = i.id ? existingItemById.get(String(i.id)) : undefined;
-        // The admin "Edit Order" item picker doesn't have hood-number controls
-        // yet — preserve whatever was already on an existing item unless the
-        // request explicitly touches it, so a routine edit (quantity, address,
-        // status) never silently wipes a customer's hood-number request.
-        const hoodNumberRequested = (i.hoodNumberRequested !== undefined ? Boolean(i.hoodNumberRequested) : (existingItem?.hoodNumberRequested ?? false))
-            && p.hoodNumberEnabled;
-        const hoodNumberText = hoodNumberRequested
-            ? ((i.hoodNumberText !== undefined ? i.hoodNumberText?.trim() : existingItem?.hoodNumberText) || null)
-            : null;
         const adultProduct = pickYouthPricingContext(p);
         const priceCents = i.priceCents !== undefined && i.priceCents !== null && i.priceCents !== ''
             ? Math.round(Number(i.priceCents))
-            : computeItemPriceCents({ ...p, priceCents: resolveProductPriceCents({ priceCents: p.priceCents, adultProduct }) }, i.size, hoodNumberRequested);
+            : computeItemPriceCents({ ...p, priceCents: resolveProductPriceCents({ priceCents: p.priceCents, adultProduct }) }, i.size);
         return {
             id: i.id ? String(i.id) : undefined,
             productId: p.id, productName: p.name,
             size: i.size || null, color: i.color || null,
             quantity: Math.max(1, Math.round(Number(i.quantity) || 1)),
-            priceCents, hoodNumberRequested, hoodNumberText
+            priceCents
         };
     });
     const subtotal = newItemsData.reduce((a: number, i: { quantity: number; priceCents: number }) => a + i.quantity * i.priceCents, 0);
@@ -491,17 +485,11 @@ router.put('/:id', requireAuth, async (req, res) => {
             if (i.id) {
                 await tx.orderItem.update({
                     where: { id: i.id },
-                    data: {
-                        productId: i.productId, size: i.size, color: i.color, quantity: i.quantity, priceCents: i.priceCents,
-                        hoodNumberRequested: i.hoodNumberRequested, hoodNumberText: i.hoodNumberText
-                    }
+                    data: { productId: i.productId, size: i.size, color: i.color, quantity: i.quantity, priceCents: i.priceCents }
                 });
             } else {
                 await tx.orderItem.create({
-                    data: {
-                        orderId: id, productId: i.productId, size: i.size, color: i.color, quantity: i.quantity, priceCents: i.priceCents,
-                        hoodNumberRequested: i.hoodNumberRequested, hoodNumberText: i.hoodNumberText
-                    }
+                    data: { orderId: id, productId: i.productId, size: i.size, color: i.color, quantity: i.quantity, priceCents: i.priceCents }
                 });
             }
         }
@@ -517,7 +505,7 @@ router.put('/:id', requireAuth, async (req, res) => {
                 residential: afterScalar.residential, specialInstructions: afterScalar.specialInstructions,
                 totalCents: afterScalar.totalCents,
             },
-            include: { items: { include: { product: true } }, shop: true, vendorOrders: true }
+            include: { items: { include: { product: true, variations: true } }, shop: true, vendorOrders: true }
         });
     });
 
@@ -548,7 +536,7 @@ router.get('/:id/history', requireAuth, async (req, res) => {
 router.get('/:id/receipt', requireAuth, async (req, res) => {
     const order = await prisma.order.findUnique({
         where: { id: String(req.params.id) },
-        include: { items: { include: { product: true } }, shop: true, discountCode: { select: { code: true } } }
+        include: { items: { include: { product: true, variations: true } }, shop: true, discountCode: { select: { code: true } } }
     });
     if (!order) return res.status(404).json({ error: 'not found' });
 

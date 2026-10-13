@@ -1,5 +1,5 @@
 import { prisma } from '../prisma.js';
-import { computeItemPriceCents, resolveProductPriceCents, pickYouthPricingContext } from './pricing.js';
+import { computeItemPriceCents, resolveProductPriceCents, pickYouthPricingContext, resolveItemVariations, VariationSelectionInput, ResolvedVariationSelection } from './pricing.js';
 
 export type CheckoutItemInput = {
     productId: string;
@@ -12,8 +12,7 @@ export type CheckoutItemInput = {
     // adult's youthPriceCents override applies when the youth product is
     // shared by several adults. See pickYouthPricingContext.
     youthContextAdultId?: string | null;
-    hoodNumberRequested?: boolean | null;
-    hoodNumberText?: string | null;
+    variations?: VariationSelectionInput[];
 };
 
 export type ShopGroup = {
@@ -29,7 +28,7 @@ export type ShopGroup = {
     // never treated as unavailable. See assertShopsAvailable.
     shopAvailable: boolean | null;
     shopExpired: boolean;
-    items: { productId: string; quantity: number; size: string | null; color: string | null; priceCents: number; hoodNumberRequested: boolean; hoodNumberText: string | null }[];
+    items: { productId: string; quantity: number; size: string | null; color: string | null; priceCents: number; variations: ResolvedVariationSelection[] }[];
     subtotal: number;
     shippingCents: number;
 };
@@ -50,7 +49,10 @@ export async function buildShopGroups(
     const [products, adultContexts] = await Promise.all([
         prisma.product.findMany({
             where: { id: { in: uniqueProductIds } },
-            include: { adultProducts: { select: { id: true, priceCents: true, youthPriceCents: true } } }
+            include: {
+                adultProducts: { select: { id: true, priceCents: true, youthPriceCents: true } },
+                variations: { orderBy: { sortOrder: 'asc' }, include: { choices: { orderBy: { sortOrder: 'asc' } } } }
+            }
         }),
         uniqueAdultContextIds.length
             ? prisma.product.findMany({
@@ -76,11 +78,12 @@ export async function buildShopGroups(
         const product = productMap.get(i.productId)!;
         const adultProduct = pickYouthPricingContext(product, i.youthContextAdultId ? adultContextMap.get(i.youthContextAdultId) : null);
         const resolvedPriceCents = resolveProductPriceCents({ priceCents: product.priceCents, adultProduct });
-        // Only a real, currently-enabled addon on this exact product can add
-        // to the charge — never trust the client's own say-so for whether it
-        // applies or what it costs.
-        const hoodNumberRequested = Boolean(i.hoodNumberRequested) && product.hoodNumberEnabled;
-        const priceCents = computeItemPriceCents({ ...product, priceCents: resolvedPriceCents }, i.size, hoodNumberRequested);
+        // Validated against this exact product's own currently-configured
+        // variations — never trust a client-supplied label/image/price, only
+        // which variationId/choiceId it picked.
+        const { resolved: variations, totalPriceCents: variationPriceCents, error } = resolveItemVariations(product.variations, i.variations ?? []);
+        if (error) throw new Error(error);
+        const priceCents = computeItemPriceCents({ ...product, priceCents: resolvedPriceCents }, i.size, variationPriceCents);
         if (!groups.has(slug)) {
             const shop = slug ? shopBySlug.get(slug) : undefined;
             const shopExpired = !!shop?.expiresAt && shop.expiresAt <= now;
@@ -95,8 +98,7 @@ export async function buildShopGroups(
         }
         const g = groups.get(slug)!;
         g.items.push({
-            productId: product.id, quantity: i.quantity, size: i.size ?? null, color: i.color ?? null, priceCents,
-            hoodNumberRequested, hoodNumberText: hoodNumberRequested ? (i.hoodNumberText?.trim() || null) : null
+            productId: product.id, quantity: i.quantity, size: i.size ?? null, color: i.color ?? null, priceCents, variations
         });
         g.subtotal += priceCents * i.quantity;
     }
@@ -148,6 +150,23 @@ export function allocateShippingAcrossGroups(groups: ShopGroup[], totalShippingC
         allocated += share;
         return { ...g, shippingCents: share };
     });
+}
+
+// Shapes a ShopGroup's resolved items into the nested-create payload Prisma
+// needs to also create each item's OrderItemVariation rows in the same
+// write — createMany can't do nested relations, so this is a plain `create`
+// with an array of objects instead of `createMany`.
+export function shopGroupItemsToCreateInput(items: ShopGroup['items']) {
+    return items.map(({ variations, ...item }) => ({
+        ...item,
+        variations: variations.length
+            ? { create: variations.map(v => ({
+                variationId: v.variationId, name: v.name, type: v.type,
+                textValue: v.textValue, choiceLabel: v.choiceLabel, choiceImageUrl: v.choiceImageUrl,
+                priceCents: v.priceCents
+            })) }
+            : undefined
+    }));
 }
 
 export function newOrderGroupId(): string {

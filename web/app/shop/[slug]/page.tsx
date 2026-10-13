@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { imgUrl } from "@/app/lib/api";
 import Link from "next/link";
 import { getColorCss } from "@/lib/colors";
-import { useCart } from "@/lib/cart";
+import { useCart, SelectedVariation } from "@/lib/cart";
 import { computeItemPriceCents } from "@/lib/pricing";
 import { PressButton } from "@/components/public/PressButton";
 import { SeparationCard } from "@/components/public/SeparationCard";
@@ -22,16 +22,18 @@ import { getShopSpot, spotVars, SPOTS } from "@/lib/spot";
 const EASE = [0.16, 1, 0.3, 1] as [number, number, number, number];
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+type VariationChoice = { id: string; label: string; imageUrl?: string | null; priceCents: number };
+type Variation = { id: string; name: string; type: "TEXT" | "CHOICE"; required: boolean; priceCents: number; choices: VariationChoice[] };
 type Product = {
     id:string; name:string; sku:string; brand?:string;
     priceCents:number; description?:string; imagesJson?:string;
     sizesJson?:string; colorsJson?:string; sizeChartUrl?:string | null;
     upchargeEnabled?:boolean; upchargeCents?:number;
-    hoodNumberEnabled?:boolean; hoodNumberPriceCents?:number;
+    variations?: Variation[];
     youthVariant?: Product | null;
     adultVariant?: Product | null;
 };
-type AddToCartOpts = { youthContextAdultId?: string; hoodNumberRequested?: boolean; hoodNumberText?: string };
+type AddToCartOpts = { youthContextAdultId?: string; selectedVariations?: SelectedVariation[] };
 type Shop = { id:string; name:string; notes?:string; expiresAt?:string; shippingEnabled:boolean; offlinePaymentEnabled:boolean; products:Product[] };
 
 const stripHtml = (s?: string) => (s ?? "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
@@ -100,33 +102,49 @@ function ProductDetailDrawer({
     const imgs: string[] = adultSource.imagesJson ? JSON.parse(adultSource.imagesJson) : [];
     const sizes: string[] = active.sizesJson ? JSON.parse(active.sizesJson) : [];
     const colors: string[] = active.colorsJson ? JSON.parse(active.colorsJson) : [];
+    const variations: Variation[] = active.variations ?? [];
 
     const [imgIdx, setImgIdx] = useState(0);
     const [selSize, setSelSize] = useState(sizes.length === 1 ? sizes[0] : "");
     const [selColor, setSelColor] = useState(colors.length === 1 ? colors[0] : "");
     const [qty, setQty] = useState(1);
     const [added, setAdded] = useState(false);
-    const [hoodNumberWanted, setHoodNumberWanted] = useState(false);
-    const [hoodNumberText, setHoodNumberText] = useState("");
+    // Keyed by variationId — { textValue } for TEXT, { choiceId } for CHOICE.
+    const [variationInputs, setVariationInputs] = useState<Record<string, { textValue?: string; choiceId?: string }>>({});
 
-    const unitPrice = computeItemPriceCents(active, selSize || undefined, hoodNumberWanted);
+    const resolvedVariations: SelectedVariation[] = [];
+    for (const v of variations) {
+        const input = variationInputs[v.id];
+        if (v.type === "CHOICE") {
+            const choice = input?.choiceId ? v.choices.find(c => c.id === input.choiceId) : undefined;
+            if (choice) resolvedVariations.push({ variationId: v.id, name: v.name, type: "CHOICE", choiceId: choice.id, choiceLabel: choice.label, priceCents: choice.priceCents });
+        } else {
+            const text = input?.textValue?.trim();
+            if (text) resolvedVariations.push({ variationId: v.id, name: v.name, type: "TEXT", textValue: text, priceCents: v.priceCents });
+        }
+    }
+    const variationPriceCents = resolvedVariations.reduce((a, v) => a + v.priceCents, 0);
+
+    const unitPrice = computeItemPriceCents(active, selSize || undefined, variationPriceCents);
 
     useEffect(() => {
         setSelSize(sizes.length === 1 ? sizes[0] : "");
         setSelColor(colors.length === 1 ? colors[0] : "");
-        setHoodNumberWanted(false);
-        setHoodNumberText("");
+        setVariationInputs({});
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [variantChoice]);
 
     function handleAdd() {
         if (sizes.length > 0 && !selSize) { alert("Please select a size."); return; }
         if (colors.length > 0 && !selColor) { alert("Please select a color."); return; }
-        if (hoodNumberWanted && !hoodNumberText.trim()) { alert("Please type the number/name you'd like on the hood, or turn that option off."); return; }
+        for (const v of variations) {
+            if (!v.required) continue;
+            const has = resolvedVariations.some(r => r.variationId === v.id);
+            if (!has) { alert(v.type === "CHOICE" ? `Please make a selection for "${v.name}".` : `"${v.name}" is required.`); return; }
+        }
         onAddToCart(active, selSize || undefined, selColor || undefined, qty, {
             youthContextAdultId,
-            hoodNumberRequested: hoodNumberWanted,
-            hoodNumberText: hoodNumberWanted ? hoodNumberText.trim() : undefined
+            selectedVariations: resolvedVariations
         });
         setAdded(true);
         setTimeout(() => setAdded(false), 1500);
@@ -304,25 +322,73 @@ function ProductDetailDrawer({
                             </div>
                         )}
 
-                        {active.hoodNumberEnabled && (
-                            <div className="bg-plate-800/60 border border-plate-700 rounded-md p-4">
-                                <label className="flex items-start gap-3 cursor-pointer">
-                                    <input type="checkbox" checked={hoodNumberWanted}
-                                        onChange={e => setHoodNumberWanted(e.target.checked)}
-                                        className="mt-0.5 w-4 h-4 rounded border-plate-600 accent-[var(--spot)]" />
-                                    <span className="flex-1">
-                                        <span className="block text-sm font-bold text-plate-50">Add a hood number</span>
-                                        <span className="block text-xs text-plate-300 mt-0.5">+{fmt(active.hoodNumberPriceCents ?? 0)} — printed on the hood</span>
-                                    </span>
-                                </label>
-                                {hoodNumberWanted && (
-                                    <input type="text" value={hoodNumberText} onChange={e => setHoodNumberText(e.target.value)}
-                                        placeholder="Number or name to print on the hood"
-                                        maxLength={40}
-                                        className="w-full mt-3 rounded-md border border-plate-700 bg-plate-950 px-3 py-2.5 text-sm text-plate-50 placeholder:text-plate-500 outline-none hover:border-plate-600 focus:border-proc-cyan focus:ring-2 focus:ring-proc-cyan/25 transition-all font-press" />
-                                )}
-                            </div>
-                        )}
+                        {variations.map(v => {
+                            const input = variationInputs[v.id];
+                            const setInput = (next: { textValue?: string; choiceId?: string }) =>
+                                setVariationInputs(prev => ({ ...prev, [v.id]: next }));
+
+                            if (v.type === "CHOICE") {
+                                return (
+                                    <div key={v.id}>
+                                        <h3 className="text-xs font-bold text-plate-300 uppercase tracking-wider mb-2">
+                                            {v.name}{v.required ? "" : " (optional)"}
+                                        </h3>
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                            {v.choices.map(c => {
+                                                const selected = input?.choiceId === c.id;
+                                                return (
+                                                    <button key={c.id} type="button"
+                                                        onClick={() => setInput(selected && !v.required ? {} : { choiceId: c.id })}
+                                                        className={`rounded-md border-2 overflow-hidden text-left spot-chip ${selected ? "spot-chip-selected" : "border-plate-700"}`}>
+                                                        {c.imageUrl && (
+                                                            <img src={imgUrl(c.imageUrl)} alt={c.label} className="w-full aspect-square object-cover" />
+                                                        )}
+                                                        <div className="px-2 py-1.5">
+                                                            <p className="text-xs font-bold text-plate-50 truncate">{c.label}</p>
+                                                            {c.priceCents > 0 && <p className="text-[10px] text-plate-300">+{fmt(c.priceCents)}</p>}
+                                                        </div>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                );
+                            }
+
+                            // TEXT — required variations always show the field; optional ones
+                            // are opt-in via a checkbox, same pattern as the old Hood Number addon.
+                            if (v.required) {
+                                return (
+                                    <div key={v.id}>
+                                        <h3 className="text-xs font-bold text-plate-300 uppercase tracking-wider mb-2">
+                                            {v.name}{v.priceCents > 0 ? ` (+${fmt(v.priceCents)})` : ""}
+                                        </h3>
+                                        <input type="text" value={input?.textValue ?? ""} onChange={e => setInput({ textValue: e.target.value })}
+                                            placeholder={`Type your ${v.name.toLowerCase()}…`} maxLength={40}
+                                            className="w-full rounded-md border border-plate-700 bg-plate-950 px-3 py-2.5 text-sm text-plate-50 placeholder:text-plate-500 outline-none hover:border-plate-600 focus:border-proc-cyan focus:ring-2 focus:ring-proc-cyan/25 transition-all font-press" />
+                                    </div>
+                                );
+                            }
+                            const wanted = input?.textValue !== undefined;
+                            return (
+                                <div key={v.id} className="bg-plate-800/60 border border-plate-700 rounded-md p-4">
+                                    <label className="flex items-start gap-3 cursor-pointer">
+                                        <input type="checkbox" checked={wanted}
+                                            onChange={e => setInput(e.target.checked ? { textValue: "" } : {})}
+                                            className="mt-0.5 w-4 h-4 rounded border-plate-600 accent-[var(--spot)]" />
+                                        <span className="flex-1">
+                                            <span className="block text-sm font-bold text-plate-50">Add a {v.name.toLowerCase()}</span>
+                                            {v.priceCents > 0 && <span className="block text-xs text-plate-300 mt-0.5">+{fmt(v.priceCents)}</span>}
+                                        </span>
+                                    </label>
+                                    {wanted && (
+                                        <input type="text" value={input?.textValue ?? ""} onChange={e => setInput({ textValue: e.target.value })}
+                                            placeholder={`Your ${v.name.toLowerCase()}…`} maxLength={40}
+                                            className="w-full mt-3 rounded-md border border-plate-700 bg-plate-950 px-3 py-2.5 text-sm text-plate-50 placeholder:text-plate-500 outline-none hover:border-plate-600 focus:border-proc-cyan focus:ring-2 focus:ring-proc-cyan/25 transition-all font-press" />
+                                    )}
+                                </div>
+                            );
+                        })}
 
                         <div>
                             <h3 className="text-xs font-bold text-plate-300 uppercase tracking-wider mb-2">Quantity</h3>
@@ -398,20 +464,20 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
             priceCents: product.priceCents, upchargeEnabled: product.upchargeEnabled, upchargeCents: product.upchargeCents,
             size, color,
             youthContextAdultId: opts?.youthContextAdultId,
-            hoodNumberRequested: opts?.hoodNumberRequested,
-            hoodNumberText: opts?.hoodNumberText,
-            hoodNumberPriceCents: product.hoodNumberPriceCents,
+            selectedVariations: opts?.selectedVariations,
         }, qty);
     }
-    // adultSource lets a quick add from the card grid (no detail drawer, so no
-    // chance to opt into the hood-number addon) still pin down which adult's
-    // price override applies if `product` turns out to be a shared youth item.
+    // adultSource lets a quick add from the card grid still pin down which
+    // adult's price override applies if `product` turns out to be a shared
+    // youth item. A product with a required variation (e.g. "Design") can't
+    // be quick-added — there's no picker here, only in the detail drawer.
     function addToCartFromCard(product: Product, adultSource: Product) {
         const sizes: string[] = product.sizesJson ? JSON.parse(product.sizesJson) : [];
         const colors: string[] = product.colorsJson ? JSON.parse(product.colorsJson) : [];
         const sel = getSelection(product.id);
         if (sizes.length > 0 && !sel.size) { alert("Please select a size."); return; }
         if (colors.length > 0 && !sel.color) { alert("Please select a color."); return; }
+        if (product.variations?.some(v => v.required)) { alert("This item has options to choose — click into it to add to cart."); return; }
         const youthContextAdultId = product.id !== adultSource.id ? adultSource.id : undefined;
         addToCart(product, sel.size || undefined, sel.color || undefined, 1, { youthContextAdultId });
     }

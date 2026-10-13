@@ -4,10 +4,11 @@ import { useSearchParams } from "next/navigation";
 import { api, printAs } from "@/app/lib/api";
 import { Button } from "@/components/ui/button";
 
+type ItemVariation = { id: string; name: string; textValue: string | null; choiceLabel: string | null };
 type OrderItemRow = {
     id: string; product?: { name: string; sku: string } | null;
     size?: string | null; color?: string | null; quantity: number; priceCents: number;
-    hoodNumberRequested?: boolean; hoodNumberText?: string | null;
+    variations?: ItemVariation[];
 };
 type PrintOrder = {
     id: string; customerName: string; customerEmail: string;
@@ -97,9 +98,9 @@ function OrderPage({ order, isFirst }: { order: PrintOrder; isFirst: boolean }) 
                         <tr key={item.id ?? i} className="border-b border-slate-100">
                             <td className="py-2 text-slate-800">
                                 {item.product?.name ?? "Item"}
-                                {item.hoodNumberRequested && (
-                                    <div className="text-xs font-bold text-red-700">Hood number: &quot;{item.hoodNumberText}&quot;</div>
-                                )}
+                                {(item.variations ?? []).map(v => (
+                                    <div key={v.id} className="text-xs font-bold text-red-700">{v.name}: &quot;{v.choiceLabel ?? v.textValue}&quot;</div>
+                                ))}
                             </td>
                             <td className="py-2 text-slate-600">{item.color ?? "—"}</td>
                             <td className="py-2 text-slate-600">{item.size ?? "—"}</td>

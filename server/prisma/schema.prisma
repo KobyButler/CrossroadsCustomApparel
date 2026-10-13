@@ -65,15 +65,50 @@ model Product {
   // resolved into what a customer is actually shown and charged.
   youthPriceCents  Int?
 
-  // Hoodie-only addon: an extra charge for printing a number on the hood,
-  // with a free-text field for which number/note the customer wants. Not
-  // meaningful for non-hoodie products, but kept as plain fields rather than
-  // a separate table since it's a single optional addon, not a general
-  // product-options system.
-  hoodNumberEnabled   Boolean @default(false)
-  hoodNumberPriceCents Int    @default(0)
+  // Admin-defined customization options a shopper fills in/picks on this
+  // product's page — e.g. a free-text "Name" field, or a "Design" choice
+  // with a few named options (optionally each with its own photo). See
+  // ProductVariation below.
+  variations       ProductVariation[]
 
   @@index([vendor])
+}
+
+// One customer-facing customization option on a product — e.g. "Hood Number"
+// (free text, +$5), "Name" (free text, no charge), or "Design" (a choice of
+// a few named options, each optionally with its own photo). A product can
+// have any number of these, each independently required/optional and
+// independently priced. See OrderItemVariation for how a shopper's actual
+// selection is captured and snapshotted onto an order line.
+model ProductVariation {
+  id          String   @id @default(cuid())
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  name        String                    // admin's label for this option, e.g. "Hood Number", "Design"
+  type        String   @default("TEXT") // TEXT (shopper types a value) | CHOICE (shopper picks one of choices below)
+  required    Boolean  @default(false)  // must the shopper fill this in/pick one before adding to cart
+  priceCents  Int      @default(0)      // extra charge when the shopper provides/selects this (TEXT) — ignored for CHOICE, where each choice can carry its own price via... see note on ProductVariationChoice
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  choices     ProductVariationChoice[]
+  orderItemVariations OrderItemVariation[]
+
+  @@index([productId])
+}
+
+// One selectable option within a CHOICE-type ProductVariation — e.g. "Design
+// A" with a photo showing what it looks like. Not used for TEXT-type
+// variations.
+model ProductVariationChoice {
+  id          String   @id @default(cuid())
+  variationId String
+  variation   ProductVariation @relation(fields: [variationId], references: [id], onDelete: Cascade)
+  label       String
+  imageUrl    String?
+  priceCents  Int      @default(0) // extra charge for picking this specific choice, on top of the variation's own priceCents
+  sortOrder   Int      @default(0)
+
+  @@index([variationId])
 }
 
 model Shop {
@@ -179,17 +214,33 @@ model OrderItem {
   size       String?
   color      String?
   quantity   Int
-  priceCents Int // unit price already includes the hood-number addon charge below, if requested
+  priceCents Int // unit price already includes every selected variation's addon charge below
 
-  // Hoodie hood-number addon, as actually chosen for this line item (see
-  // Product.hoodNumberEnabled/hoodNumberPriceCents for the per-product
-  // on/off + price). hoodNumberText is the customer's free-text note (the
-  // number/name they want printed); only meaningful when requested is true.
-  hoodNumberRequested Boolean @default(false)
-  hoodNumberText      String?
+  variations OrderItemVariation[]
 
   @@index([orderId])
   @@index([productId])
+}
+
+// A shopper's actual answer for one ProductVariation on one order line —
+// e.g. "Hood Number: 99" or "Design: Camo (choice)". Snapshotted (name/type/
+// priceCents copied in at order time, variationId nullable via SetNull) so
+// the order's own record stays accurate even if the admin later renames,
+// reprices, or deletes the underlying ProductVariation/choice.
+model OrderItemVariation {
+  id             String   @id @default(cuid())
+  orderItemId    String
+  orderItem      OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  variationId    String?
+  variation      ProductVariation? @relation(fields: [variationId], references: [id], onDelete: SetNull)
+  name           String   // snapshot of the variation's name at order time
+  type           String   // snapshot of TEXT | CHOICE
+  textValue      String?  // the shopper's typed value, for TEXT
+  choiceLabel    String?  // the chosen option's label, for CHOICE
+  choiceImageUrl String?  // the chosen option's photo, if it had one
+  priceCents     Int      @default(0) // the addon charge actually applied
+
+  @@index([orderItemId])
 }
 
 model DiscountCode {

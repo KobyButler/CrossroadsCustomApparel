@@ -18,13 +18,15 @@ const EASE = [0.16, 1, 0.3, 1] as [number, number, number, number];
 
 type Shop = { id: string; name: string; slug: string };
 type YouthProductRef = { id: string; name: string; vendorIdentifier?: string | null; sizeChartUrl?: string | null; priceCents?: number };
+type ProductVariationChoice = { id: string; label: string; imageUrl: string | null; priceCents: number; sortOrder: number };
+type ProductVariation = { id: string; name: string; type: string; required: boolean; priceCents: number; sortOrder: number; choices: ProductVariationChoice[] };
 type Product = {
     id: string; name: string; sku: string; vendor: string;
     vendorIdentifier?: string; brand?: string; description?: string;
     priceCents: number; shops?: Shop[];
     sizesJson?: string; colorsJson?: string; imagesJson?: string; sizeChartUrl?: string | null;
     upchargeEnabled?: boolean; upchargeCents?: number; weightOz?: number | null;
-    hoodNumberEnabled?: boolean; hoodNumberPriceCents?: number;
+    variations?: ProductVariation[];
     youthProductId?: string | null;
     youthProduct?: YouthProductRef | null;
     // What the linked youth variant actually costs at checkout — null (the
@@ -59,7 +61,7 @@ const EMPTY = {
     shopIds:[] as string[], sizes:[] as string[], colors:[] as string[], images:[] as string[],
     sizeChartUrl:"", youthLink: null as YouthProductRef | null, youthSizeChartUrl:"", youthPriceDollars:"",
     upchargeEnabled:false, upchargeDollars:"3.00", weightOz:"",
-    hoodNumberEnabled:false, hoodNumberDollars:"5.00"
+    variations:[] as FormVariation[]
 };
 
 // ── TagInput ──────────────────────────────────────────────────────────────────
@@ -394,6 +396,145 @@ function ImageManager({ images, onChange }: { images:string[]; onChange:(images:
                 {uploading ? "Uploading…" : "Upload image(s)"}
                 <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple className="sr-only" onChange={handleFiles} />
             </label>
+        </div>
+    );
+}
+
+// ── VariationsEditor ─────────────────────────────────────────────────────────
+// Lets the admin define customer-facing customization options for a product —
+// a free-text field (e.g. "Name"), or a multiple-choice field (e.g. "Design")
+// where each choice can optionally carry its own photo. Mirrors
+// server/prisma/schema.prisma's ProductVariation/ProductVariationChoice; the
+// whole list is replaced wholesale on every save (see PUT /products/:id).
+type FormChoice = { label: string; imageUrl: string | null; priceDollars: string };
+type FormVariation = { name: string; type: "TEXT" | "CHOICE"; required: boolean; priceDollars: string; choices: FormChoice[] };
+
+function VariationsEditor({ variations, onChange }: { variations: FormVariation[]; onChange: (v: FormVariation[]) => void }) {
+    const { toast } = useToast();
+    const [uploadingKey, setUploadingKey] = useState<string | null>(null);
+    const base = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:4000/api";
+
+    function updateVariation(i: number, patch: Partial<FormVariation>) {
+        onChange(variations.map((v, idx) => idx === i ? { ...v, ...patch } : v));
+    }
+    function addVariation() {
+        onChange([...variations, { name: "", type: "TEXT", required: false, priceDollars: "0.00", choices: [] }]);
+    }
+    function removeVariation(i: number) {
+        onChange(variations.filter((_, idx) => idx !== i));
+    }
+    function addChoice(vi: number) {
+        updateVariation(vi, { choices: [...variations[vi].choices, { label: "", imageUrl: null, priceDollars: "0.00" }] });
+    }
+    function updateChoice(vi: number, ci: number, patch: Partial<FormChoice>) {
+        updateVariation(vi, { choices: variations[vi].choices.map((c, idx) => idx === ci ? { ...c, ...patch } : c) });
+    }
+    function removeChoice(vi: number, ci: number) {
+        updateVariation(vi, { choices: variations[vi].choices.filter((_, idx) => idx !== ci) });
+    }
+    async function uploadChoiceImage(vi: number, ci: number, file: File) {
+        const key = `${vi}-${ci}`;
+        setUploadingKey(key);
+        try {
+            const formData = new FormData();
+            formData.append("images", file);
+            const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
+            const res = await fetch(`${base}/products/images/upload`, { method: "POST", headers: token ? { Authorization: `Bearer ${token}` } : {}, body: formData });
+            if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+            const { urls } = await res.json() as { urls: string[] };
+            updateChoice(vi, ci, { imageUrl: urls[0] });
+        } catch (err: any) { toast(err.message || "Upload failed", "error"); }
+        finally { setUploadingKey(null); }
+    }
+
+    return (
+        <div>
+            <div className="flex items-center justify-between mb-2">
+                <label className="field-label mb-0">Customer Options</label>
+                <button type="button" onClick={addVariation} className="text-xs font-semibold text-signal-cyan hover:text-signal-cyan-bright">+ Add Option</button>
+            </div>
+            {variations.length === 0 ? (
+                <p className="text-xs text-graphite-300 italic py-3 text-center bg-white/[0.03] rounded-md border border-dashed border-white/10">
+                    None yet — add one if customers should type something (like a name) or choose from a few options (like a design).
+                </p>
+            ) : (
+                <div className="space-y-3">
+                    {variations.map((v, vi) => (
+                        <div key={vi} className="bg-white/[0.04] border border-white/10 rounded-lg p-3.5 space-y-3">
+                            <div className="flex items-start gap-2">
+                                <Input placeholder="e.g. Name, Design" value={v.name}
+                                    onChange={e => updateVariation(vi, { name: e.target.value })} className="flex-1" />
+                                <Select value={v.type} onChange={e => updateVariation(vi, { type: e.target.value as "TEXT" | "CHOICE" })} className="w-36">
+                                    <option value="TEXT">Text entry</option>
+                                    <option value="CHOICE">Multiple choice</option>
+                                </Select>
+                                <button type="button" title="Remove option" aria-label="Remove option" onClick={() => removeVariation(vi)}
+                                    className="p-2 text-graphite-500 hover:text-signal-red transition-colors shrink-0">
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                                </button>
+                            </div>
+                            <div className="flex items-center gap-4">
+                                <label className="flex items-center gap-2 text-xs text-graphite-300 cursor-pointer">
+                                    <input type="checkbox" checked={v.required} onChange={e => updateVariation(vi, { required: e.target.checked })}
+                                        className="rounded border-white/20 accent-signal-cyan" />
+                                    Required
+                                </label>
+                                {v.type === "TEXT" && (
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="text-xs text-graphite-300">Extra charge:</span>
+                                        <div className="relative w-24">
+                                            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-graphite-400 text-xs">$</span>
+                                            <input type="number" step="0.01" min="0" value={v.priceDollars}
+                                                onChange={e => updateVariation(vi, { priceDollars: e.target.value })}
+                                                className="w-full pl-5 pr-2 py-1 text-xs bg-white/[0.03] border border-white/10 rounded-md text-white outline-none focus:border-signal-cyan/60" />
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                            {v.type === "CHOICE" && (
+                                <div className="space-y-2 pt-1">
+                                    {v.choices.map((c, ci) => {
+                                        const key = `${vi}-${ci}`;
+                                        return (
+                                            <div key={ci} className="flex items-center gap-2 bg-white/[0.03] rounded-md p-2">
+                                                <label className="relative shrink-0 cursor-pointer">
+                                                    {c.imageUrl ? (
+                                                        <img src={imgUrl(c.imageUrl)} alt={c.label} className="w-10 h-10 rounded-md object-cover border border-white/10" />
+                                                    ) : (
+                                                        <div className="w-10 h-10 rounded-md border border-dashed border-white/15 flex items-center justify-center text-graphite-500">
+                                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                                                        </div>
+                                                    )}
+                                                    {uploadingKey === key && (
+                                                        <div className="absolute inset-0 bg-graphite-950/70 rounded-md flex items-center justify-center">
+                                                            <div className="w-3.5 h-3.5 border-2 border-signal-cyan border-t-transparent rounded-full animate-spin" />
+                                                        </div>
+                                                    )}
+                                                    <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="sr-only"
+                                                        onChange={e => { const f = e.target.files?.[0]; if (f) uploadChoiceImage(vi, ci, f); e.target.value = ""; }} />
+                                                </label>
+                                                <Input placeholder="Choice label (e.g. Camo)" value={c.label}
+                                                    onChange={e => updateChoice(vi, ci, { label: e.target.value })} className="flex-1" />
+                                                <div className="relative w-24 shrink-0">
+                                                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-graphite-400 text-xs">$</span>
+                                                    <input type="number" step="0.01" min="0" value={c.priceDollars}
+                                                        onChange={e => updateChoice(vi, ci, { priceDollars: e.target.value })}
+                                                        className="w-full pl-5 pr-2 py-1.5 text-xs bg-white/[0.03] border border-white/10 rounded-md text-white outline-none focus:border-signal-cyan/60" />
+                                                </div>
+                                                <button type="button" title="Remove choice" aria-label="Remove choice" onClick={() => removeChoice(vi, ci)}
+                                                    className="p-1.5 text-graphite-500 hover:text-signal-red transition-colors shrink-0">
+                                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                                                </button>
+                                            </div>
+                                        );
+                                    })}
+                                    <button type="button" onClick={() => addChoice(vi)} className="text-xs font-semibold text-signal-cyan hover:text-signal-cyan-bright">+ Add choice</button>
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            )}
         </div>
     );
 }
@@ -1109,7 +1250,11 @@ export default function ProductsPage() {
             youthPriceDollars: p.youthPriceCents != null ? (p.youthPriceCents / 100).toFixed(2) : "",
             upchargeEnabled: Boolean(p.upchargeEnabled), upchargeDollars: ((p.upchargeCents ?? 300)/100).toFixed(2),
             weightOz: p.weightOz != null ? String(p.weightOz) : "",
-            hoodNumberEnabled: Boolean(p.hoodNumberEnabled), hoodNumberDollars: ((p.hoodNumberPriceCents ?? 500)/100).toFixed(2),
+            variations: (p.variations ?? []).map(v => ({
+                name: v.name, type: v.type === "CHOICE" ? "CHOICE" as const : "TEXT" as const, required: v.required,
+                priceDollars: (v.priceCents / 100).toFixed(2),
+                choices: v.choices.map(c => ({ label: c.label, imageUrl: c.imageUrl, priceDollars: (c.priceCents / 100).toFixed(2) }))
+            })),
         });
     }
 
@@ -1166,8 +1311,11 @@ export default function ProductsPage() {
                 upchargeEnabled:form.upchargeEnabled,
                 upchargeCents:Math.round(parseFloat(form.upchargeDollars || "0")*100) || 300,
                 weightOz: form.weightOz.trim() ? Math.round(parseFloat(form.weightOz)) : null,
-                hoodNumberEnabled:form.hoodNumberEnabled,
-                hoodNumberPriceCents:Math.round(parseFloat(form.hoodNumberDollars || "0")*100) || 0,
+                variations: form.variations.map(v => ({
+                    name: v.name, type: v.type, required: v.required,
+                    priceCents: Math.round(parseFloat(v.priceDollars || "0") * 100) || 0,
+                    choices: v.choices.map(c => ({ label: c.label, imageUrl: c.imageUrl, priceCents: Math.round(parseFloat(c.priceDollars || "0") * 100) || 0 }))
+                })),
             };
             if (editProduct) {
                 const u = await api(`/products/${editProduct.id}`, { method:"PUT", body:JSON.stringify(payload) });
@@ -1535,32 +1683,7 @@ export default function ProductsPage() {
                         )}
                     </div>
 
-                    {/* Hood Number toggle (hoodies) */}
-                    <div className="bg-white/[0.04] border border-white/10 rounded-lg p-4">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-semibold text-white">Hood Number (hoodies)</p>
-                                <p className="text-xs text-graphite-300 mt-0.5">Lets the customer request a number/name printed on the hood for an extra charge</p>
-                            </div>
-                            <button type="button" role="switch" aria-checked={form.hoodNumberEnabled}
-                                onClick={() => setForm(p => ({ ...p, hoodNumberEnabled: !p.hoodNumberEnabled }))}
-                                className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${form.hoodNumberEnabled ? "bg-signal-cyan" : "bg-white/15"}`}>
-                                <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${form.hoodNumberEnabled ? "translate-x-5" : ""}`} />
-                            </button>
-                        </div>
-                        {form.hoodNumberEnabled && (
-                            <div className="mt-3 flex items-center gap-2">
-                                <span className="text-sm text-graphite-300">Extra charge:</span>
-                                <div className="relative w-28">
-                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-graphite-400 text-sm">$</span>
-                                    <input type="number" step="0.01" min="0" value={form.hoodNumberDollars}
-                                        onChange={e => setForm(p => ({ ...p, hoodNumberDollars:e.target.value }))}
-                                        className="w-full pl-6 pr-2 py-1.5 text-sm bg-white/[0.03] border border-white/10 hover:border-white/20 rounded-md text-white outline-none focus:border-signal-cyan/60 focus:ring-2 focus:ring-signal-cyan/30" />
-                                </div>
-                                <span className="text-xs text-graphite-300">per hoodie</span>
-                            </div>
-                        )}
-                    </div>
+                    <VariationsEditor variations={form.variations} onChange={variations => setForm(p => ({ ...p, variations }))} />
 
                     <ImageManager images={form.images} onChange={images => setForm(p => ({ ...p, images }))} />
 

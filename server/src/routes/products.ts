@@ -34,6 +34,40 @@ const shopSelect = { select: { id: true, name: true, slug: true } };
 // the "Youth Size Pricing" override field; it is never what a customer is
 // charged. See youthPriceCents on the adult product and resolveProductPriceCents.
 const youthSelect = { select: { id: true, name: true, vendorIdentifier: true, sizeChartUrl: true, priceCents: true } };
+const variationsInclude = {
+    variations: { orderBy: { sortOrder: 'asc' as const }, include: { choices: { orderBy: { sortOrder: 'asc' as const } } } }
+};
+
+// Validates and shapes an incoming `variations` array from the admin product
+// form into the nested-create payload Prisma needs. Returns an error string
+// instead of throwing so the route can respond with a clean 400 — a product
+// save is a single admin action, so one bad variation fails the whole save
+// rather than silently dropping just that one.
+function validateAndShapeVariations(variations: unknown): { data: any[]; error?: string } {
+    if (!Array.isArray(variations)) return { data: [] };
+    const shaped: any[] = [];
+    for (let i = 0; i < variations.length; i++) {
+        const v = variations[i] as any;
+        const name = String(v?.name ?? '').trim();
+        if (!name) return { data: [], error: `Variation #${i + 1} needs a name.` };
+        const type = v?.type === 'CHOICE' ? 'CHOICE' : 'TEXT';
+        const required = Boolean(v?.required);
+        if (type === 'CHOICE') {
+            const choicesIn = Array.isArray(v?.choices) ? v.choices : [];
+            const choices = choicesIn
+                .map((c: any, ci: number) => ({
+                    label: String(c?.label ?? '').trim(), imageUrl: c?.imageUrl || null,
+                    priceCents: Math.round(Number(c?.priceCents) || 0), sortOrder: ci
+                }))
+                .filter((c: any) => c.label);
+            if (choices.length === 0) return { data: [], error: `"${name}" needs at least one choice.` };
+            shaped.push({ name, type, required, priceCents: 0, sortOrder: i, choices: { create: choices } });
+        } else {
+            shaped.push({ name, type, required, priceCents: Math.round(Number(v?.priceCents) || 0), sortOrder: i });
+        }
+    }
+    return { data: shaped };
+}
 
 // Writes a size chart URL onto a linked youth product (called after the adult
 // product's own save succeeds). undefined means "not touched by this save" —
@@ -84,7 +118,7 @@ router.get('/', async (req, res) => {
     // Omit pagination wrapper when limit is not specified (keeps backwards compat for small catalogs)
     if (!req.query.page && !req.query.limit) {
         const data = await prisma.product.findMany({
-            include: { shops: shopSelect, youthProduct: youthSelect },
+            include: { shops: shopSelect, youthProduct: youthSelect, ...variationsInclude },
             orderBy: { createdAt: 'desc' }
         });
         return res.json(data);
@@ -92,7 +126,7 @@ router.get('/', async (req, res) => {
 
     const [data, total] = await Promise.all([
         prisma.product.findMany({
-            include: { shops: shopSelect, youthProduct: youthSelect },
+            include: { shops: shopSelect, youthProduct: youthSelect, ...variationsInclude },
             orderBy: { createdAt: 'desc' },
             take: limit,
             skip
@@ -188,7 +222,7 @@ router.post('/', async (req, res) => {
     const {
         name, sku, vendor, vendorIdentifier, brand, description, priceCents, images, sizes, colors,
         shopIds, upchargeEnabled, upchargeCents, weightOz, sizeChartUrl, youthProductId, youthSizeChartUrl,
-        youthPriceCents, hoodNumberEnabled, hoodNumberPriceCents
+        youthPriceCents, variations
     } = req.body;
     if (!Array.isArray(colors) || colors.length === 0) {
         return res.status(400).json({ error: 'At least one color is required.' });
@@ -197,6 +231,8 @@ router.post('/', async (req, res) => {
         const err = await validateYouthLink(youthProductId, null);
         if (err) return res.status(400).json({ error: err });
     }
+    const { data: variationsData, error: variationsError } = validateAndShapeVariations(variations);
+    if (variationsError) return res.status(400).json({ error: variationsError });
     try {
         const p = await prisma.product.create({
             data: {
@@ -209,8 +245,7 @@ router.post('/', async (req, res) => {
                 upchargeEnabled: Boolean(upchargeEnabled),
                 ...(upchargeCents !== undefined ? { upchargeCents } : {}),
                 ...(weightOz !== undefined ? { weightOz: weightOz === null ? null : Number(weightOz) } : {}),
-                hoodNumberEnabled: Boolean(hoodNumberEnabled),
-                ...(hoodNumberPriceCents !== undefined ? { hoodNumberPriceCents: Math.round(Number(hoodNumberPriceCents) || 0) } : {}),
+                ...(variationsData.length ? { variations: { create: variationsData } } : {}),
                 youthProductId: youthProductId || null,
                 // null/omitted/blank = inherit this product's own priceCents for
                 // the linked youth variant (the default); only a real number
@@ -221,11 +256,11 @@ router.post('/', async (req, res) => {
                     ? { shops: { connect: shopIds.map((id: string) => ({ id })) } }
                     : {})
             },
-            include: { shops: shopSelect, youthProduct: youthSelect }
+            include: { shops: shopSelect, youthProduct: youthSelect, ...variationsInclude }
         });
         await syncYouthSizeChart(p.youthProductId, youthSizeChartUrl);
         res.json(youthSizeChartUrl !== undefined && p.youthProductId
-            ? await prisma.product.findUnique({ where: { id: p.id }, include: { shops: shopSelect, youthProduct: youthSelect } })
+            ? await prisma.product.findUnique({ where: { id: p.id }, include: { shops: shopSelect, youthProduct: youthSelect, ...variationsInclude } })
             : p);
     } catch (err: any) {
         if (err?.code === 'P2002') {
@@ -238,7 +273,7 @@ router.post('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
     const p = await prisma.product.findUnique({
         where: { id: req.params.id },
-        include: { shops: shopSelect, youthProduct: youthSelect }
+        include: { shops: shopSelect, youthProduct: youthSelect, ...variationsInclude }
     });
     if (!p) return res.status(404).json({ error: 'not found' });
     res.json(p);
@@ -316,7 +351,7 @@ router.put('/:id', async (req, res) => {
     const {
         name, sku, vendor, vendorIdentifier, brand, description, priceCents, images, sizes, colors,
         shopIds, upchargeEnabled, upchargeCents, weightOz, sizeChartUrl, youthProductId, youthSizeChartUrl,
-        youthPriceCents, hoodNumberEnabled, hoodNumberPriceCents
+        youthPriceCents, variations
     } = req.body;
     if (!Array.isArray(colors) || colors.length === 0) {
         return res.status(400).json({ error: 'At least one color is required.' });
@@ -328,6 +363,8 @@ router.put('/:id', async (req, res) => {
         const linkErr = await validateYouthLink(youthProductId, req.params.id);
         if (linkErr) return res.status(400).json({ error: linkErr });
     }
+    const { data: variationsData, error: variationsError } = validateAndShapeVariations(variations);
+    if (variationsError) return res.status(400).json({ error: variationsError });
 
     try {
         const p = await prisma.product.update({
@@ -345,8 +382,12 @@ router.put('/:id', async (req, res) => {
                 ...(upchargeEnabled !== undefined ? { upchargeEnabled: Boolean(upchargeEnabled) } : {}),
                 ...(upchargeCents !== undefined ? { upchargeCents } : {}),
                 ...(weightOz !== undefined ? { weightOz: weightOz === null ? null : Number(weightOz) } : {}),
-                ...(hoodNumberEnabled !== undefined ? { hoodNumberEnabled: Boolean(hoodNumberEnabled) } : {}),
-                ...(hoodNumberPriceCents !== undefined ? { hoodNumberPriceCents: Math.round(Number(hoodNumberPriceCents) || 0) } : {}),
+                // Admin's variation form always sends the full current list —
+                // simplest and safest is to replace wholesale rather than diff.
+                // Existing order history is unaffected: OrderItemVariation keeps
+                // its own name/type/price snapshot and just loses the FK link
+                // (onDelete: SetNull) for any variation that gets dropped here.
+                ...(variations !== undefined ? { variations: { deleteMany: {}, create: variationsData } } : {}),
                 ...(youthProductId !== undefined ? { youthProductId: youthProductId || null } : {}),
                 ...(youthPriceCents !== undefined
                     ? { youthPriceCents: youthPriceCents === null || youthPriceCents === '' ? null : Math.round(Number(youthPriceCents)) }
@@ -355,7 +396,7 @@ router.put('/:id', async (req, res) => {
                     ? { shops: { set: shopIds.map((id: string) => ({ id })) } }
                     : {})
             },
-            include: { shops: shopSelect, youthProduct: youthSelect }
+            include: { shops: shopSelect, youthProduct: youthSelect, ...variationsInclude }
         });
 
         // Clean up any of our own uploaded files that are no longer referenced.
@@ -369,7 +410,7 @@ router.put('/:id', async (req, res) => {
 
         await syncYouthSizeChart(p.youthProductId, youthSizeChartUrl);
         const responseProduct = youthSizeChartUrl !== undefined && p.youthProductId
-            ? await prisma.product.findUnique({ where: { id: p.id }, include: { shops: shopSelect, youthProduct: youthSelect } })
+            ? await prisma.product.findUnique({ where: { id: p.id }, include: { shops: shopSelect, youthProduct: youthSelect, ...variationsInclude } })
             : p;
 
         // A color/size this edit just removed might still be sitting on
@@ -459,7 +500,7 @@ router.delete('/:id', async (req, res) => {
 router.post('/:id/duplicate', async (req, res) => {
     const source = await prisma.product.findUnique({
         where: { id: req.params.id },
-        include: { shops: { select: { id: true } } }
+        include: { shops: { select: { id: true } }, ...variationsInclude }
     });
     if (!source) return res.status(404).json({ error: 'not found' });
 
@@ -486,11 +527,17 @@ router.post('/:id/duplicate', async (req, res) => {
             weightOz: source.weightOz,
             upchargeEnabled: source.upchargeEnabled,
             upchargeCents: source.upchargeCents,
-            hoodNumberEnabled: source.hoodNumberEnabled,
-            hoodNumberPriceCents: source.hoodNumberPriceCents,
-            shops: source.shops.length ? { connect: source.shops.map(s => ({ id: s.id })) } : undefined
+            shops: source.shops.length ? { connect: source.shops.map(s => ({ id: s.id })) } : undefined,
+            variations: source.variations.length
+                ? { create: source.variations.map(v => ({
+                    name: v.name, type: v.type, required: v.required, priceCents: v.priceCents, sortOrder: v.sortOrder,
+                    choices: v.choices.length
+                        ? { create: v.choices.map(c => ({ label: c.label, imageUrl: c.imageUrl, priceCents: c.priceCents, sortOrder: c.sortOrder })) }
+                        : undefined
+                })) }
+                : undefined
         },
-        include: { shops: shopSelect }
+        include: { shops: shopSelect, ...variationsInclude }
     });
     res.json(copy);
 });

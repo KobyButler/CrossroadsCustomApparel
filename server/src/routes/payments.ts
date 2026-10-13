@@ -3,7 +3,7 @@ import Stripe from 'stripe';
 import { prisma } from '../prisma.js';
 import { config } from '../config.js';
 import { sendOrderConfirmation } from '../utils/email.js';
-import { buildShopGroups, applyDiscountAcrossGroups, allocateShippingAcrossGroups, newOrderGroupId, assertShippingAllowed, assertShopsAvailable } from '../utils/checkoutHelpers.js';
+import { buildShopGroups, applyDiscountAcrossGroups, allocateShippingAcrossGroups, newOrderGroupId, assertShippingAllowed, assertShopsAvailable, shopGroupItemsToCreateInput } from '../utils/checkoutHelpers.js';
 import { quoteShipping } from '../utils/shippingCalc.js';
 import { quoteOrderTax } from '../utils/tax.js';
 import { getStripe } from '../utils/stripeClient.js';
@@ -156,7 +156,7 @@ router.post('/create-intent', async (req: Request, res: Response) => {
                 specialInstructions: specialInstructions || null,
                 taxCents,
                 totalCents: g.subtotal + g.shippingCents + taxCents,
-                items: { createMany: { data: g.items } }
+                items: { create: shopGroupItemsToCreateInput(g.items) }
             }
         });
         createdOrders.push(order);
@@ -202,7 +202,7 @@ export async function stripeWebhookHandler(req: Request, res: Response) {
 
         const orders = await prisma.order.findMany({
             where: { stripePaymentIntentId: pi.id },
-            include: { items: { include: { product: true } }, shop: true }
+            include: { items: { include: { product: true, variations: true } }, shop: true }
         });
 
         if (orders.length === 0) {
@@ -270,7 +270,7 @@ export async function stripeWebhookHandler(req: Request, res: Response) {
                     size: i.size,
                     color: i.color,
                     priceCents: i.priceCents,
-                    hoodNumberText: i.hoodNumberText
+                    variations: i.variations.map(v => ({ name: v.name, textValue: v.textValue, choiceLabel: v.choiceLabel }))
                 }))
             }).catch(err => console.error('[stripe-webhook] email error:', err));
         }

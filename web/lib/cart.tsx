@@ -2,6 +2,19 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { computeItemPriceCents } from "@/lib/pricing";
 
+// A shopper's answer for one ProductVariation, captured at add-to-cart time —
+// see server/prisma/schema.prisma's ProductVariation/OrderItemVariation for
+// the authoritative shape this mirrors.
+export type SelectedVariation = {
+    variationId: string;
+    name: string;
+    type: "TEXT" | "CHOICE";
+    textValue?: string;
+    choiceId?: string;
+    choiceLabel?: string;
+    priceCents: number; // the addon charge for this selection, for display only — checkout re-resolves and re-prices server-side
+};
+
 export type CartItem = {
     productId: string;
     shopSlug: string;
@@ -19,10 +32,7 @@ export type CartItem = {
     // specific adult product's page — pins down which adult's price override
     // applies when the youth product is shared by several adults.
     youthContextAdultId?: string;
-    // Hoodie hood-number addon, as chosen at add-to-cart time.
-    hoodNumberRequested?: boolean;
-    hoodNumberText?: string;
-    hoodNumberPriceCents?: number;
+    selectedVariations?: SelectedVariation[];
 };
 
 type CartContextValue = {
@@ -40,16 +50,25 @@ type CartContextValue = {
 const STORAGE_KEY = "crossroads_cart_v1";
 const CartContext = createContext<CartContextValue | null>(null);
 
+function variationsPriceCents(item: CartItem): number {
+    return (item.selectedVariations ?? []).reduce((a, v) => a + v.priceCents, 0);
+}
+
 function lineTotal(item: CartItem) {
     return computeItemPriceCents(
-        {
-            priceCents: item.priceCents, upchargeEnabled: item.upchargeEnabled, upchargeCents: item.upchargeCents,
-            // Already a settled choice by the time it's in the cart — true here
-            // just unlocks computeItemPriceCents's own hoodNumberRequested gate.
-            hoodNumberEnabled: true, hoodNumberPriceCents: item.hoodNumberPriceCents
-        },
-        item.size, item.hoodNumberRequested
+        { priceCents: item.priceCents, upchargeEnabled: item.upchargeEnabled, upchargeCents: item.upchargeCents },
+        item.size, variationsPriceCents(item)
     ) * item.quantity;
+}
+
+// Stable string for grouping identical cart lines — two selections with the
+// same variationId but a different typed value/choice (or a different
+// youth-adult context) are deliberately treated as separate lines.
+function variationsKey(variations?: SelectedVariation[]): string {
+    return (variations ?? [])
+        .map(v => `${v.variationId}:${v.textValue ?? ""}:${v.choiceId ?? ""}`)
+        .sort()
+        .join(",");
 }
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
@@ -73,7 +92,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
     const addItem = useCallback((item: Omit<CartItem, "quantity">, qty = 1) => {
         const keyOf = (x: Omit<CartItem, "quantity">) =>
-            `${x.shopSlug}|${x.productId}|${x.size ?? ""}|${x.color ?? ""}|${x.youthContextAdultId ?? ""}|${x.hoodNumberRequested ? "1" : "0"}|${x.hoodNumberText ?? ""}`;
+            `${x.shopSlug}|${x.productId}|${x.size ?? ""}|${x.color ?? ""}|${x.youthContextAdultId ?? ""}|${variationsKey(x.selectedVariations)}`;
         const key = keyOf(item);
         setCart(prev => {
             const idx = prev.findIndex(x => keyOf(x) === key);

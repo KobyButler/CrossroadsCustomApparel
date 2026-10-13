@@ -8,12 +8,12 @@ export function isUpchargeSize(size: string | null | undefined): boolean {
 }
 
 export function computeItemPriceCents(
-    product: { priceCents: number; upchargeEnabled?: boolean | null; upchargeCents?: number | null; hoodNumberEnabled?: boolean | null; hoodNumberPriceCents?: number | null },
+    product: { priceCents: number; upchargeEnabled?: boolean | null; upchargeCents?: number | null },
     size?: string | null,
-    hoodNumberRequested?: boolean | null
+    variationPriceCents?: number | null
 ): number {
     let cents = product.priceCents;
     if (product.upchargeEnabled && isUpchargeSize(size)) cents += product.upchargeCents ?? 0;
-    if (hoodNumberRequested && product.hoodNumberEnabled) cents += product.hoodNumberPriceCents ?? 0;
+    if (variationPriceCents) cents += variationPriceCents;
     return cents;
 }

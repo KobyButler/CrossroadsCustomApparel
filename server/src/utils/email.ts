@@ -18,7 +18,10 @@ type OrderEmailData = {
     totalCents: number;
     shippingCents?: number;
     taxCents?: number;
-    items: Array<{ name: string; quantity: number; size?: string | null; color?: string | null; priceCents: number; hoodNumberText?: string | null }>;
+    items: Array<{
+        name: string; quantity: number; size?: string | null; color?: string | null; priceCents: number;
+        variations?: Array<{ name: string; textValue?: string | null; choiceLabel?: string | null }>;
+    }>;
     shopName?: string;
     specialInstructions?: string | null;
 };
@@ -59,14 +62,27 @@ function fmt(cents: number) {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100);
 }
 
+function escapeHtml(s: string): string {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// One line per selected variation (e.g. "Hood Number: 99", "Design: Camo"),
+// shown under the item name — only ever rendered for variations the shopper
+// actually filled in/picked, not every variation the product offers.
+function variationsHtml(variations?: Array<{ name: string; textValue?: string | null; choiceLabel?: string | null }>): string {
+    if (!variations?.length) return '';
+    return variations.map(v => {
+        const value = v.choiceLabel ?? v.textValue;
+        if (!value) return '';
+        return `<br/><span style="color:#be123c;font-size:12px;font-weight:700;">${escapeHtml(v.name)}: "${escapeHtml(value)}"</span>`;
+    }).join('');
+}
+
 function buildOrderHtml(data: OrderEmailData): string {
     const itemRows = data.items.map(i => {
         const variant = [i.size, i.color].filter(Boolean).join(' / ');
-        const hoodNumber = i.hoodNumberText
-            ? `<br/><span style="color:#be123c;font-size:12px;font-weight:700;">Hood number: "${i.hoodNumberText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}"</span>`
-            : '';
         return `<tr>
-            <td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;">${i.name}${variant ? ` <span style="color:#94a3b8;font-size:12px;">(${variant})</span>` : ''}${hoodNumber}</td>
+            <td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;">${i.name}${variant ? ` <span style="color:#94a3b8;font-size:12px;">(${variant})</span>` : ''}${variationsHtml(i.variations)}</td>
             <td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;text-align:center;">${i.quantity}</td>
             <td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;text-align:right;">${fmt(i.priceCents * i.quantity)}</td>
         </tr>`;
@@ -124,11 +140,8 @@ export async function sendOfflinePaymentNotification(data: OfflinePaymentData): 
 
     const itemRows = data.items.map(i => {
         const variant = [i.size, i.color].filter(Boolean).join(' / ');
-        const hoodNumber = i.hoodNumberText
-            ? `<br/><span style="color:#be123c;font-weight:700;">Hood number: "${i.hoodNumberText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}"</span>`
-            : '';
         return `<tr>
-            <td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;">${i.name}${variant ? ` <span style="color:#94a3b8;">(${variant})</span>` : ''}${hoodNumber}</td>
+            <td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;">${i.name}${variant ? ` <span style="color:#94a3b8;">(${variant})</span>` : ''}${variationsHtml(i.variations)}</td>
             <td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;text-align:center;">${i.quantity}</td>
             <td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;text-align:right;">${fmt(i.priceCents * i.quantity)}</td>
         </tr>`;

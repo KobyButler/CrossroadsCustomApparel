@@ -85,7 +85,11 @@ router.get('/:slug', async (req, res) => {
                 // the admin also added the sibling product to this shop.
                 // adultProducts is a list since the same youth product can now
                 // be linked from several different adults (see schema.prisma).
-                include: { youthProduct: true, adultProducts: { select: { id: true, priceCents: true, youthPriceCents: true } } }
+                include: {
+                    youthProduct: { include: { variations: { orderBy: { sortOrder: 'asc' }, include: { choices: { orderBy: { sortOrder: 'asc' } } } } } },
+                    adultProducts: { select: { id: true, priceCents: true, youthPriceCents: true } },
+                    variations: { orderBy: { sortOrder: 'asc' }, include: { choices: { orderBy: { sortOrder: 'asc' } } } }
+                }
             }
         }
     });
