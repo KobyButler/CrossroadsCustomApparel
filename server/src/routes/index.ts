@@ -1,5 +1,4 @@
 import { Router } from 'express';
-import path from 'path';
 import { requireAuth } from '../middleware/auth.js';
 import { router as auth } from './auth.js';
 import { router as products } from './products.js';
@@ -48,14 +47,3 @@ router.use('/ss', requireAuth, ssactivewear);
 
 // Shipping rate quotes — public (used by storefront checkout)
 router.use('/shipping', shipping);
-
-// TEMPORARY — one-time export of the production SQLite file so the admin can
-// pull a fresh copy down for local dev after the local copy got reverted by
-// something on their machine. Admin-authenticated only. Remove this route
-// once it's been used — it's a full raw database dump, not something that
-// should sit in production long-term even behind auth.
-router.get('/export-db', requireAuth, (_req, res) => {
-    const url = process.env.DATABASE_URL ?? '';
-    const filePath = url.replace(/^file:/, '');
-    res.download(path.resolve(filePath), 'dev.db');
-});
