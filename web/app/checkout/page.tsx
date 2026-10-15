@@ -145,6 +145,7 @@ export default function CheckoutPage() {
         const items = cart.map(c => ({
             productId:c.productId, quantity:c.quantity, size:c.size, color:c.color, shopSlug:c.shopSlug,
             youthContextAdultId: c.youthContextAdultId,
+            styleListingId: c.styleListingId,
             variations: (c.selectedVariations ?? []).map(v => ({ variationId: v.variationId, textValue: v.textValue, choiceId: v.choiceId })),
         }));
         const addressFields = shippingMethod === "SHIP"

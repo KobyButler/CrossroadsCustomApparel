@@ -88,7 +88,14 @@ router.get('/:slug', async (req, res) => {
                 include: {
                     youthProduct: { include: { variations: { orderBy: { sortOrder: 'asc' }, include: { choices: { orderBy: { sortOrder: 'asc' } } } } } },
                     adultProducts: { select: { id: true, priceCents: true, youthPriceCents: true, variations: { orderBy: { sortOrder: 'asc' }, include: { choices: { orderBy: { sortOrder: 'asc' } } } } } },
-                    variations: { orderBy: { sortOrder: 'asc' }, include: { choices: { orderBy: { sortOrder: 'asc' } } } }
+                    variations: { orderBy: { sortOrder: 'asc' }, include: { choices: { orderBy: { sortOrder: 'asc' } } } },
+                    // Other products offered inside this listing as extra color
+                    // choices (see ProductStyle) — full data, since picking one
+                    // swaps the whole listing over to it, youth toggle included.
+                    styles: {
+                        orderBy: { sortOrder: 'asc' },
+                        include: { styleProduct: { include: { youthProduct: { include: { variations: { orderBy: { sortOrder: 'asc' }, include: { choices: { orderBy: { sortOrder: 'asc' } } } } } }, variations: { orderBy: { sortOrder: 'asc' }, include: { choices: { orderBy: { sortOrder: 'asc' } } } } } } }
+                    }
                 }
             }
         }
@@ -97,7 +104,7 @@ router.get('/:slug', async (req, res) => {
 
     res.json({
         ...s,
-        products: s.products.map(({ youthProduct, adultProducts, ...p }) => {
+        products: s.products.map(({ youthProduct, adultProducts, styles, ...p }) => {
             // Only unambiguous when there's exactly one possible parent adult —
             // with zero or several, this product's own raw priceCents is shown
             // instead of guessing whose override applies (see
@@ -118,7 +125,15 @@ router.get('/:slug', async (req, res) => {
                 // which product the storefront's toggle points to when this
                 // youth product is listed directly and shared by several
                 // adults — display/navigation only, not a pricing decision.
-                adultVariant: adultProducts[0] ?? null
+                adultVariant: adultProducts[0] ?? null,
+                styles: styles.map(({ styleProduct: { youthProduct: styleYouth, ...styleProduct } }) => ({
+                    styleProduct: {
+                        ...styleProduct,
+                        youthVariant: styleYouth
+                            ? { ...styleYouth, priceCents: resolveProductPriceCents({ priceCents: styleYouth.priceCents, adultProduct: styleProduct }) }
+                            : null
+                    }
+                }))
             };
         })
     });

@@ -71,7 +71,33 @@ model Product {
   // ProductVariation below.
   variations       ProductVariation[]
 
+  // Other products shown inside this product's storefront listing as extra
+  // color choices (see ProductStyle). styleOf is the reverse side: the
+  // listings this product appears in as a style.
+  styles           ProductStyle[] @relation("ListingStyles")
+  styleOf          ProductStyle[] @relation("StyleOfListings")
+
   @@index([vendor])
+}
+
+// Links a separate Product into another product's storefront listing, so its
+// colors show up as extra swatches there — e.g. a camo hoodie that's really
+// its own vendor style, offered next to the listing hoodie's Black. Picking it
+// swaps the listing to that product (photos, sizes, price), and orders record
+// the linked product itself so POs and reports still name the right garment.
+// One level only: a listing's style can't have styles of its own, and a
+// product used as a style can't be a listing with styles (see PUT
+// /products/:id).
+model ProductStyle {
+  id             String  @id @default(cuid())
+  productId      String
+  product        Product @relation("ListingStyles", fields: [productId], references: [id], onDelete: Cascade)
+  styleProductId String
+  styleProduct   Product @relation("StyleOfListings", fields: [styleProductId], references: [id], onDelete: Cascade)
+  sortOrder      Int     @default(0)
+
+  @@unique([productId, styleProductId])
+  @@index([styleProductId])
 }
 
 // One customer-facing customization option on a product — e.g. "Hood Number"

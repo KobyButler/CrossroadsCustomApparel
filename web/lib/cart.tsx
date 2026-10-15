@@ -32,6 +32,9 @@ export type CartItem = {
     // specific adult product's page — pins down which adult's price override
     // applies when the youth product is shared by several adults.
     youthContextAdultId?: string;
+    // Set only when this item was picked as a linked style inside another
+    // product's listing — that listing's options apply at checkout.
+    styleListingId?: string;
     selectedVariations?: SelectedVariation[];
 };
 
@@ -92,7 +95,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
     const addItem = useCallback((item: Omit<CartItem, "quantity">, qty = 1) => {
         const keyOf = (x: Omit<CartItem, "quantity">) =>
-            `${x.shopSlug}|${x.productId}|${x.size ?? ""}|${x.color ?? ""}|${x.youthContextAdultId ?? ""}|${variationsKey(x.selectedVariations)}`;
+            `${x.shopSlug}|${x.productId}|${x.size ?? ""}|${x.color ?? ""}|${x.youthContextAdultId ?? ""}|${x.styleListingId ?? ""}|${variationsKey(x.selectedVariations)}`;
         const key = keyOf(item);
         setCart(prev => {
             const idx = prev.findIndex(x => keyOf(x) === key);

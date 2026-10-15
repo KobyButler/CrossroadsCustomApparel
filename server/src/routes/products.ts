@@ -37,6 +37,9 @@ const youthSelect = { select: { id: true, name: true, vendorIdentifier: true, si
 const variationsInclude = {
     variations: { orderBy: { sortOrder: 'asc' as const }, include: { choices: { orderBy: { sortOrder: 'asc' as const } } } }
 };
+const stylesInclude = {
+    styles: { orderBy: { sortOrder: 'asc' as const }, select: { styleProductId: true } }
+};
 
 // Validates and shapes an incoming `variations` array from the admin product
 // form into the nested-create payload Prisma needs. Returns an error string
@@ -92,6 +95,33 @@ async function validateYouthLink(youthProductId: string, currentProductId: strin
     return null;
 }
 
+// Validates the products an admin wants shown as extra styles inside this
+// product's storefront listing (see ProductStyle in schema.prisma). Styles are
+// one level deep — a style can't have styles of its own, and a product that's
+// already a style somewhere can't become a listing with styles — which also
+// rules out cycles. currentProductId is null on create.
+async function validateStyleLinks(styleProductIds: unknown, currentProductId: string | null): Promise<{ ids: string[]; error?: string }> {
+    if (!Array.isArray(styleProductIds)) return { ids: [] };
+    const ids = [...new Set(styleProductIds.map(String).filter(Boolean))];
+    if (ids.length === 0) return { ids };
+    if (currentProductId && ids.includes(currentProductId)) return { ids: [], error: "A product can't be a style of itself." };
+    const targets = await prisma.product.findMany({
+        where: { id: { in: ids } },
+        select: { id: true, name: true, _count: { select: { styles: true } } }
+    });
+    if (targets.length !== ids.length) return { ids: [], error: 'One of the linked styles no longer exists.' };
+    const nested = targets.find(t => t._count.styles > 0);
+    if (nested) return { ids: [], error: `"${nested.name}" has linked styles of its own, so it can't also be a style here.` };
+    if (currentProductId) {
+        const usedAsStyle = await prisma.productStyle.findFirst({
+            where: { styleProductId: currentProductId },
+            select: { product: { select: { name: true } } }
+        });
+        if (usedAsStyle) return { ids: [], error: `This product is already a style in "${usedAsStyle.product.name}", so it can't have styles of its own.` };
+    }
+    return { ids };
+}
+
 // Renames a multer temp file to include its original extension and returns the public URL.
 async function finalizeUpload(file: Express.Multer.File, fallbackExt: string): Promise<string> {
     const ext = path.extname(file.originalname).toLowerCase() || fallbackExt;
@@ -118,7 +148,7 @@ router.get('/', async (req, res) => {
     // Omit pagination wrapper when limit is not specified (keeps backwards compat for small catalogs)
     if (!req.query.page && !req.query.limit) {
         const data = await prisma.product.findMany({
-            include: { shops: shopSelect, youthProduct: youthSelect, ...variationsInclude },
+            include: { shops: shopSelect, youthProduct: youthSelect, ...variationsInclude, ...stylesInclude },
             orderBy: { createdAt: 'desc' }
         });
         return res.json(data);
@@ -126,7 +156,7 @@ router.get('/', async (req, res) => {
 
     const [data, total] = await Promise.all([
         prisma.product.findMany({
-            include: { shops: shopSelect, youthProduct: youthSelect, ...variationsInclude },
+            include: { shops: shopSelect, youthProduct: youthSelect, ...variationsInclude, ...stylesInclude },
             orderBy: { createdAt: 'desc' },
             take: limit,
             skip
@@ -222,11 +252,13 @@ router.post('/', async (req, res) => {
     const {
         name, sku, vendor, vendorIdentifier, brand, description, priceCents, images, sizes, colors,
         shopIds, upchargeEnabled, upchargeCents, weightOz, sizeChartUrl, youthProductId, youthSizeChartUrl,
-        youthPriceCents, variations
+        youthPriceCents, variations, styleProductIds
     } = req.body;
     if (!Array.isArray(colors) || colors.length === 0) {
         return res.status(400).json({ error: 'At least one color is required.' });
     }
+    const { ids: styleIds, error: stylesError } = await validateStyleLinks(styleProductIds, null);
+    if (stylesError) return res.status(400).json({ error: stylesError });
     if (youthProductId) {
         const err = await validateYouthLink(youthProductId, null);
         if (err) return res.status(400).json({ error: err });
@@ -246,6 +278,7 @@ router.post('/', async (req, res) => {
                 ...(upchargeCents !== undefined ? { upchargeCents } : {}),
                 ...(weightOz !== undefined ? { weightOz: weightOz === null ? null : Number(weightOz) } : {}),
                 ...(variationsData.length ? { variations: { create: variationsData } } : {}),
+                ...(styleIds.length ? { styles: { create: styleIds.map((styleProductId, sortOrder) => ({ styleProductId, sortOrder })) } } : {}),
                 youthProductId: youthProductId || null,
                 // null/omitted/blank = inherit this product's own priceCents for
                 // the linked youth variant (the default); only a real number
@@ -256,11 +289,11 @@ router.post('/', async (req, res) => {
                     ? { shops: { connect: shopIds.map((id: string) => ({ id })) } }
                     : {})
             },
-            include: { shops: shopSelect, youthProduct: youthSelect, ...variationsInclude }
+            include: { shops: shopSelect, youthProduct: youthSelect, ...variationsInclude, ...stylesInclude }
         });
         await syncYouthSizeChart(p.youthProductId, youthSizeChartUrl);
         res.json(youthSizeChartUrl !== undefined && p.youthProductId
-            ? await prisma.product.findUnique({ where: { id: p.id }, include: { shops: shopSelect, youthProduct: youthSelect, ...variationsInclude } })
+            ? await prisma.product.findUnique({ where: { id: p.id }, include: { shops: shopSelect, youthProduct: youthSelect, ...variationsInclude, ...stylesInclude } })
             : p);
     } catch (err: any) {
         if (err?.code === 'P2002') {
@@ -273,7 +306,7 @@ router.post('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
     const p = await prisma.product.findUnique({
         where: { id: req.params.id },
-        include: { shops: shopSelect, youthProduct: youthSelect, ...variationsInclude }
+        include: { shops: shopSelect, youthProduct: youthSelect, ...variationsInclude, ...stylesInclude }
     });
     if (!p) return res.status(404).json({ error: 'not found' });
     res.json(p);
@@ -351,13 +384,15 @@ router.put('/:id', async (req, res) => {
     const {
         name, sku, vendor, vendorIdentifier, brand, description, priceCents, images, sizes, colors,
         shopIds, upchargeEnabled, upchargeCents, weightOz, sizeChartUrl, youthProductId, youthSizeChartUrl,
-        youthPriceCents, variations
+        youthPriceCents, variations, styleProductIds
     } = req.body;
     if (!Array.isArray(colors) || colors.length === 0) {
         return res.status(400).json({ error: 'At least one color is required.' });
     }
     const existing = await prisma.product.findUnique({ where: { id: req.params.id } });
     if (!existing) return res.status(404).json({ error: 'not found' });
+    const { ids: styleIds, error: stylesError } = await validateStyleLinks(styleProductIds, req.params.id);
+    if (stylesError) return res.status(400).json({ error: stylesError });
 
     if (youthProductId !== undefined && youthProductId && youthProductId !== existing.youthProductId) {
         const linkErr = await validateYouthLink(youthProductId, req.params.id);
@@ -388,6 +423,11 @@ router.put('/:id', async (req, res) => {
                 // its own name/type/price snapshot and just loses the FK link
                 // (onDelete: SetNull) for any variation that gets dropped here.
                 ...(variations !== undefined ? { variations: { deleteMany: {}, create: variationsData } } : {}),
+                // Same full-list replace as variations; nothing else references
+                // ProductStyle rows, so regenerating them is harmless.
+                ...(styleProductIds !== undefined
+                    ? { styles: { deleteMany: {}, create: styleIds.map((styleProductId, sortOrder) => ({ styleProductId, sortOrder })) } }
+                    : {}),
                 ...(youthProductId !== undefined ? { youthProductId: youthProductId || null } : {}),
                 ...(youthPriceCents !== undefined
                     ? { youthPriceCents: youthPriceCents === null || youthPriceCents === '' ? null : Math.round(Number(youthPriceCents)) }
@@ -396,7 +436,7 @@ router.put('/:id', async (req, res) => {
                     ? { shops: { set: shopIds.map((id: string) => ({ id })) } }
                     : {})
             },
-            include: { shops: shopSelect, youthProduct: youthSelect, ...variationsInclude }
+            include: { shops: shopSelect, youthProduct: youthSelect, ...variationsInclude, ...stylesInclude }
         });
 
         // Clean up any of our own uploaded files that are no longer referenced.
@@ -410,7 +450,7 @@ router.put('/:id', async (req, res) => {
 
         await syncYouthSizeChart(p.youthProductId, youthSizeChartUrl);
         const responseProduct = youthSizeChartUrl !== undefined && p.youthProductId
-            ? await prisma.product.findUnique({ where: { id: p.id }, include: { shops: shopSelect, youthProduct: youthSelect, ...variationsInclude } })
+            ? await prisma.product.findUnique({ where: { id: p.id }, include: { shops: shopSelect, youthProduct: youthSelect, ...variationsInclude, ...stylesInclude } })
             : p;
 
         // A color/size this edit just removed might still be sitting on

@@ -24,3 +24,17 @@ export const COLOR_MAP: Record<string, string> = {
 export function getColorCss(name: string): string {
     return COLOR_MAP[name.toLowerCase().trim()] ?? "#94a3b8";
 }
+
+// Camo prints have no single color, so their swatch gets a mottled pattern.
+const CAMO_SWATCH = [
+    "radial-gradient(circle at 28% 30%, #3f4a24 0 20%, transparent 21%)",
+    "radial-gradient(circle at 72% 68%, #2c3320 0 24%, transparent 25%)",
+    "radial-gradient(circle at 78% 22%, #8b7b55 0 15%, transparent 16%)",
+    "radial-gradient(circle at 24% 78%, #5f4f33 0 18%, transparent 19%)",
+    "#6f7a48",
+].join(", ");
+
+// A CSS `background` value for a color swatch.
+export function getSwatchBackground(name: string): string {
+    return /camo|realtree|mossy oak/i.test(name) ? CAMO_SWATCH : getColorCss(name);
+}

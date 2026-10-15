@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { imgUrl } from "@/app/lib/api";
 import Link from "next/link";
-import { getColorCss } from "@/lib/colors";
+import { getColorCss, getSwatchBackground } from "@/lib/colors";
 import { useCart, SelectedVariation } from "@/lib/cart";
 import { computeItemPriceCents } from "@/lib/pricing";
 import { PressButton } from "@/components/public/PressButton";
@@ -32,8 +32,9 @@ type Product = {
     variations?: Variation[];
     youthVariant?: Product | null;
     adultVariant?: Product | null;
+    styles?: { styleProduct: Product }[];
 };
-type AddToCartOpts = { youthContextAdultId?: string; selectedVariations?: SelectedVariation[] };
+type AddToCartOpts = { youthContextAdultId?: string; styleListingId?: string; selectedVariations?: SelectedVariation[] };
 type Shop = { id:string; name:string; notes?:string; expiresAt?:string; shippingEnabled:boolean; offlinePaymentEnabled:boolean; products:Product[] };
 
 const stripHtml = (s?: string) => (s ?? "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
@@ -50,10 +51,59 @@ function getVariantInfo(p: Product): { linked: Product | null; selfLabel: string
     return { linked: null, selfLabel: "", linkedLabel: "", adultSource: p };
 }
 
-// The youth side shares its adult listing's options; its own only apply if the
-// adult has none. Must match the server's variationDefs in buildShopGroups.
-function variationsFor(active: Product, adultSource: Product): Variation[] {
-    return (adultSource.variations?.length ? adultSource.variations : active.variations) ?? [];
+const parseList = (json?: string): string[] => json ? JSON.parse(json) : [];
+
+// A listing is the product as listed in the shop plus any other products the
+// admin linked into it as extra color choices (ProductStyle) — e.g. a camo
+// hoodie offered next to this hoodie's Black. Styles are adult-side products,
+// so a youth product listed on its own never carries any.
+function listingMembers(p: Product): Product[] {
+    return p.adultVariant ? [p] : [p, ...(p.styles ?? []).map(s => s.styleProduct)];
+}
+
+type Swatch = { memberId: string; color: string };
+type ListingView = {
+    member: Product;      // the selected listing member (adult side)
+    active: Product;      // what's actually shown and added: member, or its youth version
+    adultSource: Product;
+    listing?: Product;    // set only when member is a linked style, not the listed product itself
+    hasLinkedMode: boolean;
+    selfLabel: string; linkedLabel: string;
+    swatches: Swatch[];   // every member's colors available in the current Adult/Youth mode
+};
+
+// If the chosen member has no version in the current mode (e.g. Youth is on
+// but the camo style has no youth version), falls back to the first member
+// that does, so the view never shows a product the toggle doesn't match.
+function resolveListingView(p: Product, memberId: string | undefined, choice: "self" | "linked"): ListingView {
+    const members = listingMembers(p);
+    const inMode = (m: Product) => choice === "linked" ? getVariantInfo(m).linked : m;
+    let member = members.find(m => m.id === memberId) ?? p;
+    if (!inMode(member)) member = members.find(m => inMode(m)) ?? p;
+    const info = getVariantInfo(member);
+    const base = getVariantInfo(p);
+    return {
+        member,
+        active: (choice === "linked" && info.linked) || member,
+        adultSource: info.adultSource,
+        listing: member.id !== p.id ? p : undefined,
+        hasLinkedMode: members.some(m => getVariantInfo(m).linked),
+        selfLabel: base.linked ? base.selfLabel : "Adult",
+        linkedLabel: base.linked ? base.linkedLabel : "Youth",
+        swatches: members.flatMap(m => {
+            const shown = inMode(m);
+            return shown ? parseList(shown.colorsJson).map(color => ({ memberId: m.id, color })) : [];
+        }),
+    };
+}
+
+// Options are set up once per listing: a linked style uses its listing's, a
+// youth version uses its adult's, and a product's own only apply when neither
+// has any. Must match the server's variationDefs in buildShopGroups.
+function variationsFor(active: Product, adultSource: Product, listing?: Product): Variation[] {
+    return (listing?.variations?.length ? listing.variations
+        : adultSource.variations?.length ? adultSource.variations
+        : active.variations) ?? [];
 }
 
 function VariantToggle({ selfLabel, linkedLabel, choice, onChange }: {
@@ -89,26 +139,28 @@ const TONE_ICON_CLS = {
 
 // ─── Product Detail Drawer ────────────────────────────────────────────────────
 function ProductDetailDrawer({
-    product, initialVariant = "self", onClose, onAddToCart, cartQuantityFor
+    product, initialVariant = "self", initialMemberId, onClose, onAddToCart, cartQuantityFor
 }: {
     product: Product;
     initialVariant?: "self" | "linked";
+    initialMemberId?: string;
     onClose: () => void;
     onAddToCart: (product: Product, size?: string, color?: string, qty?: number, opts?: AddToCartOpts) => void;
     cartQuantityFor: (productId: string) => number;
 }) {
-    const { linked, selfLabel, linkedLabel, adultSource } = getVariantInfo(product);
-    const [variantChoice, setVariantChoice] = useState<"self" | "linked">(linked ? initialVariant : "self");
-    const active = variantChoice === "linked" && linked ? linked : product;
+    const [variantChoice, setVariantChoice] = useState<"self" | "linked">(initialVariant);
+    const [memberId, setMemberId] = useState(initialMemberId ?? product.id);
+    const view = resolveListingView(product, memberId, variantChoice);
+    const { active, adultSource, listing, hasLinkedMode, selfLabel, linkedLabel, swatches } = view;
     // Only set when `active` is itself the youth side of an adult/youth pair —
     // pins down which adult's price override applies at checkout if this
     // youth product is shared by more than one adult. See getVariantInfo.
     const youthContextAdultId = active.id !== adultSource.id ? adultSource.id : undefined;
 
-    const imgs: string[] = adultSource.imagesJson ? JSON.parse(adultSource.imagesJson) : [];
-    const sizes: string[] = active.sizesJson ? JSON.parse(active.sizesJson) : [];
-    const colors: string[] = active.colorsJson ? JSON.parse(active.colorsJson) : [];
-    const variations = variationsFor(active, adultSource);
+    const imgs = parseList(adultSource.imagesJson);
+    const sizes = parseList(active.sizesJson);
+    const colors = parseList(active.colorsJson);
+    const variations = variationsFor(active, adultSource, listing);
 
     const [imgIdx, setImgIdx] = useState(0);
     const [selSize, setSelSize] = useState(sizes.length === 1 ? sizes[0] : "");
@@ -137,8 +189,25 @@ function ProductDetailDrawer({
         setSelSize(sizes.length === 1 ? sizes[0] : "");
         setSelColor(colors.length === 1 ? colors[0] : "");
         setVariationInputs({});
+        setImgIdx(0);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [variantChoice]);
+
+    function changeVariant(c: "self" | "linked") {
+        setVariantChoice(c);
+        setMemberId(resolveListingView(product, memberId, c).member.id);
+    }
+
+    // Picking another member's swatch swaps the whole listing over to that
+    // product — keeping the chosen size only if the new product offers it.
+    function pickSwatch(sw: Swatch) {
+        if (sw.memberId === view.member.id) { setSelColor(prev => prev === sw.color ? "" : sw.color); return; }
+        const nextSizes = parseList(resolveListingView(product, sw.memberId, variantChoice).active.sizesJson);
+        setMemberId(sw.memberId);
+        setSelColor(sw.color);
+        setSelSize(prev => nextSizes.length === 1 ? nextSizes[0] : nextSizes.includes(prev) ? prev : "");
+        setImgIdx(0);
+    }
 
     function handleAdd() {
         if (sizes.length > 0 && !selSize) { alert("Please select a size."); return; }
@@ -150,6 +219,7 @@ function ProductDetailDrawer({
         }
         onAddToCart(active, selSize || undefined, selColor || undefined, qty, {
             youthContextAdultId,
+            styleListingId: listing?.id,
             selectedVariations: resolvedVariations
         });
         setAdded(true);
@@ -249,9 +319,9 @@ function ProductDetailDrawer({
                                 <p className="text-xs font-bold text-proc-cyan uppercase tracking-wider mb-1">{active.brand}</p>
                             )}
                             <h2 className="text-xl font-extrabold text-plate-50 leading-tight">{active.name}</h2>
-                            {linked && (
+                            {hasLinkedMode && (
                                 <div className="mt-2.5">
-                                    <VariantToggle selfLabel={selfLabel} linkedLabel={linkedLabel} choice={variantChoice} onChange={setVariantChoice} />
+                                    <VariantToggle selfLabel={selfLabel} linkedLabel={linkedLabel} choice={variantChoice} onChange={changeVariant} />
                                 </div>
                             )}
                             <p className="text-2xl font-extrabold mt-2.5 font-spec tabular-nums" style={{ color: "var(--spot-bright)" }}>
@@ -266,28 +336,29 @@ function ProductDetailDrawer({
                             </div>
                         )}
 
-                        {colors.length > 0 && (
+                        {swatches.length > 0 && (
                             <div>
                                 <div className="flex items-center justify-between mb-2">
                                     <h3 className="text-xs font-bold text-plate-300 uppercase tracking-wider">Color</h3>
                                     {selColor && (
                                         <span className="text-sm font-bold text-plate-50 flex items-center gap-1.5">
                                             <span className="w-4 h-4 rounded-full border border-plate-600 inline-block"
-                                                style={{ backgroundColor: getColorCss(selColor) }} />
+                                                style={{ background: getSwatchBackground(selColor) }} />
                                             {selColor}
                                         </span>
                                     )}
                                 </div>
                                 <div className="flex flex-wrap gap-2">
-                                    {colors.map(c => {
+                                    {swatches.map(sw => {
+                                        const c = sw.color;
                                         const css = getColorCss(c);
                                         const isWhite = css === "#ffffff";
-                                        const isSelected = selColor === c;
+                                        const isSelected = sw.memberId === view.member.id && selColor === c;
                                         return (
-                                            <button key={c} type="button" title={c}
-                                                onClick={() => setSelColor(prev => prev === c ? "" : c)}
+                                            <button key={`${sw.memberId}:${c}`} type="button" title={c} aria-label={c} aria-pressed={isSelected}
+                                                onClick={() => pickSwatch(sw)}
                                                 className={`relative w-8 h-8 rounded-full border-2 spot-swatch ${isSelected ? "spot-swatch-selected" : isWhite ? "border-plate-600" : "border-transparent"}`}
-                                                style={{ backgroundColor: css, borderColor: isSelected ? "var(--spot)" : undefined }}>
+                                                style={{ background: getSwatchBackground(c), borderColor: isSelected ? "var(--spot)" : undefined }}>
                                                 {isSelected && (
                                                     <svg className={`absolute inset-0 m-auto w-4 h-4 ${isWhite || css.startsWith("#f") || css.startsWith("#e") || css.startsWith("#d") ? "text-plate-950" : "text-white"}`}
                                                         fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -447,7 +518,9 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
     const [notFound, setNotFound]     = useState(false);
     const [detailProduct, setDetailProduct] = useState<Product | null>(null);
     const [variantChoice, setVariantChoice] = useState<Record<string, "self" | "linked">>({});
+    const [memberChoice, setMemberChoice] = useState<Record<string, string>>({});
     const [detailInitialVariant, setDetailInitialVariant] = useState<"self" | "linked">("self");
+    const [detailInitialMember, setDetailInitialMember] = useState<string | undefined>(undefined);
 
     useEffect(() => {
         publicFetch(`/shops/${slug}`).then(setShop).catch(() => setNotFound(true));
@@ -455,6 +528,10 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
 
     const spot = getShopSpot(shop?.id ?? slug);
     const products: Product[] = shop?.products ?? [];
+    // A product linked into another listing as a style is offered there, not
+    // as its own card.
+    const styleProductIds = new Set(products.flatMap(p => (p.styles ?? []).map(s => s.styleProduct.id)));
+    const listedProducts = products.filter(p => !styleProductIds.has(p.id));
     const thisShopCount = cart.filter(c => c.shopSlug === slug).reduce((a,c) => a + c.quantity, 0);
     const otherShopsCount = itemCount - thisShopCount;
     const days = daysUntil(shop?.expiresAt);
@@ -470,6 +547,7 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
             priceCents: product.priceCents, upchargeEnabled: product.upchargeEnabled, upchargeCents: product.upchargeCents,
             size, color,
             youthContextAdultId: opts?.youthContextAdultId,
+            styleListingId: opts?.styleListingId,
             selectedVariations: opts?.selectedVariations,
         }, qty);
     }
@@ -477,15 +555,27 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
     // adult's price override applies if `product` turns out to be a shared
     // youth item. A product with a required variation (e.g. "Design") can't
     // be quick-added — there's no picker here, only in the detail drawer.
-    function addToCartFromCard(product: Product, adultSource: Product) {
-        const sizes: string[] = product.sizesJson ? JSON.parse(product.sizesJson) : [];
-        const colors: string[] = product.colorsJson ? JSON.parse(product.colorsJson) : [];
-        const sel = getSelection(product.id);
+    function addToCartFromCard({ active, adultSource, listing }: ListingView) {
+        const sizes = parseList(active.sizesJson);
+        const colors = parseList(active.colorsJson);
+        const sel = getSelection(active.id);
         if (sizes.length > 0 && !sel.size) { alert("Please select a size."); return; }
         if (colors.length > 0 && !sel.color) { alert("Please select a color."); return; }
-        if (variationsFor(product, adultSource).some(v => v.required)) { alert("This item has options to choose — click into it to add to cart."); return; }
-        const youthContextAdultId = product.id !== adultSource.id ? adultSource.id : undefined;
-        addToCart(product, sel.size || undefined, sel.color || undefined, 1, { youthContextAdultId });
+        if (variationsFor(active, adultSource, listing).some(v => v.required)) { alert("This item has options to choose — click into it to add to cart."); return; }
+        const youthContextAdultId = active.id !== adultSource.id ? adultSource.id : undefined;
+        addToCart(active, sel.size || undefined, sel.color || undefined, 1, { youthContextAdultId, styleListingId: listing?.id });
+    }
+    function changeCardVariant(p: Product, c: "self" | "linked") {
+        setVariantChoice(prev => ({ ...prev, [p.id]: c }));
+        setMemberChoice(prev => ({ ...prev, [p.id]: resolveListingView(p, prev[p.id], c).member.id }));
+    }
+    function pickCardSwatch(p: Product, view: ListingView, choice: "self" | "linked", sw: Swatch) {
+        if (sw.memberId === view.member.id) {
+            setSelection(view.active.id, "color", getSelection(view.active.id).color === sw.color ? "" : sw.color);
+            return;
+        }
+        setMemberChoice(prev => ({ ...prev, [p.id]: sw.memberId }));
+        setSelection(resolveListingView(p, sw.memberId, choice).active.id, "color", sw.color);
     }
     function cartQuantityFor(productId: string) {
         return cart.filter(c => c.shopSlug === slug && c.productId === productId).reduce((a, c) => a + c.quantity, 0);
@@ -591,7 +681,7 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
 
             <main className="relative z-10 flex-1 max-w-5xl mx-auto w-full px-4 sm:px-6 py-8">
                 <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} transition={{ duration:0.3 }}>
-                    {products.length === 0 ? (
+                    {listedProducts.length === 0 ? (
                         <div className="text-center py-24">
                             <div className="w-16 h-16 bg-plate-800 border border-plate-700 rounded-lg flex items-center justify-center mx-auto mb-4">
                                 <svg className="w-8 h-8 text-plate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
@@ -602,18 +692,17 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
                     ) : (
                         <>
                             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 pt-2">
-                                {products.map((p, idx) => {
-                                    const { linked, selfLabel, linkedLabel, adultSource } = getVariantInfo(p);
+                                {listedProducts.map((p, idx) => {
                                     const choice = variantChoice[p.id] ?? "self";
-                                    const active = choice === "linked" && linked ? linked : p;
+                                    const view = resolveListingView(p, memberChoice[p.id], choice);
+                                    const { active, adultSource, hasLinkedMode, selfLabel, linkedLabel, swatches } = view;
 
-                                    const sizes: string[] = active.sizesJson ? JSON.parse(active.sizesJson) : [];
-                                    const colors: string[] = active.colorsJson ? JSON.parse(active.colorsJson) : [];
+                                    const sizes = parseList(active.sizesJson);
                                     const sel = getSelection(active.id);
                                     const totalInCart = cartQuantityFor(active.id);
-                                    const imgs: string[] = adultSource.imagesJson ? JSON.parse(adultSource.imagesJson) : [];
+                                    const imgs = parseList(adultSource.imagesJson);
                                     const displayPrice = computeItemPriceCents(active, sel.size || undefined);
-                                    const openDetail = () => { setDetailProduct(p); setDetailInitialVariant(choice); };
+                                    const openDetail = () => { setDetailProduct(p); setDetailInitialVariant(choice); setDetailInitialMember(view.member.id); };
                                     return (
                                         <motion.div key={p.id}
                                             initial={{ opacity:0, y:16 }} animate={{ opacity:1, y:0 }}
@@ -659,14 +748,14 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
                                                         <p className="text-lg font-extrabold font-spec tabular-nums" style={{ color: "var(--spot-bright)" }}>
                                                             {fmt(displayPrice)}
                                                         </p>
-                                                        {linked && (
+                                                        {hasLinkedMode && (
                                                             <VariantToggle selfLabel={selfLabel} linkedLabel={linkedLabel} choice={choice}
-                                                                onChange={c => setVariantChoice(prev => ({ ...prev, [p.id]: c }))} />
+                                                                onChange={c => changeCardVariant(p, c)} />
                                                         )}
                                                     </div>
                                                 </div>
 
-                                                {(sizes.length > 0 || colors.length > 0) && (
+                                                {(sizes.length > 0 || swatches.length > 0) && (
                                                     <div className="space-y-2.5 border-t border-dashed border-plate-700 pt-3">
                                                         {sizes.length > 0 && (
                                                             <div>
@@ -682,20 +771,19 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
                                                                 </div>
                                                             </div>
                                                         )}
-                                                        {colors.length > 0 && (
+                                                        {swatches.length > 0 && (
                                                             <div>
                                                                 <label className="text-[10px] font-bold text-plate-400 uppercase tracking-wider mb-1.5 block">
                                                                     Color{sel.color ? `: ${sel.color}` : ""}
                                                                 </label>
                                                                 <div className="flex flex-wrap gap-1.5">
-                                                                    {colors.map(c => {
-                                                                        const css = getColorCss(c);
-                                                                        const isSelected = sel.color === c;
+                                                                    {swatches.map(sw => {
+                                                                        const isSelected = sw.memberId === view.member.id && sel.color === sw.color;
                                                                         return (
-                                                                            <button key={c} type="button" title={c}
-                                                                                onClick={() => setSelection(active.id,"color", sel.color===c ? "" : c)}
+                                                                            <button key={`${sw.memberId}:${sw.color}`} type="button" title={sw.color} aria-label={sw.color} aria-pressed={isSelected}
+                                                                                onClick={() => pickCardSwatch(p, view, choice, sw)}
                                                                                 className={`w-6 h-6 rounded-full border-2 spot-swatch ${isSelected ? "spot-swatch-selected" : ""}`}
-                                                                                style={{ backgroundColor: css, borderColor: isSelected ? "var(--spot)" : "#2B303A" }}>
+                                                                                style={{ background: getSwatchBackground(sw.color), borderColor: isSelected ? "var(--spot)" : "#2B303A" }}>
                                                                             </button>
                                                                         );
                                                                     })}
@@ -706,7 +794,7 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
                                                 )}
 
                                                 <div className="flex gap-2">
-                                                    <motion.button type="button" whileTap={{ scale:0.96 }} whileHover={{ y:-1 }} onClick={() => addToCartFromCard(active, adultSource)}
+                                                    <motion.button type="button" whileTap={{ scale:0.96 }} whileHover={{ y:-1 }} onClick={() => addToCartFromCard(view)}
                                                         className="console-sheen flex-1 press-btn press-btn-primary text-sm py-2.5">
                                                         Add to cart
                                                     </motion.button>
@@ -779,6 +867,7 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
                     <ProductDetailDrawer
                         product={detailProduct}
                         initialVariant={detailInitialVariant}
+                        initialMemberId={detailInitialMember}
                         onClose={() => setDetailProduct(null)}
                         cartQuantityFor={cartQuantityFor}
                         onAddToCart={(product, size, color, qty, opts) => {

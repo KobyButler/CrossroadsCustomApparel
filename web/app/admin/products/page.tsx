@@ -12,7 +12,7 @@ import { IconButton, IconButtonRow } from "@/components/ui/icon-button";
 import { EditIcon, DuplicateIcon, TrashIcon } from "@/components/ui/icons";
 import { useSortable, SortableTh } from "@/components/ui/sortable-th";
 import { motion, Reorder } from "framer-motion";
-import { getColorCss } from "@/lib/colors";
+import { getColorCss, getSwatchBackground } from "@/lib/colors";
 
 const EASE = [0.16, 1, 0.3, 1] as [number, number, number, number];
 
@@ -34,6 +34,9 @@ type Product = {
     // automatically; a number means the admin set a deliberate override. See
     // resolveProductPriceCents on the server.
     youthPriceCents?: number | null;
+    // Other products shown inside this one's storefront listing as extra
+    // color choices (see ProductStyle on the server), in display order.
+    styles?: { styleProductId: string }[];
 };
 
 // From GET /products/vendor-drift — a product whose configured color/size no
@@ -61,7 +64,8 @@ const EMPTY = {
     shopIds:[] as string[], sizes:[] as string[], colors:[] as string[], images:[] as string[],
     sizeChartUrl:"", youthLink: null as YouthProductRef | null, youthSizeChartUrl:"", youthPriceDollars:"",
     upchargeEnabled:false, upchargeDollars:"3.00", weightOz:"",
-    variations:[] as FormVariation[]
+    variations:[] as FormVariation[],
+    styleProductIds:[] as string[]
 };
 
 // ── TagInput ──────────────────────────────────────────────────────────────────
@@ -584,6 +588,100 @@ function SizeChartUploader({ url, onChange, label = "Size Chart (PDF)" }: { url:
                 <input type="file" accept="application/pdf" className="sr-only" onChange={handleFile} />
             </label>
             <p className="text-xs text-graphite-300 mt-1">Customers can view this from the product page — handy for sizing guides from the vendor.</p>
+        </div>
+    );
+}
+
+// ── StyleLinksPanel ──────────────────────────────────────────────────────────
+// Puts other products inside this product's storefront listing as extra color
+// choices — e.g. a camo hoodie that's really its own product, offered next to
+// this hoodie's Black. Shoppers see the linked product's colors as more
+// swatches; picking one switches the listing to that product's photos, sizes
+// and price, and orders record the linked product itself so vendor POs stay
+// right. One level only (enforced server-side too): a product used as a style
+// somewhere shows read-only info here instead, and products that already have
+// styles of their own, or are someone's youth version, aren't offered.
+function StyleLinksPanel({ products, editProductId, value, onChange }: {
+    products: Product[]; editProductId: string | null; value: string[]; onChange: (ids: string[]) => void;
+}) {
+    const [query, setQuery] = useState("");
+    const byId = new Map(products.map(p => [p.id, p]));
+    const usedIn = editProductId ? products.filter(p => (p.styles ?? []).some(st => st.styleProductId === editProductId)) : [];
+
+    if (usedIn.length > 0) {
+        return (
+            <div>
+                <label className="field-label">Linked Styles</label>
+                <div className="bg-white/[0.04] border border-white/10 rounded-lg p-3.5">
+                    <p className="text-sm font-semibold text-white">
+                        Shown as a style in {usedIn.map(p => `"${p.name}"`).join(", ")}
+                    </p>
+                    <p className="text-xs text-graphite-300 mt-0.5">Manage or remove it from that product&apos;s own edit form.</p>
+                </div>
+            </div>
+        );
+    }
+
+    const youthIds = new Set(products.map(p => p.youthProductId).filter(Boolean));
+    const q = query.trim().toLowerCase();
+    const candidates = q
+        ? products.filter(p =>
+            p.id !== editProductId && !value.includes(p.id) && !youthIds.has(p.id) && !(p.styles?.length)
+            && (p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q))
+        ).slice(0, 8)
+        : [];
+    const colorsOf = (p: Product): string[] => p.colorsJson ? JSON.parse(p.colorsJson) : [];
+
+    return (
+        <div>
+            <label className="field-label">Linked Styles</label>
+            <p className="text-xs text-graphite-300 mb-2">
+                Offer a different product in this listing as another color choice, like a camo hoodie next to this one&apos;s black.
+                Its colors show up as extra swatches, and orders record that product so vendor orders stay correct.
+            </p>
+            {value.length > 0 && (
+                <div className="space-y-2 mb-2">
+                    {value.map(id => {
+                        const p = byId.get(id);
+                        if (!p) return null;
+                        return (
+                            <div key={id} className="flex items-center gap-3 bg-white/[0.04] border border-white/10 rounded-lg px-3.5 py-2.5">
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-semibold text-white truncate">{p.name}</p>
+                                    <p className="text-xs text-graphite-300 truncate">{p.sku} · ${(p.priceCents / 100).toFixed(2)}</p>
+                                </div>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                    {colorsOf(p).map(c => (
+                                        <span key={c} className="inline-flex items-center gap-1 text-xs text-graphite-200">
+                                            <span className="w-3.5 h-3.5 rounded-full border border-white/20" style={{ background: getSwatchBackground(c) }} />
+                                            {c}
+                                        </span>
+                                    ))}
+                                </div>
+                                <button type="button" onClick={() => onChange(value.filter(v => v !== id))}
+                                    className="text-xs font-semibold text-signal-red hover:brightness-125 shrink-0">Remove</button>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+            <Input placeholder="Search your products by name or SKU to add a style…" value={query} onChange={e => setQuery(e.target.value)} />
+            {q && (
+                <div className="mt-1.5 border border-white/10 rounded-lg overflow-hidden divide-y divide-white/[0.06]">
+                    {candidates.length === 0 ? (
+                        <p className="text-xs text-graphite-300 px-3.5 py-2.5">No matching products. Create the other product first, then link it here.</p>
+                    ) : candidates.map(p => (
+                        <button key={p.id} type="button" onClick={() => { onChange([...value, p.id]); setQuery(""); }}
+                            className="w-full text-left px-3.5 py-2.5 hover:bg-white/[0.05] transition-colors flex items-center justify-between gap-3">
+                            <span className="min-w-0">
+                                <span className="block text-sm text-white truncate">{p.name}</span>
+                                <span className="block text-xs text-graphite-300 truncate">{p.sku} · {colorsOf(p).join(", ") || "no colors"}</span>
+                            </span>
+                            <span className="text-xs font-semibold text-signal-cyan shrink-0">+ Add</span>
+                        </button>
+                    ))}
+                </div>
+            )}
         </div>
     );
 }
@@ -1255,6 +1353,7 @@ export default function ProductsPage() {
                 priceDollars: (v.priceCents / 100).toFixed(2),
                 choices: v.choices.map(c => ({ label: c.label, imageUrl: c.imageUrl, priceDollars: (c.priceCents / 100).toFixed(2) }))
             })),
+            styleProductIds: (p.styles ?? []).map(st => st.styleProductId),
         });
     }
 
@@ -1316,6 +1415,7 @@ export default function ProductsPage() {
                     priceCents: Math.round(parseFloat(v.priceDollars || "0") * 100) || 0,
                     choices: v.choices.map(c => ({ label: c.label, imageUrl: c.imageUrl, priceCents: Math.round(parseFloat(c.priceDollars || "0") * 100) || 0 }))
                 })),
+                styleProductIds: form.styleProductIds,
             };
             if (editProduct) {
                 const u = await api(`/products/${editProduct.id}`, { method:"PUT", body:JSON.stringify(payload) });
@@ -1694,6 +1794,9 @@ export default function ProductsPage() {
                         value={form.youthLink} onChange={youthLink => setForm(p => ({ ...p, youthLink }))}
                         sizeChartUrl={form.youthSizeChartUrl} onSizeChartChange={youthSizeChartUrl => setForm(p => ({ ...p, youthSizeChartUrl }))}
                         priceDollars={form.youthPriceDollars} onPriceChange={youthPriceDollars => setForm(p => ({ ...p, youthPriceDollars }))} />
+
+                    <StyleLinksPanel products={products} editProductId={editProduct?.id ?? null}
+                        value={form.styleProductIds} onChange={styleProductIds => setForm(p => ({ ...p, styleProductIds }))} />
 
                     <ModalFooter>
                         <Button type="button" variant="outline" onClick={() => { setShowAdd(false); setEditProduct(null); }}>Cancel</Button>

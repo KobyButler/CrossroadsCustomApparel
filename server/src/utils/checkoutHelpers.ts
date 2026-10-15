@@ -12,6 +12,9 @@ export type CheckoutItemInput = {
     // adult's youthPriceCents override applies when the youth product is
     // shared by several adults. See pickYouthPricingContext.
     youthContextAdultId?: string | null;
+    // Set only when this item was picked as a linked style inside another
+    // product's listing (see ProductStyle) — that listing's options apply.
+    styleListingId?: string | null;
     variations?: VariationSelectionInput[];
 };
 
@@ -46,7 +49,8 @@ export async function buildShopGroups(
 
     const uniqueProductIds = [...new Set(items.map(i => i.productId))];
     const uniqueAdultContextIds = [...new Set(items.map(i => i.youthContextAdultId).filter((id): id is string => !!id))];
-    const [products, adultContexts] = await Promise.all([
+    const uniqueListingIds = [...new Set(items.map(i => i.styleListingId).filter((id): id is string => !!id))];
+    const [products, adultContexts, listings] = await Promise.all([
         prisma.product.findMany({
             where: { id: { in: uniqueProductIds } },
             include: {
@@ -59,6 +63,12 @@ export async function buildShopGroups(
                 where: { id: { in: uniqueAdultContextIds } },
                 select: { id: true, priceCents: true, youthPriceCents: true, youthProductId: true, variations: { orderBy: { sortOrder: 'asc' }, include: { choices: { orderBy: { sortOrder: 'asc' } } } } }
             })
+            : Promise.resolve([]),
+        uniqueListingIds.length
+            ? prisma.product.findMany({
+                where: { id: { in: uniqueListingIds } },
+                select: { id: true, styles: { select: { styleProductId: true } }, variations: { orderBy: { sortOrder: 'asc' }, include: { choices: { orderBy: { sortOrder: 'asc' } } } } }
+            })
             : Promise.resolve([])
     ]);
     if (products.length !== uniqueProductIds.length) {
@@ -66,6 +76,7 @@ export async function buildShopGroups(
     }
     const productMap = new Map(products.map(p => [p.id, p]));
     const adultContextMap = new Map(adultContexts.map(a => [a.id, a]));
+    const listingMap = new Map(listings.map(l => [l.id, l]));
 
     const slugs = [...new Set(items.map(i => i.shopSlug ?? topLevelShopSlug ?? null).filter((s): s is string => !!s))];
     const shops = slugs.length ? await prisma.shop.findMany({ where: { slug: { in: slugs } } }) : [];
@@ -78,13 +89,19 @@ export async function buildShopGroups(
         const product = productMap.get(i.productId)!;
         const adultProduct = pickYouthPricingContext(product, i.youthContextAdultId ? adultContextMap.get(i.youthContextAdultId) : null);
         const resolvedPriceCents = resolveProductPriceCents({ priceCents: product.priceCents, adultProduct });
-        // A youth variant shares its adult listing's options (the admin sets
-        // them up once, on the adult); the youth product's own only apply if
-        // the adult has none. Must match variationsFor() in the storefront.
-        // Validated against the currently-configured variations — never trust
-        // a client-supplied label/image/price, only which variationId/choiceId
-        // it picked.
-        const variationDefs = adultProduct?.variations.length ? adultProduct.variations : product.variations;
+        // Options are set up once per listing: a linked style uses its
+        // listing's, a youth variant uses its adult's, and a product's own
+        // only apply when neither of those has any. Must match
+        // variationsFor() in the storefront. A listing context only counts if
+        // that listing really links this product (or the adult whose youth
+        // version this is) as a style. Validated against the currently-
+        // configured variations — never trust a client-supplied
+        // label/image/price, only which variationId/choiceId it picked.
+        const listing = i.styleListingId ? listingMap.get(i.styleListingId) : undefined;
+        const styleListing = listing?.styles.some(st => st.styleProductId === product.id || st.styleProductId === adultProduct?.id) ? listing : null;
+        const variationDefs = styleListing?.variations.length ? styleListing.variations
+            : adultProduct?.variations.length ? adultProduct.variations
+            : product.variations;
         const { resolved: variations, totalPriceCents: variationPriceCents, error } = resolveItemVariations(variationDefs, i.variations ?? []);
         if (error) throw new Error(error);
         const priceCents = computeItemPriceCents({ ...product, priceCents: resolvedPriceCents }, i.size, variationPriceCents);
