@@ -87,7 +87,7 @@ router.get('/:slug', async (req, res) => {
                 // be linked from several different adults (see schema.prisma).
                 include: {
                     youthProduct: { include: { variations: { orderBy: { sortOrder: 'asc' }, include: { choices: { orderBy: { sortOrder: 'asc' } } } } } },
-                    adultProducts: { select: { id: true, priceCents: true, youthPriceCents: true } },
+                    adultProducts: { select: { id: true, priceCents: true, youthPriceCents: true, variations: { orderBy: { sortOrder: 'asc' }, include: { choices: { orderBy: { sortOrder: 'asc' } } } } } },
                     variations: { orderBy: { sortOrder: 'asc' }, include: { choices: { orderBy: { sortOrder: 'asc' } } } }
                 }
             }

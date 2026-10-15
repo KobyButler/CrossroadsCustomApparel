@@ -108,10 +108,10 @@ export function resolveProductPriceCents(product: {
 // applied when there's exactly one possible parent adult; with zero or
 // several, falls back to the youth product's own raw priceCents rather than
 // guessing whose override should win.
-export function pickYouthPricingContext(
-    product: { id: string; adultProducts: { id: string; priceCents: number; youthPriceCents: number | null }[] },
-    explicitAdult?: { id: string; priceCents: number; youthPriceCents: number | null; youthProductId: string | null } | null
-): { priceCents: number; youthPriceCents?: number | null } | null {
+export function pickYouthPricingContext<A extends { id: string; priceCents: number; youthPriceCents: number | null }>(
+    product: { id: string; adultProducts: A[] },
+    explicitAdult?: (A & { youthProductId: string | null }) | null
+): A | null {
     if (explicitAdult && explicitAdult.youthProductId === product.id) return explicitAdult;
     return product.adultProducts.length === 1 ? product.adultProducts[0] : null;
 }

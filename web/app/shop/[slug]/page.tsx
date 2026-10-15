@@ -50,6 +50,12 @@ function getVariantInfo(p: Product): { linked: Product | null; selfLabel: string
     return { linked: null, selfLabel: "", linkedLabel: "", adultSource: p };
 }
 
+// The youth side shares its adult listing's options; its own only apply if the
+// adult has none. Must match the server's variationDefs in buildShopGroups.
+function variationsFor(active: Product, adultSource: Product): Variation[] {
+    return (adultSource.variations?.length ? adultSource.variations : active.variations) ?? [];
+}
+
 function VariantToggle({ selfLabel, linkedLabel, choice, onChange }: {
     selfLabel: string; linkedLabel: string; choice: "self" | "linked"; onChange: (c: "self" | "linked") => void;
 }) {
@@ -102,7 +108,7 @@ function ProductDetailDrawer({
     const imgs: string[] = adultSource.imagesJson ? JSON.parse(adultSource.imagesJson) : [];
     const sizes: string[] = active.sizesJson ? JSON.parse(active.sizesJson) : [];
     const colors: string[] = active.colorsJson ? JSON.parse(active.colorsJson) : [];
-    const variations: Variation[] = active.variations ?? [];
+    const variations = variationsFor(active, adultSource);
 
     const [imgIdx, setImgIdx] = useState(0);
     const [selSize, setSelSize] = useState(sizes.length === 1 ? sizes[0] : "");
@@ -477,7 +483,7 @@ export default function ShopPage({ params }: { params: { slug: string } }) {
         const sel = getSelection(product.id);
         if (sizes.length > 0 && !sel.size) { alert("Please select a size."); return; }
         if (colors.length > 0 && !sel.color) { alert("Please select a color."); return; }
-        if (product.variations?.some(v => v.required)) { alert("This item has options to choose — click into it to add to cart."); return; }
+        if (variationsFor(product, adultSource).some(v => v.required)) { alert("This item has options to choose — click into it to add to cart."); return; }
         const youthContextAdultId = product.id !== adultSource.id ? adultSource.id : undefined;
         addToCart(product, sel.size || undefined, sel.color || undefined, 1, { youthContextAdultId });
     }

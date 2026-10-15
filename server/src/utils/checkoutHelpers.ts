@@ -50,14 +50,14 @@ export async function buildShopGroups(
         prisma.product.findMany({
             where: { id: { in: uniqueProductIds } },
             include: {
-                adultProducts: { select: { id: true, priceCents: true, youthPriceCents: true } },
+                adultProducts: { select: { id: true, priceCents: true, youthPriceCents: true, variations: { orderBy: { sortOrder: 'asc' }, include: { choices: { orderBy: { sortOrder: 'asc' } } } } } },
                 variations: { orderBy: { sortOrder: 'asc' }, include: { choices: { orderBy: { sortOrder: 'asc' } } } }
             }
         }),
         uniqueAdultContextIds.length
             ? prisma.product.findMany({
                 where: { id: { in: uniqueAdultContextIds } },
-                select: { id: true, priceCents: true, youthPriceCents: true, youthProductId: true }
+                select: { id: true, priceCents: true, youthPriceCents: true, youthProductId: true, variations: { orderBy: { sortOrder: 'asc' }, include: { choices: { orderBy: { sortOrder: 'asc' } } } } }
             })
             : Promise.resolve([])
     ]);
@@ -78,10 +78,14 @@ export async function buildShopGroups(
         const product = productMap.get(i.productId)!;
         const adultProduct = pickYouthPricingContext(product, i.youthContextAdultId ? adultContextMap.get(i.youthContextAdultId) : null);
         const resolvedPriceCents = resolveProductPriceCents({ priceCents: product.priceCents, adultProduct });
-        // Validated against this exact product's own currently-configured
-        // variations — never trust a client-supplied label/image/price, only
-        // which variationId/choiceId it picked.
-        const { resolved: variations, totalPriceCents: variationPriceCents, error } = resolveItemVariations(product.variations, i.variations ?? []);
+        // A youth variant shares its adult listing's options (the admin sets
+        // them up once, on the adult); the youth product's own only apply if
+        // the adult has none. Must match variationsFor() in the storefront.
+        // Validated against the currently-configured variations — never trust
+        // a client-supplied label/image/price, only which variationId/choiceId
+        // it picked.
+        const variationDefs = adultProduct?.variations.length ? adultProduct.variations : product.variations;
+        const { resolved: variations, totalPriceCents: variationPriceCents, error } = resolveItemVariations(variationDefs, i.variations ?? []);
         if (error) throw new Error(error);
         const priceCents = computeItemPriceCents({ ...product, priceCents: resolvedPriceCents }, i.size, variationPriceCents);
         if (!groups.has(slug)) {
