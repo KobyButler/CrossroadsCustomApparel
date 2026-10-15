@@ -143,7 +143,7 @@ export default function HomePage() {
     }, []);
 
     const previewShops = (shops ?? []).slice(0, 3);
-
+<image href="/logo.png" x="270" y="200" width="300" height="300"></image>
     return (
         <div className="press-canvas min-h-screen flex flex-col font-press">
             <PressFrame />
